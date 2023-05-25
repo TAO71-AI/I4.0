@@ -14,6 +14,7 @@ GPU (if you don't want to use the CPU): Any GPU with NVIDIA CUDA.
 RAM: At least 4GB.
 
 Tested hardware:
+
     1. Alcoft's (programmer #1) PC:
     
         CPU: Ryzen 5 3600.
