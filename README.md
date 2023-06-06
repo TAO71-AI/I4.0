@@ -20,5 +20,10 @@ Tested hardware:
         CPU: Ryzen 5 3600.
         GPU: AMD Radeon 6400.
         RAM: 16GB.
+    
+    2. Alcoft's Server:
+        CPU: Intel Core i3-10100.
+        GPU: NVIDIA GT 1030.
+        RAM: 8GB.
 
 If your computer doesn't have the requirements, you can buy a TAO NeuroN/I4.0 API key and use our server.
