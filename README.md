@@ -15,13 +15,13 @@ RAM: At least 4GB.
 
 Tested hardware:
 
-    1. Alcoft's (programmer #1) PC:
-        CPU: Ryzen 5 3600.
+    1. Alcoft's (main programmer of TAO71) PC:
+        CPU: Ryzen 5 3600 (6 cores, 12 threads).
         GPU: AMD Radeon 6400.
         RAM: 16GB.
     
     2. Alcoft's Server:
-        CPU: Intel Core i3-10100.
+        CPU: Intel Core i3-10100 (4 cores, 8 threads).
         GPU: NVIDIA GT 1030.
         RAM: 8GB.
 
