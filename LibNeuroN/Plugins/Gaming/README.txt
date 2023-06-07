@@ -1,0 +1,2 @@
+﻿Dependencies:
+    · OpenCV4Sharp

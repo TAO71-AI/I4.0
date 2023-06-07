@@ -1,0 +1,9 @@
+gpt4all_model=ggml-gpt4all-j-v1.3-groovy
+any_model=microsoft/DialoGPT-small
+tf_data_file=tf_train_data_es.txt
+tf_epochs=100
+force_api_key=true
+use_tf_v2=false
+low_cpu_or_memory=false
+max_length=1000
+use_chat_history=false

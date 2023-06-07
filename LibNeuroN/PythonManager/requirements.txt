@@ -1,0 +1,12 @@
+numpy
+torch
+torchtext
+tensorflow
+gpt4all
+llama-cpp-python
+transformers
+sockets
+keras
+accelerate
+torchvision
+openai
