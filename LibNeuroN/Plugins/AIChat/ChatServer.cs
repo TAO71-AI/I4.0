@@ -29,7 +29,7 @@ namespace TAO.NeuroN.Plugins.AIChat
             }
 
             ServerSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            ServerSocket.Bind(new IPEndPoint(IPAddress.Any, 295));
+            ServerSocket.Bind(new IPEndPoint(IPAddress.Any, 2950));
             ServerSocket.Listen(MaxUsers);
 
             ServerSocket.BeginAccept(OnConnect, null);

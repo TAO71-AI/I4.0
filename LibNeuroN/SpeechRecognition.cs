@@ -1,7 +1,4 @@
 ﻿using System;
-using IronPython.Hosting;
-using IronPython.Runtime;
-using Microsoft.Scripting.Hosting;
 
 namespace TAO.NeuroN
 {

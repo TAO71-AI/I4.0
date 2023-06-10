@@ -16,7 +16,7 @@ namespace TAO.NeuroN.Plugins.AIChat
             Disconnect();
 
             ClientSocket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-            ClientSocket.Connect(new IPEndPoint(IPAddress.Parse(ServerAddress), 295));
+            ClientSocket.Connect(new IPEndPoint(IPAddress.Parse(ServerAddress), 2950));
 
             try
             {

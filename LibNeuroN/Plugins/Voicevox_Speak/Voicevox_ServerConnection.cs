@@ -15,7 +15,7 @@ namespace TAO.NeuroN.Plugins.Voicevox
         {
             (TConnectionType.Http, "post:https://deprecatedapis.tts.quest/v2/voicevox/audio/"), // Third-party server
             (TConnectionType.Http, "post:https://api.su-shiki.com/v2/voicevox/audio/"), // Third-party server 2
-            (TConnectionType.Socket, "147.78.87.113:28171"), // TAO Server
+            (TConnectionType.Socket, "147.78.87.113:8072"), // TAO Server
         };
         public static int DefaultServer = 0;
         public static Action OnConnectAction = null;
@@ -123,7 +123,23 @@ namespace TAO.NeuroN.Plugins.Voicevox
 
             foreach (TParameter param in Parameters)
             {
-                data += '"' + param.Name + '"' + ":[" + '"' + param.Value + '"' + "],";
+                try
+                {
+                    Convert.ToInt32(param.Value);
+                    data += '"' + param.Name + "\":" + param.Value + ",";
+                }
+                catch
+                {
+                    try
+                    {
+                        Convert.ToDouble(param.Value);
+                        data += '"' + param.Name + "\":" + param.Value.Replace(",", ".") + ",";
+                    }
+                    catch
+                    {
+                        data += '"' + param.Name + "\":\"" + param.Value + "\",";
+                    }
+                }
             }
 
             data = data.Substring(0, data.LastIndexOf(","));
