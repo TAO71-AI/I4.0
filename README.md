@@ -10,8 +10,12 @@ Everything on the LibNeuroN/Plugins/ directory is a plugin.
 
 ## PC Requirements
 CPU: Any CPU with AVX2.
+
 GPU (if you don't want to use the CPU): Any GPU with NVIDIA CUDA.
+
 RAM: At least 4GB.
+
+-----------------------------------
 
 Tested hardware:
 
