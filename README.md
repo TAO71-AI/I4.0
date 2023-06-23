@@ -29,6 +29,6 @@ Tested hardware:
         CPU: Intel Core i3-10100 (4 cores, 8 threads).
         GPU: NVIDIA GT 1030.
         RAM: 8GB.
-        VRAM: 4GB.
+        VRAM: 2GB.
 
 If your computer doesn't have the requirements, you can buy a TAO NeuroN/I4.0 API key and use our server.
