@@ -9,11 +9,11 @@ Yes, you can remove every plugin of the AI and you will not need to fix bugs in 
 Everything on the LibNeuroN/Plugins/ directory is a plugin.
 
 ## PC Requirements
-CPU: Any CPU with AVX2.
+CPU: Any CPU with AVX2 and 2+ cores (AVX if you're only going to use Tensorflow).
 
 GPU (if you don't want to use the CPU): Any GPU with NVIDIA CUDA.
 
-RAM: At least 4GB.
+RAM: At least 4GB (8GB recommended).
 
 -----------------------------------
 
