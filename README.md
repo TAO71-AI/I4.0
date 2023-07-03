@@ -31,4 +31,4 @@ Tested hardware:
         RAM: 8GB.
         VRAM: 2GB.
 
-If your computer doesn't have the requirements, you can buy a TAO NeuroN/I4.0 API key and use our server.
+If your computer doesn't have the requirements, you can buy a TAO I4.0 API key and use our server.
