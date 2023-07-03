@@ -1,3 +1,0 @@
-voicevox-client
-speechrecognition
-asyncio
