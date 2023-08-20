@@ -24,11 +24,13 @@ Tested hardware:
     GPU: AMD Radeon 6400.
     RAM: 16GB.
     VRAM: 4GB.
+    OS: Arch Linux.
     
 2. Alcoft's Server:
     CPU: Intel Core i3-10100 (4 cores, 8 threads).
     GPU: NVIDIA GT 1030.
     RAM: 8GB.
     VRAM: 2GB.
+    OS: Debian.
 ```
 If your computer doesn't have the requirements, you can buy a TAO I4.0 API key and use our server.
