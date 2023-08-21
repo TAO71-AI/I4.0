@@ -21,7 +21,7 @@ Tested hardware:
 ```
 1. Alcoft's (main programmer of TAO71) PC:
     CPU: Ryzen 5 3600 (6 cores, 12 threads).
-    GPU: AMD Radeon 6400.
+    GPU: AMD Radeon RX 6400.
     RAM: 16GB.
     VRAM: 4GB.
     OS: Arch Linux.
