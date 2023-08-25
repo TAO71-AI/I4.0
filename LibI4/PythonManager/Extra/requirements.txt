@@ -1,0 +1,4 @@
+voicevox-client
+speechrecognition
+asyncio
+pygame
