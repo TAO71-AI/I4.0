@@ -24,6 +24,7 @@ Tested hardware:
     GPU: AMD Radeon RX 6400.
     RAM: 16GB.
     VRAM: 4GB.
+    SWAP: 16GB.
     OS: Arch Linux.
     
 2. Alcoft's Server:
@@ -31,6 +32,7 @@ Tested hardware:
     GPU: NVIDIA GT 1030.
     RAM: 8GB.
     VRAM: 2GB.
-    OS: Debian.
+    SWAP: 32GB.
+    OS: Ubuntu Server.
 ```
 If your computer doesn't have the requirements, you can buy a TAO I4.0 API key and use our server.
