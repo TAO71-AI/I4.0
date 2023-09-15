@@ -36,3 +36,5 @@ Tested hardware:
     OS: Ubuntu Server.
 ```
 If your computer doesn't have the requirements, you can buy a TAO I4.0 API key and use our server.
+
+## How to use
