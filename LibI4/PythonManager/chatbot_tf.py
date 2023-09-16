@@ -8,34 +8,42 @@ import ai_config as cfg
 # Other vars
 allow_args = True
 epochs = cfg.current_data.tf_epochs
-
 model_loaded = False
+tokenizer: tf.keras.preprocessing.text.Tokenizer = None
+data: list[str] = []
+model: tf.keras.Sequential = None
 
-# Prepare data
-data_file = "tf_train_data_es.txt"
-data = rf.read_lines_from_file(data_file)
-data = [mh.number_to_str(i) for i in data]
+def prepare() -> tuple:
+    # Prepare data
+    data_file = "tf_train_data_es.txt"
+    data = rf.read_lines_from_file(data_file)
+    data = [mh.number_to_str(i) for i in data]
 
-tokenizer = tf.keras.preprocessing.text.Tokenizer()
-tokenizer.fit_on_texts(data)
-word_index = tokenizer.word_index
-sequences = tokenizer.texts_to_sequences(data)
-ai_data = tf.keras.preprocessing.sequence.pad_sequences(sequences)
+    tokenizer = tf.keras.preprocessing.text.Tokenizer()
+    tokenizer.fit_on_texts(data)
+    word_index = tokenizer.word_index
+    sequences = tokenizer.texts_to_sequences(data)
+    ai_data = tf.keras.preprocessing.sequence.pad_sequences(sequences)
 
-# Create model
-model = tf.keras.Sequential()
-model.add(tf.keras.layers.Embedding(len(word_index) + 1, 128))
-model.add(tf.keras.layers.LSTM(128))
-model.add(tf.keras.layers.Dense(len(data), activation = "softmax"))
+    # Create model
+    model = tf.keras.Sequential()
+    model.add(tf.keras.layers.Embedding(len(word_index) + 1, 128))
+    model.add(tf.keras.layers.LSTM(128))
+    model.add(tf.keras.layers.Dense(len(data), activation = "softmax"))
 
-# Compile model
-model.compile(optimizer = "adam", loss = "categorical_crossentropy", metrics = ["accuracy"])
+    # Compile model
+    model.compile(optimizer = "adam", loss = "categorical_crossentropy", metrics = ["accuracy"])
 
-# Train model
-labels = tf.keras.utils.to_categorical(np.arange(len(data)), len(data))
+    # Train model
+    labels = tf.keras.utils.to_categorical(np.arange(len(data)), len(data))
+
+    # Evaluate model
+    test_loss, test_acc = model.evaluate(ai_data, labels)
+    return ai_data, labels, test_loss, test_acc
 
 def train_model(model_name: str = "tf_model") -> None:
     global model_loaded, model
+    ai_data, labels = prepare()
 
     if (model_loaded):
         return
@@ -46,9 +54,6 @@ def train_model(model_name: str = "tf_model") -> None:
         model = tf.keras.models.load_model(model_name)
     
     model_loaded = True
-
-# Evaluate model
-test_loss, test_acc = model.evaluate(ai_data, labels)
 
 # Do predictions
 def get_ai_response(input_data: str) -> str:
