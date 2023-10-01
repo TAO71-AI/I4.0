@@ -1,6 +1,6 @@
-# TAO I4.0
+# TAO71 I4.0
 ## What is this?
-TAO I4.0 is an AI created by TAO71 in C# and Python. It uses GPT4All, Transformers, Tensorflow and OpenAI's ChatGPT (API key required).
+TAO71 I4.0 is an AI created by TAO71 in C# and Python. It uses GPT4All, Hugging Face Transformers, Hugging Face Diffusers, Tensorflow and OpenAI's ChatGPT (API key required).
 
 ## If I don't want a plugin, can I remove it?
 Yes, you can remove every plugin of the AI and you will not need to fix bugs in the AI code.
@@ -11,7 +11,7 @@ Everything on the LibI4/Plugins/ directory is a plugin.
 ## PC Requirements
 CPU: Any CPU with AVX or AVX2 and 2+ cores.
 
-GPU (if you don't want to use the CPU): Any GPU with NVIDIA CUDA.
+GPU (optional): Any GPU with NVIDIA CUDA for Hugging Face Transformers, Hugging Face Difusers or Any GPU compatible with Vulkan for GPT4All.
 
 RAM: At least 4GB (8GB recommended).
 
@@ -32,7 +32,6 @@ Tested hardware:
     GPU: NVIDIA GT 1030.
     RAM: 8GB.
     VRAM: 2GB.
-    SWAP: 32GB.
-    OS: Ubuntu Server.
+    SWAP: 36GB.
+    OS: Arch Linux.
 ```
-If your computer doesn't have the requirements, you can buy a TAO71 I4.0 API key and use our server.
