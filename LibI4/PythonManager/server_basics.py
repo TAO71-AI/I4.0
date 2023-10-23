@@ -88,15 +88,14 @@ def GenerateKey(tokens: int = -1, max_connections: int = -1, daily_key: bool = F
 
 def SaveKey(key_data: dict) -> str:
     try:
-        if (key_data["user_id"] <= 0):
-            if (key_data["tokens"] <= 0 or key_data["connections"] <= 0):
-                DeleteKey(key_data["key"])
+        if (key_data["user_id"] > 0 and use_database):
+            raise Exception()
+        
+        with open("API/" + key_data["key"] + ".key", "w+") as f:
+            f.write(json.dumps(key_data))
+            f.close()
             
-            with open("API/" + key_data["key"] + ".key", "w+") as f:
-                json.dump(key_data, f)
-                f.close()
-            
-            return "Done!"
+        return "Done!"
     except:
         pass
 

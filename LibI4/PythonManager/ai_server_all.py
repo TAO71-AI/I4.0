@@ -58,8 +58,8 @@ def UpdateServer():
                         api_key["tokens"] = api_key["default"]["tokens"]
                         api_key["connections"] = api_key["default"]["connections"]
                         api_key["date"] = sb.GetCurrentDateDict()
-            except:
-                continue
+            except Exception as ex:
+                __print__("Error on API Key '" + str(api_key["key"]) + "': " + str(ex))
 
             sb.SaveKey(api_key)
 
@@ -242,8 +242,10 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
     if (key_data == None):
         key_data = sb.GenerateKey(0, 0, False)
         api_key = False
+        temp_key = True
     else:
         api_key = (not requires_api_key or (key_data["tokens"] > 0 and key_data["connections"] > 0))
+        temp_key = False
 
     try:
         if (data.startswith("service_0 ") and api_key):
@@ -301,6 +303,11 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
             key_data["connections"] += 1
 
         key_data["connections"] -= 1
+
+        if (temp_key):
+            sb.DeleteKey(key_data["key"])
+        else:
+            sb.SaveKey(key_data)
 
         # Update server
         UpdateServer()
