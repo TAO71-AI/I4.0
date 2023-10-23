@@ -2,3 +2,5 @@ voicevox-client
 speechrecognition
 asyncio
 pygame
+discord.py
+websockets
