@@ -1,1 +1,0 @@
-﻿This plugin requires the "Espeak" I4.0 plugin.
