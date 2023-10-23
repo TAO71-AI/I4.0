@@ -38,9 +38,9 @@ learning_rate = 1e-3
 move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("7")
 device = torch.device("cuda" if move_to_gpu else "cpu")
 eval_iters = 200
-n_embed = 132
+n_embed = 132 * 4
 n_layer = 6
-n_head = 6
+n_head = 24
 dropout = 0.2
 
 # Prepare training
@@ -222,3 +222,15 @@ def GenerateResponse(prompt: str) -> str:
     response = Decode(response)
 
     return response
+
+"""try:
+    TrainModel()
+    SaveModel()
+
+    while True:
+        p = input("You: ")
+        r = GenerateResponse(p)
+
+        print("AI: " + r)
+except Exception as ex:
+    print("Error training model: " + str(ex))"""

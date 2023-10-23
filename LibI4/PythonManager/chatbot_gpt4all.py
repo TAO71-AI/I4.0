@@ -13,40 +13,41 @@ def LoadModel() -> None:
         return
 
     device = "gpu" if cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("0") else "cpu"
-    model = gpt4all.GPT4All(model_name = model_name, device = device)
+    model = gpt4all.GPT4All(model_name = model_name, device = device, allow_download = True)
 
 def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: str = "server") -> str:
     global system_messages
-
     LoadModel()
-    content_str = ""
-    system_prompt = ""
-    conversation = conv.GetConversation(conversation_name)
-    
-    if (len(system_messages) > 0):
-        for i in system_messages:
-            content_str += i + " "
-            system_prompt += i + " "
-        
-        content_str += "\n"
-    
-    if (use_chat_history):
-        if (len(conversation) > 0 and not conversation.endswith("\n")):
-            conversation += "\n"
 
-        content_str += "### ASSISTANT: \n" + conversation
+    sm = ""
+    content = ""
+
+    for smsg in system_messages:
+        sm += smsg + "\n"
     
-    content_str += "### USER: " + prompt + "\n### RESPONSE: "
+    if (sm.endswith("\n")):
+        sm = sm[::-1].replace('\n', '', 1)[::-1]
+
+    try:
+        conv_msg = conv.ConversationToStr(conversation_name)
+
+        if (use_chat_history and len(conv_msg.strip()) > 0):
+            if (not conv_msg.endswith("\n")):
+                conv_msg += "\n"
+
+            content += "### CONVERSATION:\n" + conv_msg + "\n"
+    except:
+        pass
+    
+    content += "### USER: " + prompt
 
     if (cfg.current_data.print_prompt):
-        print(content_str)
+        print(sm + "\n\n")
+        print(content + "\n### RESPONSE: ")
     
-    if (use_chat_history):
-        with model.chat_session(system_prompt, "### USER: {0}\n### RESPONSE: "):
-            response = model.generate(prompt, max_tokens = cfg.current_data.max_length, temp = cfg.current_data.temp)
-    else:
-        response = model.generate(content_str, max_tokens = cfg.current_data.max_length, temp = cfg.current_data.temp)
-
+    with model.chat_session(sm, "{0}\n### RESPONSE: "):
+        response = model.generate(content, max_tokens = cfg.current_data.max_length, temp = cfg.current_data.temp)
+    
     if (cfg.current_data.print_prompt):
         print(response)
 

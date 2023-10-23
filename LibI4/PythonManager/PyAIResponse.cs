@@ -128,6 +128,7 @@ namespace TAO.I4.PythonManager
         {
             string sd = "service_";
             string jsonData = "";
+            string msg = Message;
 
             if (ExtraSystemMessages == null)
             {
@@ -147,6 +148,12 @@ namespace TAO.I4.PythonManager
                     case Service.CustomCommand:
                         sd += "2";
                         break;
+                    case Service.Image:
+                        sd += "4";
+                        break;
+                    case Service.ImageToText:
+                        sd += "5";
+                        break;
                 }
             }
             else
@@ -157,7 +164,7 @@ namespace TAO.I4.PythonManager
             sd += " ";
 
             jsonData += "{";
-            jsonData += "\"api_key\": \"" + ReadKeyFromFile() + "\", \"cmd\": \"" + sd + Message + "\", " +
+            jsonData += "\"api_key\": \"" + ReadKeyFromFile() + "\", \"cmd\": \"" + sd + msg + "\", " +
                 "\"extra_data\": {\"system_msgs\": " + Config.ArrayToJson(ExtraSystemMessages) + ", " +
                 "\"translator\": \"" + Translator + "\"}";
             jsonData += "}";
@@ -290,12 +297,64 @@ namespace TAO.I4.PythonManager
             return -1;
         }
 
+        public static int SendFileToServer(string FilePath, int Server = -1)
+        {
+            if (!File.Exists(FilePath))
+            {
+                throw new Exception("File doesn't exists.");
+            }
+
+            if (Server < 0)
+            {
+                Server = DefaultServer;
+            }
+
+            Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            byte[] FileBytes = File.ReadAllBytes(FilePath);
+            int chunksize = 4096;
+            int totalChunks = (int)Math.Ceiling((double)FileBytes.Length / chunksize);
+
+            client.Connect(new IPEndPoint(IPAddress.Parse(Servers[Server]), 8061));
+
+            try
+            {
+                for (int i = 0; i < totalChunks; i++)
+                {
+                    int offset = i * chunksize;
+                    int length = Math.Min(chunksize, FileBytes.Length - offset);
+                    byte[] chunk = new byte[length];
+
+                    Array.Copy(FileBytes, offset, chunk, 0, length);
+                    client.Send(chunk);
+
+                    if (i == totalChunks - 1)
+                    {
+                        break;
+                    }
+                }
+
+                client.Send(Encoding.UTF8.GetBytes("<end>"));
+            }
+            catch
+            {
+                client.Close();
+                throw new Exception("Bytes limit error.");
+            }
+
+            byte[] rbuffer = new byte[32];
+            client.Receive(rbuffer);
+
+            client.Close();
+            return Convert.ToInt32(Encoding.UTF8.GetString(rbuffer));
+        }
+
         public enum Service
         {
             Chatbot = 0,
             Translation = 1,
             CustomCommand = 2,
-            Image = 4
+            Image = 4,
+            ImageToText = 5
         }
     }
 }

@@ -43,6 +43,11 @@ async def GetAudioFromJson(jsondata: str):
         except:
             vel = 1
     
+    try:
+        pitch = float(jsonloaded["pitch"])
+    except:
+        pitch = 1
+    
     for i in ignore:
         msg = msg.replace(i, "")
 
@@ -53,6 +58,9 @@ async def GetAudioFromJson(jsondata: str):
         return bytes()
 
     audio_query = await client.create_audio_query(msg, speaker = voice)
+    audio_query.speed_scale = vel
+    audio_query.pitch_scale = pitch
+
     audio_syn = await audio_query.synthesis(speaker = voice)
 
     return bytes(audio_syn)

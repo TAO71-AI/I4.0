@@ -18,5 +18,3 @@ datasets
 keras-nlp
 diffusers
 tflite
-gputil
-pyamdgpuinfo

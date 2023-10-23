@@ -3,7 +3,7 @@ import torch
 import ai_config as cfg
 import ai_conversation as conv
 
-model_name: str = cfg.current_data.any_model
+model_name: str = cfg.current_data.hf_model
 low_cpu_or_memory: bool = cfg.current_data.low_cpu_or_memory
 system_messages: list[str] = []
 chat_history: list[str] = []
@@ -28,35 +28,37 @@ def LoadModel() -> None:
 
 def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: str = "server") -> str:
     global print_data, system_messages, chat_history
-
     LoadModel()
-    content_str = ""
-    conversation = conv.GetConversation(conversation_name)
-    
-    if (len(system_messages) > 0):
-        for i in system_messages:
-            content_str += i + " "
-        
-        content_str += "\n"
-    
-    if (len(conversation) > 0 and not conversation.endswith("\n")):
-        conversation += "\n"
-    
-    if (use_chat_history):
-        content_str += "### ASSISTANT: " + conversation
 
-        for i in chat_history:
-            content_str += i + " "
-        
-        content_str += "\n"
+    content = ""
+
+    for smsg in system_messages:
+        content += smsg + "\n"
     
-    content_str += "### USER: " + prompt + "\n### RESPONSE: "
+    if (len(content.strip()) > 0):
+        content += "\n"
 
-    if (print_data):
-        print(content_str)
+    try:
+        conv_msg = conv.ConversationToStr(conversation_name)
 
-    input_ids = tokenizer.encode(content_str, return_tensors = "pt", truncation = True)
+        if (use_chat_history and len(conv_msg.strip()) > 0):
+            if (not conv_msg.endswith("\n")):
+                conv_msg += "\n"
+
+            content += "### CONVERSATION:\n" + conv_msg + "\n"
+    except:
+        pass
+    
+    content += "### USER: " + prompt + "\n### RESPONSE: "
+
+    if (cfg.current_data.print_prompt):
+        print(content)
+
+    input_ids = tokenizer.encode(content, return_tensors = "pt", truncation = True)
     output = model.generate(input_ids, max_new_tokens = cfg.current_data.max_length)
     response = tokenizer.decode(output[0], skip_special_tokens = True)
+
+    if (cfg.current_data.print_prompt):
+        print(response)
 
     return response

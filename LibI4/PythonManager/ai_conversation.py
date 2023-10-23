@@ -1,6 +1,7 @@
 import os
+import json
 
-conversations: dict[str, str] = {}
+conversations: dict[str, list[dict[str, str]]] = {}
 
 def Init() -> None:
     if (not os.path.exists("Conversations/")):
@@ -19,7 +20,11 @@ def UpdateConversation(name: str) -> None:
 
     try:
         with open("Conversations/" + name + ".txt", "r+") as f:
-            conversations[name] = f.read()
+            try:
+                conversations[name] = json.loads(f.read())
+            except:
+                conversations[name] = []
+
             f.close()
     except:
         pass
@@ -30,21 +35,21 @@ def SaveConversations() -> None:
 
     for conv in convs:
         if (os.path.isfile("Conversations/" + conv)):
-            UpdateConversation(conv[0:conv.rfind(".")])
+            SaveConversation(conv[0:conv.rfind(".")])
 
 def SaveConversation(name: str) -> None:
     Init()
 
     try:
         with open("Conversations/" + name + ".txt", "w+") as f:
-            f.write(conversations[name])
+            f.write(json.dumps(conversations[name]))
             f.close()
         
         UpdateConversation(name)
     except:
         pass
 
-def GetAllConversations() -> list[str]:
+def GetAllConversations() -> list[list[dict[str, str]]]:
     Init()
     convs = os.listdir("Conversations/")
     rconvs = []
@@ -55,25 +60,43 @@ def GetAllConversations() -> list[str]:
     
     return rconvs
 
-def GetConversation(name: str) -> str:
+def GetConversation(name: str) -> list[dict[str, str]]:
     Init()
     UpdateConversation(name)
 
     try:
         return conversations[name]
     except:
-        return ""
+        return []
 
-def SaveToConversation(name: str, data: str) -> None:
+def SaveToConversation(name: str, user: str, response: str) -> None:
     Init()
 
-    try:
-        conv = conversations[name]
-    except:
-        conversations[name] = ""
-
-    conversations[name] = conversations[name] + data
+    if (list(conversations.keys()).count(name) == 0):
+        conversations[name] = []
+    
+    conversations[name] += [
+        {"role": "user", "content": user},
+        {"role": "response", "content": response}
+    ]
     SaveConversation(name)
+
+def ConversationToStr(name: str) -> str:
+    msg = ""
+    conversation = GetConversation(name)
+
+    for m in conversation:
+        try:
+            if (m["role"] == "user"):
+                msg += "User: "
+            else:
+                msg += "Response: "
+            
+            msg += m["content"] + "\n"
+        except:
+            continue
+    
+    return msg
 
 Init()
 UpdateConversations()

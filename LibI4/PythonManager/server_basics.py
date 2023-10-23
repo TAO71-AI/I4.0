@@ -11,6 +11,9 @@ use_database: bool = (cfg.current_data.keys_db["use"].lower() == "true")
 db = None
 db_con = None
 
+if (not os.path.exists("API/")):
+    os.mkdir("API/")
+
 def ReloadDB() -> None:
     if (use_database):
         db_con = mysql.connector.connect(

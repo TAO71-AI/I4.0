@@ -7,9 +7,11 @@ import chatbot_pt as cbpt
 import text_classification as tc
 import translation as tns
 import ai_generate_image as agi
+import ai_img_to_text as itt
 import ai_config as cfg
 import speech_recognition as sr
 import ai_conversation as conv
+import ai_logs as logs
 import openai
 import os
 import datetime
@@ -29,6 +31,7 @@ Models:
 6 - Internet chatbot.
 7 - PyTorch chatbot.
 8 - Image generation.
+9 - Image to Text.
 """
 
 openai_model: str = cfg.current_data.openai_model
@@ -76,6 +79,8 @@ def LoadAllModels() -> None:
             cbpt.TrainModel(model_pt_name)
         elif (i == "8"):
             agi.LoadModel()
+        elif (i == "9"):
+            itt.LoadModel()
             
 def RecognizeSpeech(lang: str, data: str) -> str:
     msg = ""
@@ -108,25 +113,32 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
     global order, current_emotion
     LoadAllModels()
 
+    sm = []
+
     if (cfg.current_data.use_default_system_messages):
         sm = system_messages
 
         for msg in extra_system_msgs:
             sm.append(msg)
 
-    sm.append(cfg.current_data.custom_system_messages)
+    if (len(cfg.current_data.custom_system_messages.strip()) > 0):
+        sm.append(cfg.current_data.custom_system_messages)
 
     if (cfg.current_data.use_dynamic_system_args):
         current_dt = datetime.datetime.now()
+        dsm = []
 
-        sm.append("Your current state of humor is '" + current_emotion + "'.")
-        sm.append("The current date is "
+        dsm.append("Your current state of humor is '" + current_emotion + "'.")
+        dsm.append("The current date is "
             + str(current_dt.day) + " of "
             + calendar.month_name[current_dt.month] + " "
             + str(current_dt.year)
             + ", and the current time is "
-            + str(current_dt.hour) + ":"
-            + str(current_dt.minute) + ".")
+            + ("0" + str(current_dt.hour) if current_dt.hour < 10 else str(current_dt.hour)) + ":"
+            + ("0" + str(current_dt.minute) if current_dt.minute < 10 else str(current_dt.minute)) + ".")
+
+        for m in dsm:
+            sm.append(m)
     
     if (cfg.current_data.system_messages_in_first_person):
         sm = basics.ToFirstPerson(sm)
@@ -138,9 +150,6 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
     cbg4a.system_messages = sm
     cba.system_messages = sm
     openai_msgs = [{"role": "system", "content": msg} for msg in sm] + [{"role": "user", "content": prompt}]
-
-    if (not prompt.endswith(".") and not prompt.endswith("!") and not prompt.endswith("?")):
-        prompt += "."
 
     if (len(order_prompt) <= 0):
         order_prompt = order
@@ -159,13 +168,12 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             "image": "",
             "tested_models": [],
             "text_classification": "-1",
+            "title": "NO TITLE",
             "errors": []
         }
 
         if (len(translator.strip()) > 0 and order_prompt.__contains__("5")):
-            prompt = tns.TranslateFrom2To1(prompt, translator)
-
-            data["response"] = "[translate " + prompt + " to " + translator + "]"
+            data["response"] = tns.TranslateFrom2To1(prompt, translator)
             data["tested_models"].append("5")
 
         if (args.__contains__("-img") and order_prompt.__contains__("8")):
@@ -177,6 +185,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
     
     tested_models: list[str] = []
     errors: list[str] = []
+    responses = []
 
     for i in order_prompt:
         response = "ERROR"
@@ -195,10 +204,14 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
                 response = "### RESPONSE: " + cbi.MakePrompt(prompt)
             elif (i == "7"):
                 response = "### RESPONSE: " + cbpt.GenerateResponse((SystemMessagesToStr() if apply_system_messages_to_tensorflow else "") + prompt)
+            elif (i == "9"):
+                response = "### RESPONSE: " + ImageToText(prompt)
             
             tested_models += i
         except Exception as ex:
             errors.append("Error on model '" + i + "': '" + str(ex) + "'")
+            logs.AddToLog("Model '" + i + "' found an error processing '" + prompt + "': '" + str(ex) + "'")
+
             continue
 
         response = response.strip()
@@ -225,8 +238,37 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             tcn: str = "-1"
             image: str = ""
 
-            if (cfg.current_data.save_conversations and cfg.current_data.force_api_key and len(conversation.strip()) > 0):
-                conv.SaveToConversation(conversation, response + "\n")
+            logs.AddToLog("Model '" + i + "' response to '" + prompt + "': '" + response + "'")
+
+            if (cfg.current_data.allow_titles and response.startswith("[") and response.__contains__("]")):
+                title = response[1:response.index("]")]
+                response = response[response.index("]") + 1:len(response)].strip()
+
+                if (response.startswith(" ")):
+                    response = response[1:len(response)]
+
+                if (len(response.strip()) == 0):
+                    response = "[" + title + "]"
+            else:
+                title = "NO TITLE"
+            
+            if (cfg.current_data.use_multi_model):
+                responses.append(response)
+                continue
+
+            if (cfg.current_data.save_conversations):
+                if (cfg.current_data.allow_titles and response.startswith("[") and response.__contains__("]")):
+                    response_conv = response[response.index("]") + 1:len(response)].strip()
+
+                    if (response_conv.startswith(" ")):
+                        response_conv = response_conv[1:len(response_conv)]
+                else:
+                    response_conv = response
+
+                if (len(response_conv.strip()) == 0):
+                    response_conv = response
+
+                conv.SaveToConversation(conversation, prompt, response_conv)
 
             if (order_prompt.__contains__("4")):
                 try:
@@ -247,14 +289,95 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             if (order_prompt.__contains__("5") and len(translator.strip()) > 0):
                 response = tns.TranslateFrom2To1(response, translator)
             
+            if (cfg.current_data.use_dynamic_system_args):
+                for m in dsm:
+                    if (sm.count(m) > 0):
+                        sm.remove(m)
+            
             return {
                 "response": response,
                 "model": i,
                 "image": image,
                 "tested_models": tested_models,
                 "text_classification": tcn,
+                "title": title,
                 "errors": errors
             }
+    
+    if (cfg.current_data.use_multi_model):
+        response = ""
+
+        if (cfg.current_data.multi_model_mode == "shortest"):
+            for r in responses:
+                if (len(response.strip()) == 0):
+                    response = r
+                    continue
+
+                if (len(r) < len(response)):
+                    response = r
+        elif (cfg.current_data.multi_model_mode == "longest"):
+            for r in responses:
+                if (len(response.strip()) == 0):
+                    response = r
+                    continue
+
+                if (len(r) > len(response)):
+                    response = r
+
+        if (cfg.current_data.allow_titles and response.startswith("[") and response.__contains__("]")):
+            title = response[1:response.index("]")]
+            response = response[response.index("]") + 1:len(response)].strip()
+
+            if (response.startswith(" ")):
+                response = response[1:len(response)]
+
+            if (len(response.strip()) == 0):
+                response = "[" + title + "]"
+        else:
+            title = "NO TITLE"
+
+        if (cfg.current_data.save_conversations):
+            if (cfg.current_data.allow_titles and response.startswith("[") and response.__contains__("]")):
+                response_conv = response[response.index("]") + 1:len(response)].strip()
+
+                if (response_conv.startswith(" ")):
+                    response_conv = response_conv[1:len(response_conv)]
+            else:
+                response_conv = response
+
+            if (len(response_conv.strip()) == 0):
+                response_conv = response
+
+            conv.SaveToConversation(conversation, prompt, response_conv)
+        
+        if (order_prompt.__contains__("4")):
+                try:
+                    tcn = tc.DoPrompt(response)
+                except Exception as ex:
+                    tcn = "-1"
+            
+        if (order_prompt.__contains__("8") and response.__contains__("[agi ")):
+            try:
+                img_prompt = response[response.index("[agi ") + 5:response[response.index("[agi ") + 5:len(response)].index("]")]
+                response = response.replace("[agi " + img_prompt + "]", "")
+                image = GenerateImage(img_prompt)
+
+                tested_models.append("8")
+            except Exception as ex:
+                errors.append("Could not generate image: " + str(ex))
+            
+        if (order_prompt.__contains__("5") and len(translator.strip()) > 0):
+            response = tns.TranslateFrom2To1(response, translator)
+        
+        return {
+            "response": response,
+            "image": image,
+            "model": "-1",
+            "tested_models": tested_models,
+            "text_classification": tcn,
+            "title": title,
+            "errors": errors
+        }
 
     return {
         "response": "ERROR",
@@ -262,6 +385,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         "model": "-1",
         "tested_models": tested_models,
         "text_classification": "-1",
+        "title": "NO TITLE",
         "errors": ["Error on response from all models."] + errors
     }
 
@@ -277,3 +401,6 @@ def GenerateImage(prompt: str) -> str:
     image = base64.b64encode(img_response).decode("utf-8")
 
     return image
+
+def ImageToText(img: str) -> str:
+    return itt.MakePrompt(img)

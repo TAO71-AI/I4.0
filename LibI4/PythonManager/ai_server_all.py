@@ -8,6 +8,8 @@ import server_basics as sb
 import chatbot_all as cb
 import ai_config as cfg
 import ai_conversation as conv
+import ai_logs as logs
+import ip_banning as ip_ban
 
 # Variables
 max_buffer_length: int = 4096
@@ -16,7 +18,13 @@ requires_api_key: bool = cfg.current_data.force_api_key
 queue: int = 0
 args: list[str] = []
 extra_system_messages: list[str] = []
-version: str = "TAO NeuroN for Servers v1.0.0"
+version: str = "TAO71 I4.0 for Servers"
+
+if (not os.path.exists("TOS.txt")):
+    with open("TOS.txt", "w+") as f:
+        f.close()
+
+cfg.SaveConfig()
 
 if (cfg.current_data.ai_args.__contains__("+self-aware")):
     args += cb.basics.ExtraSystemMessages.SelfAware()
@@ -34,12 +42,35 @@ cb.system_messages = cb.basics.GetDefault_I4_SystemMessages(cb.basics.Plugins.Al
 cb.LoadAllModels()
 
 # Server
+def UpdateServer():
+    if (requires_api_key):
+        api_keys = sb.GetAllKeys()
+
+        for api_key in api_keys:
+            try:
+                if (str(api_key["daily"]).lower() == "true" or str(api_key["daily"]) == "1"):
+                    date = datetime.datetime.now()
+                    key_date = datetime.datetime(int(api_key["date"]["year"]), int(api_key["date"]["month"]), int(api_key["date"]["day"]),
+                        int(api_key["date"]["hour"]), int(api_key["date"]["minute"]))
+                    date_diff = date - key_date
+
+                    if (date_diff.total_seconds() >= 86400):
+                        api_key["tokens"] = api_key["default"]["tokens"]
+                        api_key["connections"] = api_key["default"]["connections"]
+                        api_key["date"] = sb.GetCurrentDateDict()
+            except:
+                continue
+
+            sb.SaveKey(api_key)
+
 def __print__(data: str = "", p: bool = False) -> None:
     if (p):
         while queue > 0:
             threading.Event().wait(0.1)
-
+        
         print(data)
+        logs.AddToLog("PRINT: " + data)
+        
         return
 
     t = threading.Thread(target = __print__, args = (data, True))
@@ -50,7 +81,7 @@ def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [],
     global queue
     queue += 1
 
-    while queue > 1:
+    while queue > cfg.current_data.max_prompts:
         threading.Event().wait(0.1)
 
     response = cb.MakePrompt(prompt, "", args, extra_system_messages, translator, force_translator, conversation)
@@ -121,7 +152,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     elif (command == "getallkeys" and admin and requires_api_key):
         return str(sb.GetAllKeys())
     elif (command.startswith("sr ")):
-        lang = ""
+        lang = "en"
         data = ""
         
         try:
@@ -147,15 +178,57 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             key = "server"
         
         try:
-            conv.conversations[key] = ""
+            conv.conversations[key] = []
         except Exception as ex:
             __print__("ERROR: " + str(ex))
         
         conv.SaveConversation(key)
         return "Done! Conversation deleted!"
+    elif (command.startswith("ai_img_to_text ")):
+        img = command[15:len(command)]
+        img_bytes = b""
+        
+        if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
+            return "The file id '" + img + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + img + "_file", "rb") as f:
+            img_bytes = f.read()
+            f.close()
+        
+        with open("ReceivedFiles/" + img + ".enc_file", "r") as f:
+            img = json.loads(f.read())
+            f.close()
+        
+        tid = 0
+
+        while os.path.exists("temp_img_" + str(tid) + ".png"):
+            tid += 1
+        
+        with open("temp_img_" + str(tid) + ".png", "wb") as f:
+            f.write(img_bytes)
+            f.close()
+
+        img = cb.ImageToText("temp_img_" + str(tid) + ".png")
+        img = cb.MakePrompt(img, "", "-ncb", esm, translator)
+
+        os.remove("temp_img_" + str(tid) + ".png")
+        return img
     elif (command.startswith("save_tf_model") and admin):
         cb.SaveTF()
         return "Done!"
+    elif (command.startswith("ban ") and admin):
+        if (ip_ban.BanIP(command[4:len(command)])):
+            __print__("IP banned!")
+        else:
+            __print__("This IP is already banned.")
+    elif (command.startswith("unban ") and admin):
+        if (ip_ban.UnbanIP(command[4:len(command)])):
+            __print__("IP unbanned!")
+        else:
+            __print__("This IP isn't banned.")
+    elif (command.startswith("sbips") and admin):
+        ip_ban.ReloadBannedIPs()
+        return "The banned IPs are: " + str(ip_ban.banned_ips)
     elif (admin):
         try:
             return str(os.system(command))
@@ -167,39 +240,44 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
 def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> dict:
     if (key_data == None):
-        key_data = {"tokens": 0, "connections": 0}
+        key_data = sb.GenerateKey(0, 0, False)
         api_key = False
     else:
         api_key = (not requires_api_key or (key_data["tokens"] > 0 and key_data["connections"] > 0))
 
     try:
         if (data.startswith("service_0 ") and api_key):
-            #Chatbot full-response
+            # Chatbot full-response
 
-            key_data["tokens"] += (len(data) - 12) / 6
+            key_data["tokens"] -= (len(data) - 12) / 6
             server_response = run_server_command("-u ai_fresponse " + data[10:len(data)], extra_data)
         elif (data.startswith("service_1 ") and api_key):
-            #Translation
+            # Translation
 
-            key_data["tokens"] += (len(data) - 10) / 8
+            key_data["tokens"] -= (len(data) - 10) / 8
             server_response = run_server_command("-u ai_translation " + data[10:len(data)], extra_data)
         elif (data.startswith("service_2 ") and api_key):
-            #Custom server command
+            # Custom server command
 
-            key_data["tokens"] += (len(data) - 10)
+            key_data["tokens"] -= (len(data) - 10)
             server_response = run_server_command("-u " + data[10:len(data)], extra_data)
         elif (data.startswith("service_3 ") and api_key):
-            #Recognize speech
+            # Recognize speech
             
-            key_data["tokens"] += (len(data) - 10) / 10
+            key_data["tokens"] -= (len(data) - 10) / 10
             server_response = run_server_command("-u " + data[10:len(data)], extra_data)
         elif (data.startswith("service_4 ") and api_key):
-            #Image generation
+            # Image generation
             
-            key_data["tokens"] += (len(data) - 12) / 4
+            key_data["tokens"] -= (len(data) - 12) / 4
             server_response = run_server_command("-u ai_image " + data[10:len(data)], extra_data)
+        elif (data.startswith("service_5 ") and api_key):
+            # Image to Text
+
+            key_data["tokens"] -= 25
+            server_response = run_server_command("-u ai_img_to_text " + data[10:len(data)], extra_data)
         elif (data.lower().startswith("get_queue")):
-            #Get queue
+            # Get queue
             server_response = run_server_command("-u get_queue")
             key_data["connections"] += 1
         elif (data.lower().startswith("clear_my_history") and requires_api_key and cfg.current_data.save_conversations):
@@ -211,6 +289,13 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
                 pass
 
             key_data["connections"] += 1
+        elif (data.lower().startswith("get_tos")):
+            # Get Terms Of Service (TOS)
+            with open("TOS.txt", "r+") as f:
+                server_response = f.read()
+                f.close()
+            
+            key_data["connections"] += 1
         else:
             server_response = ""
             key_data["connections"] += 1
@@ -218,25 +303,7 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
         key_data["connections"] -= 1
 
         # Update server
-        if (requires_api_key):
-            api_keys = sb.GetAllKeys()
-
-            for api_key in api_keys:
-                try:
-                    if (str(api_key["daily"]).lower() == "true" or str(api_key["daily"]) == "1"):
-                        date = datetime.datetime.now()
-                        key_date = datetime.datetime(int(api_key["date"]["year"]), int(api_key["date"]["month"]), int(api_key["date"]["day"]),
-                            int(api_key["date"]["hour"]), int(api_key["date"]["minute"]))
-                        date_diff = date - key_date
-
-                        if (date_diff.total_seconds() >= 86400):
-                            api_key["tokens"] = api_key["default"]["tokens"]
-                            api_key["connections"] = api_key["default"]["connections"]
-                            api_key["date"] = sb.GetCurrentDateDict()
-                except:
-                    continue
-
-                sb.SaveKey(api_key)
+        UpdateServer()
 
         return str(server_response)
     except Exception as ex:
@@ -298,7 +365,7 @@ async def handle_client_ws(websocket):
             data = await websocket.recv()
             data = json.loads(data)
         except:
-            break
+            data = {}
 
         if (len(data) > 0):
             __print__("Received data from websocket: '" + str(data) + "'.")
@@ -311,6 +378,19 @@ async def handle_client_ws(websocket):
 
 async def accept_client_ws(websocket):
     __print__("Incomming connection from '" + str(websocket.remote_address[0]) + ":" + str(websocket.remote_address[1]) + "'.")
+    ip_ban.ReloadBannedIPs()
+
+    if (ip_ban.IsIPBanned(str(websocket.remote_address[0]))):
+        __print__("Banned IP, connection closed.")
+
+        try:
+            await websocket.send("{\"response\": \"You are banned.\"}")
+        except:
+            pass
+
+        await websocket.close()
+        return
+
     await handle_client_ws(websocket)
 
 def ws_server():
@@ -325,8 +405,13 @@ def ws_server():
 if (requires_api_key and len(os.listdir("API/")) <= 0):
     run_server_command("createkey")
 
+# Check everything before start server
+logs.CheckFilesAndDirs()
+
 # Start websockets server
 try:
+    logs.AddToLog("Starting server...")
+
     ws_server_thread = threading.Thread(target = ws_server)
     ws_server_thread.start()
 
@@ -342,6 +427,8 @@ while (True):
 
         cfg.SaveConfig()
         sb.StopDB()
+        logs.WriteToFile()
+        UpdateServer()
         os._exit(0)
     elif (len(command.split()) > 0):
         __print__(run_server_command(command))

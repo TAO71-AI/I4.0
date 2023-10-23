@@ -2,8 +2,8 @@ import os
 import json
 
 class ConfigData:
-    gpt4all_model: str = "ggml-gpt4all-j-v1.3-groovy"
-    any_model: str = "gpt2"
+    gpt4all_model: str = "mistral-7b-instruct-v0.1.Q4_0.gguf"
+    hf_model: str = "gpt2"
     text_classification_model: str = "nlptown/bert-base-multilingual-uncased-sentiment"
     translation_model_multiple: str = "Helsinki-NLP/opus-mt-mul-en"
     translation_models: dict[str, str] = {
@@ -15,17 +15,17 @@ class ConfigData:
     internet_model: str = "facebook/bart-large-cnn"
     image_generation_model: str = "deepghs/animefull-latest"
     image_generation_steps: int = 10
+    img_to_text_model: str = "microsoft/git-large-textcaps"
     tf_epochs: int = 100
     force_api_key: bool = True
-    cb_tf_version: int = 1
     low_cpu_or_memory: bool = False
     max_length: int = 1000
     use_chat_history: bool = True
     use_dynamic_system_args: bool = True
-    prompt_order: str = "540367128"
-    move_to_gpu: str = "540367128"
+    prompt_order: str = "5403671289"
+    move_to_gpu: str = "5403671289"
     use_gpu_if_available: bool = True
-    ai_args: str = "+self-aware"
+    ai_args: str = ""
     custom_system_messages: str = ""
     system_messages_in_first_person: bool = False
     use_default_system_messages: bool = True
@@ -40,6 +40,10 @@ class ConfigData:
         "table": "keys"
     }
     print_prompt: bool = False
+    allow_titles: bool = True
+    max_prompts: int = 1
+    use_multi_model: bool = False
+    multi_model_mode: str = "longest"
 
 def Init():
     if (not os.path.exists("config.tcfg")):
@@ -71,8 +75,8 @@ def ReadConfig() -> ConfigData:
 
             if (il == "gpt4all_model"):
                 data.gpt4all_model = config_dict[i]
-            elif (il == "any_model"):
-                data.any_model = config_dict[i]
+            elif (il == "hf_model"):
+                data.hf_model = config_dict[i]
             elif (il == "text_classification_model"):
                 data.text_classification_model = config_dict[i]
             elif (il == "translation_model_mult"):
@@ -102,6 +106,8 @@ def ReadConfig() -> ConfigData:
                     data.image_generation_steps = int(config_dict[i])
                 except:
                     data.image_generation_steps = 10
+            elif (il == "img_to_text_model"):
+                data.img_to_text_model = config_dict[i]
             elif (il == "tf_epochs"):
                 try:
                     data.tf_epochs = int(config_dict[i])
@@ -163,6 +169,23 @@ def ReadConfig() -> ConfigData:
                     pass
             elif (il == "print_prompt"):
                 data.print_prompt = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "allow_titles"):
+                data.allow_titles = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "max_prompts"):
+                try:
+                    data.max_prompts = int(config_dict[i])
+
+                    if (data.max_prompts <= 0):
+                        data.max_prompts = 1
+                except:
+                    data.max_prompts = 1
+            elif (il == "use_multi_model"):
+                data.use_multi_model = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "multi_model_mode"):
+                data.multi_model_mode = config_dict[i].lower()
+
+                if (data.multi_model_mode != "shortest" and data.multi_model_mode != "longest"):
+                    data.multi_model_mode = "longest"
 
         f.close()
     
@@ -181,7 +204,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text = ""
 
     text += "gpt4all_model=" + cfg.gpt4all_model + "\n"
-    text += "any_model=" + cfg.any_model + "\n"
+    text += "hf_model=" + cfg.hf_model + "\n"
     text += "text_classification_model=" + cfg.text_classification_model + "\n"
     text += "translation_model_mult=" + cfg.translation_model_multiple + "\n"
     text += "translation_models=" + json.dumps(cfg.translation_models) + "\n"
@@ -191,6 +214,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "internet_model=" + cfg.internet_model + "\n"
     text += "image_generation_model=" + cfg.image_generation_model + "\n"
     text += "image_generation_steps=" + str(cfg.image_generation_steps) + "\n"
+    text += "img_to_text_model=" + cfg.img_to_text_model + "\n"
     text += "tf_epochs=" + str(cfg.tf_epochs) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "cb_tf_version=" + str(cfg.cb_tf_version) + "\n"
@@ -209,6 +233,10 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "save_conversations=" + ("true" if cfg.save_conversations == True else "false") + "\n"
     text += "keys_db=" + str(cfg.keys_db).replace("'", "\"") + "\n"
     text += "print_prompt=" + ("true" if cfg.print_prompt == True else "false") + "\n"
+    text += "allow_titles=" + ("true" if cfg.allow_titles == True else "false") + "\n"
+    text += "max_prompts=" + str(cfg.max_prompts) + "\n"
+    text += "use_multi_model=" + ("true" if cfg.use_multi_model == True else "false") + "\n"
+    text += "multi_model_mode=" + cfg.multi_model_mode + "\n"
 
     with open("config.tcfg", "w") as f:
         f.write(text)
