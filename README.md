@@ -34,4 +34,7 @@ Tested hardware:
     VRAM: 2GB.
     SWAP: 36GB.
     OS: Arch Linux.
+    Extra:
+        · Public TAO71 I4.0 Server (CPU).
+        · Public TAO71 VoiceVox Server (GPU).
 ```
