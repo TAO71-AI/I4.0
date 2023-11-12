@@ -1,6 +1,0 @@
-safetensors
-scipy
-runhouse
-sentencepiece
-sacremoses
-accelerate
