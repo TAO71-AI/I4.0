@@ -35,3 +35,12 @@ Tested hardware:
     SWAP: 36GB.
     OS: Arch Linux.
 ```
+
+-----------------------------------
+
+Contributors/Helpers:
+
+[![AlcoftTAO](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/AlcoftTAO.jpeg?raw=true)](https://github.com/alcoftTAO)
+[![Coderarduinopython](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/Coderarduinopython.png?raw=true)](https://github.com/coderarduinopython)
+[![JLMR08](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/JLMR08.png?raw=true)](https://github.com/Jlmr08)
+[![DINOLT](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/DINOLT.jpg?raw=true)](https://www.youtube.com/@GoldenClassicsStudios)
