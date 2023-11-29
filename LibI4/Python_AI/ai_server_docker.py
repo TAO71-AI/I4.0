@@ -1,13 +1,35 @@
 import ai_server
 import os
 import time
+import requests
+import socket
 from sys import argv
+
+def GetIPs() -> list[tuple[str, int]]:
+    local = ""
+    public = ""
+
+    try:
+        host_name = socket.gethostname()
+        local = socket.gethostbyname(host_name)
+    except:
+        print("Error getting local IP.")
+    
+    try:
+        response = requests.get("https://api64.ipify.org?format=json")
+        data = response.json()
+        public = data["ip"]
+    except:
+        print("Error getting public IP.")
+    
+    return [(local, 8060), (public, 8060)]
 
 max_buffer_length: int = 4096
 max_users: int = 1000
 extra_system_messages: list[str] = []
 plugins: list[str] = ai_server.cb.basics.Plugins.All()
 version: str = "TAO71 I4.0 for Servers"
+ips: list[tuple[str, int]] = GetIPs()
 
 if (len(argv) > 1):
     if (argv[1].lower() == "-l"):
@@ -16,6 +38,8 @@ if (len(argv) > 1):
         max_users = 7500
         max_buffer_length = 8192
 
+print("Local IP: " + ips[0][0] + ":" + str(ips[0][1]))
+print("Public IP: " + ips[1][0] + ":" + str(ips[1][1]))
 print("Server started. Press Ctrl+C to stop.")
 
 try:
