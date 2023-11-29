@@ -1,1 +1,0 @@
-﻿This will need the Sing plugin for TAO I4.0. If you don't need this option, you can delete this directory.
