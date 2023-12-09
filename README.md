@@ -11,7 +11,7 @@ Everything on the LibI4/Plugins/ directory is a plugin.
 ## PC Requirements
 CPU: Any CPU with AVX or AVX2 and 2+ cores.
 
-GPU (optional): Any GPU with NVIDIA CUDA or ROCm 5.6 (experimental) for Hugging Face Transformers, Hugging Face Difusers or Any GPU compatible with Vulkan for GPT4All.
+GPU (optional): Any GPU with NVIDIA CUDA for Hugging Face Transformers, Hugging Face Difusers or Any GPU compatible with Vulkan for GPT4All.
 
 RAM: At least 4GB (8GB recommended).
 
