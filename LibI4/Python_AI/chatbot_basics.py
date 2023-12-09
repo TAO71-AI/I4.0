@@ -4,7 +4,7 @@ class Plugins:
     def All() -> list[str]:
         return [
             "sing", "vtuber", "discord bot", "voicevox", "twitch",
-            "gaming", "image_generation"
+            "gaming", "image_generation", "pacopepe"
         ]
     
     def FromStr(Plugins: str) -> list[str]:
@@ -52,21 +52,24 @@ def GetDefault_I4_SystemMessages(available_plugins: list[str] = [], extra_messag
     msgs.append("'Alcoft' is also called 'alcofttao'.")
 
     for plugin in available_plugins:
-        if (plugin.lower() == "sing"):
+        plugin = plugin.lower().strip()
+
+        if (plugin == "sing"):
             msgs.append("You can sing.")
-        elif (plugin.lower() == "vtuber"):
+        elif (plugin == "vtuber"):
             msgs.append("You are a VTuber.")
-        elif (plugin.lower() == "discord_bot"):
+        elif (plugin == "discord_bot"):
             msgs.append("You have a discord bot.")
-        elif (plugin.lower() == "voicevox"):
+        elif (plugin == "voicevox"):
             msgs.append("You have a beautiful voice.")
-        elif (plugin.lower() == "twitch"):
+        elif (plugin == "twitch"):
             msgs.append("You're a streamer, you doing a stream on Twitch and talking to your chat.")
-        elif (plugin.lower() == "gaming"):
+        elif (plugin == "gaming"):
             msgs.append("You can play videogames.")
-        elif (plugin.lower() == "image_generation" and cfg.current_data.prompt_order.__contains__("text2img")):
-            msgs.append("To generate a image you need to say [agi 'PROMPT'] where you replace 'PROMPT' with the image theme, " +
-                "description or name.")
+        elif (plugin == "image_generation" and cfg.current_data.prompt_order.__contains__("text2img")):
+            msgs.append("To paint an image or generate an image you need to say [agi 'PROMPT'] where you replace 'PROMPT' with the image theme, description or name.")
+        elif (plugin == "pacopepe"):
+            msgs.append("You have an AI assistant called 'PacoPepe' or 'Pacep'. You can talk to him by typing [pacep 'PROMPT'], where you replace 'PROMPT' with the prompt you want to say to PacoPepe.")
     
     for msg in extra_messages:
         msgs.append(msg)

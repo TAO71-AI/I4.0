@@ -1,14 +1,14 @@
 # For whisper recognition
-speechrecognition>=*
-soundfile>=*
-pyaudio>=*
-openai-whisper>=*
+speechrecognition
+soundfile
+pyaudio
+openai-whisper
 
 # For opencv
-opencv-python>=*
-numpy>=*
+opencv-python
+numpy
 
 # For games using opencv
-pyautogui>=*
-keyboard>=*
-screeninfo>=*
+pyautogui
+keyboard
+screeninfo

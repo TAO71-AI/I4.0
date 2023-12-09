@@ -1,30 +1,30 @@
-from transformers import AutoTokenizer, AutoModelForTextToWaveform
+from transformers import AutoProcessor, AutoModel
 import torch
 import os
 import ai_config as cfg
 
-model: AutoModelForTextToWaveform = None
-tokenizer: AutoTokenizer = None
+model: AutoModel = None
+processor: AutoProcessor = None
 
 def __load_model__(model_name: str, device: str):
-    model = AutoModelForTextToWaveform.from_pretrained(model_name)
+    model = AutoModel.from_pretrained(model_name)
     model.to(device)
         
     return model
 
 def LoadModel() -> None:
-    global model, tokenizer
+    global model, processor
 
-    if (model != None and tokenizer != None):
+    if (model != None and processor != None):
         return
     
-    move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("hf")
+    move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("text2audio")
     device = "cuda" if (move_to_gpu) else "cpu"
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'chatbot (hf)' on device '" + device + "'...")
+        print("Loading model 'text to audio' on device '" + device + "'...")
     
-    tokenizer = AutoTokenizer.from_pretrained(cfg.current_data.text_to_audio_model)
+    processor = AutoProcessor.from_pretrained(cfg.current_data.text_to_audio_model)
     model = __load_model__(cfg.current_data.text_to_audio_model, device)
 
 def GenerateAudio(prompt: str) -> bytes:
@@ -36,15 +36,15 @@ def GenerateAudio(prompt: str) -> bytes:
     if (prompt.endswith("\"") or prompt.endswith("'")):
         prompt = prompt[0:len(prompt) - 2]
 
-    input_ids = tokenizer.encode(prompt, return_tensors = "pt")
-    audio = model.generate(input_ids, max_new_tokens = cfg.current_data.max_length)
+    input_ids = processor([processor], return_tensors = "pt")
+    audio = model.generate(**input_ids, do_sample = True)
 
-    audio_name = "ta.png"
+    audio_name = "ta.wav"
     audio_n = 0
 
     while (os.path.exists(audio_name)):
         audio_n += 1
-        audio_name = "ta_" + str(audio_n) + ".png"
+        audio_name = "ta_" + str(audio_n) + ".wav"
 
     with open(audio_name, "w+") as f:
         f.close()

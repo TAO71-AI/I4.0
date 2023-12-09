@@ -2,9 +2,10 @@ from diffusers import DiffusionPipeline
 import torch
 import os
 import json
+import traceback
 import ai_config as cfg
 
-pipeline = None
+pipeline: DiffusionPipeline = None
 
 def LoadModel() -> None:
     global pipeline
@@ -23,18 +24,15 @@ def LoadModel() -> None:
     pipeline.to(device)
 
 def GenerateImage(prompt: str | dict[str, str]) -> bytes:
-    if (prompt is dict[str, str]):
+    if (type(prompt) == dict[str, str]):
         return __generate_image__(prompt["prompt"], prompt["negative_prompt"])
     
     try:
-        prompt = dict(prompt)
-        return __generate_image__(prompt["prompt"], prompt["negative_prompt"])
+        p = dict(prompt.replace("\"", "\'"))
+        return __generate_image__(p["prompt"], p["negative_prompt"])
     except:
-        try:
-            prompt = json.loads(prompt)
-            return __generate_image__(prompt["prompt"], prompt["negative_prompt"])
-        except:
-            return __generate_image__(prompt, "")
+        p = json.loads(prompt)
+        return __generate_image__(p["prompt"], p["negative_prompt"])
 
 def __generate_image__(prompt: str, negative_prompt: str) -> bytes:
     LoadModel()

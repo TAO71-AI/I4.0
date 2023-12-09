@@ -2,7 +2,6 @@ import os
 import json
 import discord
 import websockets
-import asyncio
 import time
 from discord.ext import commands
 
@@ -34,6 +33,7 @@ ips: list[str] = [
     "127.0.0.1:8060",
     "147.78.87.113:8060"
 ]
+conversation = "discord"
 
 async def connect_to_server_and_send(send_data: str = "") -> str:
     global websocket
@@ -98,13 +98,19 @@ async def on_message(message) -> None:
                 res += "\ncc - clear the conversation. If you're having errors and you don't know why, use this option."
                 res += "\nhelp - see this help message."
             elif (t == "response"):
-                await send_message(message.channel, "The current server queue is of '" + json.loads(await connect_to_server_and_send(json.dumps({
+                queue = json.loads(await connect_to_server_and_send(json.dumps({
                     "cmd": "get_queue"
-                })))["response"] + "' users.")
+                })))["response"]
+                queue = json.loads(queue.replace("\'", "\""))
+                queue_users = queue["queue"]
+                queue_time = queue["time"]["chatbot"]
+
+                await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
 
                 p = json.dumps({
                     "cmd": "service_0 " + p,
-                    "api_key": server_api_key
+                    "api_key": server_api_key,
+                    "conversation": conversation
                 })
                 res = await connect_to_server_and_send(p)
                 
@@ -119,7 +125,8 @@ async def on_message(message) -> None:
             elif (t == "cc"):
                 p = json.dumps({
                     "cmd": "clear_my_history",
-                    "api_key": server_api_key
+                    "api_key": server_api_key,
+                    "conversation": conversation
                 })
                 res = await connect_to_server_and_send(p)
                 res = json.loads(res)

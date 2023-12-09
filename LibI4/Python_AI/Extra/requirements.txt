@@ -1,6 +1,6 @@
-voicevox-client>=*
-speechrecognition>=*
-asyncio>=*
-pygame>=*
-discord.py>=*
-websockets>=*
+voicevox-client
+speechrecognition
+asyncio
+pygame
+discord.py
+websockets

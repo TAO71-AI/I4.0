@@ -1,6 +1,5 @@
-safetensors>=*
-scipy>=*
-runhouse>=*
-sentencepiece>=*
-sacremoses>=*
-accelerate>=*
+safetensors
+runhouse
+sentencepiece
+sacremoses
+accelerate

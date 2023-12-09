@@ -24,4 +24,4 @@ while (True):
         ai_server.UpdateServer()
         os._exit(0)
     elif (len(command.split()) > 0):
-        ai_server.__print__(ai_server.run_server_command(command))
+        ai_server.__print__(ai_server.run_server_command(command, {"ip": "0.0.0.0"}))

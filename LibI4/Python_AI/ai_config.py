@@ -17,14 +17,16 @@ class ConfigData:
     image_generation_steps: int = 10
     img_to_text_model: str = "microsoft/git-large-r-coco"
     text_to_audio_model: str = "suno/bark-small"
+    nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"
+    nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"
     tf_epochs: int = 100
     force_api_key: bool = True
     low_cpu_or_memory: bool = False
     max_length: int = 1000
     use_chat_history: bool = True
     use_dynamic_system_args: bool = True
-    prompt_order: str = "tr sc g4a"
-    move_to_gpu: str = "tr sc g4a hf int pt tf cgpt text2img img2text text2audio"
+    prompt_order: str = "tr sc g4a nsfw_filter-text"
+    move_to_gpu: str = "tr sc g4a hf int pt tf cgpt text2img img2text text2audio nsfw_filter-text nsfw_filter-image"
     use_gpu_if_available: bool = False
     ai_args: str = ""
     custom_system_messages: str = ""
@@ -48,8 +50,12 @@ class ConfigData:
     use_tf_instead_of_pt: bool = False
     print_loading_message: bool = True
     enable_predicted_queue_time: bool = True
-    enabled_plugins: str = "sing vtuber discord_bot voicevox twitch gaming image_generation"
+    enabled_plugins: str = "sing vtuber discord_bot voicevox twitch gaming image_generation pacopepe"
     use_only_latest_log: bool = True
+    max_predicted_queue_time: int = 20
+    use_google_instead_of_whisper: bool = False
+    allow_processing_if_nsfw: bool = False
+    ban_if_nsfw: bool = True
 
 def Init() -> None:
     if (not os.path.exists("config.tcfg")):
@@ -120,6 +126,10 @@ def ReadConfig() -> ConfigData:
                 data.img_to_text_model = config_dict[i]
             elif (il == "text_to_audio_model"):
                 data.text_to_audio_model = config_dict[i]
+            elif (il == "nsfw_filter_text_model"):
+                data.nsfw_filter_text_model = config_dict[i]
+            elif (il == "nsfw_filter_image_model"):
+                data.nsfw_filter_image_model = config_dict[i]
             elif (il == "tf_epochs"):
                 try:
                     data.tf_epochs = int(config_dict[i])
@@ -203,6 +213,20 @@ def ReadConfig() -> ConfigData:
                 data.enabled_plugins = config_dict[i].lower()
             elif (il == "use_only_latest_log"):
                 data.use_only_latest_log = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "max_predicted_queue_time"):
+                try:
+                    data.max_predicted_queue_time = int(config_dict[i])
+
+                    if (data.max_predicted_queue_time <= 0):
+                        data.max_predicted_queue_time = 20
+                except:
+                    data.max_predicted_queue_time = 20
+            elif (il == "use_google_instead_of_whisper"):
+                data.use_google_instead_of_whisper = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "allow_processing_if_nsfw"):
+                data.allow_processing_if_nsfw = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "ban_if_nsfw"):
+                data.ban_if_nsfw = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
 
         f.close()
     
@@ -233,6 +257,8 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "image_generation_steps=" + str(cfg.image_generation_steps) + "\n"
     text += "img_to_text_model=" + cfg.img_to_text_model + "\n"
     text += "text_to_audio_model=" + cfg.text_to_audio_model + "\n"
+    text += "nsfw_filter_text_model=" + cfg.nsfw_filter_text_model + "\n"
+    text += "nsfw_filter_image_model=" + cfg.nsfw_filter_image_model + "\n"
     text += "tf_epochs=" + str(cfg.tf_epochs) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "low_cpu_or_memory=" + ("true" if cfg.low_cpu_or_memory == True else "false") + "\n"
@@ -259,6 +285,10 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "enable_predicted_queue_time=" + ("true" if cfg.enable_predicted_queue_time == True else "false") + "\n"
     text += "enabled_plugins=" + cfg.enabled_plugins + "\n"
     text += "use_only_latest_log=" + ("true" if cfg.use_only_latest_log == True else "false") + "\n"
+    text += "max_predicted_queue_time=" + str(cfg.max_predicted_queue_time) + "\n"
+    text += "use_google_instead_of_whisper=" + ("true" if cfg.use_google_instead_of_whisper == True else "false") + "\n"
+    text += "allow_processing_if_nsfw=" + ("true" if cfg.allow_processing_if_nsfw == True else "false") + "\n"
+    text += "ban_if_nsfw=" + ("true" if cfg.ban_if_nsfw == True else "false") + "\n"
 
     with open("config.tcfg", "w") as f:
         f.write(text)

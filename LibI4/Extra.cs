@@ -8,10 +8,18 @@ namespace TAO.I4
         public static string DictionaryToJson(Dictionary<object, object> Dictionary)
         {
             string jsonDict = "{";
+            int i = 0;
 
             foreach (object key in Dictionary.Keys)
             {
                 jsonDict += "\"" + key + "\": \"" + Dictionary[key] + "\"";
+
+                if (i < Dictionary.Count - 1)
+                {
+                    jsonDict += ", ";
+                }
+
+                i++;
             }
 
             jsonDict += "}";
@@ -22,9 +30,14 @@ namespace TAO.I4
         {
             string jsonArray = "[";
 
-            foreach (object obj in Array)
+            for (int i = 0; i < Array.Length; i++)
             {
-                jsonArray += "\"" + obj.ToString().Replace("\"", "\'") + "\"";
+                jsonArray += "\"" + Array[i].ToString().Replace("\"", "\'") + "\"";
+
+                if (i < Array.Length - 1)
+                {
+                    jsonArray += ", ";
+                }
             }
 
             jsonArray += "]";

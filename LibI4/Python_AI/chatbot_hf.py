@@ -36,7 +36,7 @@ def LoadModel() -> None:
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     model = __load_model__(model_name, device)
 
-def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: str = "server") -> str:
+def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: list[str] = ["", ""]) -> str:
     global print_data, system_messages, chat_history
     LoadModel()
 
@@ -46,16 +46,15 @@ def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: st
     for smsg in system_messages:
         sm += smsg + "\n"
     
-    if (sm.endswith("\n")):
-        sm = sm[:-1]
-    
     content += sm
     
-    if (len(content.strip()) > 0):
+    if (len(content.strip()) > 0 and not content.endswith("\n")):
+        content += "\n\n"
+    elif (len(content.strip()) > 0 and content.endswith("\n")):
         content += "\n"
 
     try:
-        conv_msg = conv.ConversationToStr(conversation_name)
+        conv_msg = conv.ConversationToStr(conversation_name[0], conversation_name[1])
 
         if (use_chat_history and len(conv_msg.strip()) > 0):
             if (not conv_msg.endswith("\n")):

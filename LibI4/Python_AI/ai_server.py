@@ -64,6 +64,12 @@ def UpdateServer() -> None:
                 __print__("Error on API Key '" + str(api_key["key"]) + "': " + str(ex))
 
             sb.SaveKey(api_key)
+    
+    conv.SaveConversations()
+
+def __add_queue_time__(model: str, time: float) -> None:
+    if (len(times[model]) <= cfg.current_data.max_predicted_queue_time):
+        times[model].append(time)
 
 def __get_args__(ai_args: str) -> list[str]:
     args = []
@@ -96,12 +102,12 @@ def __print__(data: str = "", p: bool = False) -> None:
     t.start()
 
 def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [],
-        translator: str = "", force_translator: bool = True, conversation: str = "",
+        translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""],
         use_default_sys_prompts: bool = True) -> dict:
     global queue
     queue += 1
 
-    while queue > cfg.current_data.max_prompts:
+    while (queue > cfg.current_data.max_prompts):
         threading.Event().wait(0.1)
 
     response = cb.MakePrompt(prompt, [], args, extra_system_messages, translator, force_translator, conversation,
@@ -111,7 +117,7 @@ def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [],
     return response
 
 def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [],
-        translator: str = "", force_translator: bool = True, conversation: str = "",
+        translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""],
         use_default_sys_prompts: bool = True) -> dict:
     response = __prompt__(prompt, args, extra_system_messages, translator, force_translator, conversation,
         use_default_sys_prompts)
@@ -120,8 +126,14 @@ def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [],
         cb.current_emotion = "angry"
     elif (response["text_classification"] == "1"):
         cb.current_emotion = "sad"
-    else:
+    elif (response["text_classification"] == "4"):
         cb.current_emotion = "happy"
+    else:
+        try:
+            cb.current_emotion = str(int(response["text_classification"]))
+            cb.current_emotion = "neutral"
+        except:
+            cb.current_emotion = response["text_classification"]
 
     return response
 
@@ -148,11 +160,6 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         translator = ""
     
     try:
-        conver = extra_data["conversation"]
-    except:
-        conver = "server" if admin else ""
-    
-    try:
         use_default_sys_prompts = str(extra_data["use_default_sys_prompts"]).lower()
         use_default_sys_prompts = (use_default_sys_prompts == "yes" or use_default_sys_prompts == "true")
     except:
@@ -167,6 +174,19 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         key_data = extra_data["key"]
     except:
         key_data = {}
+    
+    try:
+        conver = list(extra_data["conversation"])
+
+        if (len(conver) < 2):
+            raise
+    except:
+        try:
+            conver = [key_data["key"], ""]
+        except:
+            conver = ["", ""]
+    
+    ip = str(extra_data["ip"])
 
     if (len(ai_args.strip()) == 0):
         ai_args = cfg.current_data.ai_args
@@ -181,24 +201,30 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = DoPrompt(command[12:len(command)], "", esm, translator, True, conver, use_default_sys_prompts)["response"]
+        res = DoPrompt(command[12:len(command)], "", esm, translator, True, conver, use_default_sys_prompts)
+
+        if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
         
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
-            times["chatbot"].append(end_timer - start_timer)
+            __add_queue_time__("chatbot", end_timer - start_timer)
 
-        return res
+        return res["response"]
     elif (command.startswith("ai_fresponse ")):
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = str(DoPrompt(command[13:len(command)], "", esm, translator, True, conver, use_default_sys_prompts))
+        res = DoPrompt(command[13:len(command)], "", esm, translator, True, conver, use_default_sys_prompts)
+
+        if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
-            times["chatbot"].append(end_timer - start_timer)
+            __add_queue_time__("chatbot", end_timer - start_timer)
         
-        return res
+        return str(res)
     elif (command.startswith("ai_image ")):
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
@@ -210,17 +236,20 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             np = p[p.index("[NEGATIVE]") + 10:len(p)].strip()
             p = p[0:p.index("[NEGATIVE]")].strip()
 
-        res = DoPrompt(str({
+        res = DoPrompt(json.dumps({
             "prompt": p,
             "negative_prompt": np
-        }).replace("\'", "\""), "-ncb-img", esm, translator, True, conver, use_default_sys_prompts)
+        }), "-ncb-img", esm, translator, True, conver, use_default_sys_prompts)
+
+        if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
 
         if (len(res["errors"]) > 0):
             __print__("Errors: " + (e + "\n" for e in res["errors"]))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
-            times["text2img"].append(end_timer - start_timer)
+            __add_queue_time__("text2img", end_timer - start_timer)
 
         return res
     elif (command.startswith("ai_audio ")):
@@ -229,9 +258,12 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         
         res = DoPrompt(command[9:len(command)], "-ncb-aud", esm, translator, True, conver, use_default_sys_prompts)
 
+        if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
+
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
-            times["text2audio"].append(end_timer - start_timer)
+            __add_queue_time__("text2audio", end_timer - start_timer)
 
         return res
     elif (command.startswith("echo ") and admin):
@@ -277,19 +309,11 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     elif (command.startswith("version")):
         return str(version)
     elif (command.startswith("clear_my_history")):
-        key = ""
-
         try:
-            key = key_data["key"]
-        except:
-            key = "server"
-        
-        try:
-            conv.conversations[key] = []
+            conv.ClearConversation(conver[0], conver[1])
         except Exception as ex:
             __print__("ERROR: " + str(ex))
         
-        conv.SaveConversation(key)
         return "Done! Conversation deleted!"
     elif (command.startswith("ai_img_to_text ")):
         img = command[15:len(command)]
@@ -321,9 +345,12 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         img = cb.ImageToText("temp_img_" + str(tid) + ".png")
         img = cb.MakePrompt(img, "", "-ncb", esm, translator)
 
+        if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
+
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
-            times["img2text"].append(end_timer - start_timer)
+            __add_queue_time__("img2text", end_timer - start_timer)
 
         os.remove("temp_img_" + str(tid) + ".png")
         return img
@@ -354,6 +381,9 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         audio = cb.RecognizeAudio("temp_audio_" + str(tid) + ".wav")
         audio = cb.MakePrompt(audio, "", "-ncb", esm, translator)
 
+        if (audio["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
+
         os.remove("temp_audio_" + str(tid) + ".wav")
         return audio
     elif (command.startswith("save_tf_model") and admin):
@@ -372,6 +402,10 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     elif (command.startswith("sbips") and admin):
         ip_ban.ReloadBannedIPs()
         return "The banned IPs are: " + str(ip_ban.banned_ips)
+    elif (command.startswith("get_my_conversation")):
+        return json.dumps(conv.GetConversation(conver[0], conver[1]))
+    elif (command.startswith("get_models")):
+        return json.dumps(cb.GetAllModels())
     elif (admin):
         try:
             return str(os.system(command))
@@ -423,7 +457,7 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
             server_response = run_server_command("-u ai_audio " + data[10:len(data)], extra_data)
         elif (data.lower().startswith("get_queue")):
             # Get queue
-            server_response = run_server_command("-u get_queue")
+            server_response = run_server_command("-u get_queue", extra_data)
             key_data["connections"] += 1
         elif (data.lower().startswith("clear_my_history") and requires_api_key and cfg.current_data.save_conversations):
             # Clear chat history
@@ -481,15 +515,20 @@ def on_receive(data: dict[str]):
             key_data = sb.GetKey(api_key)
         except:
             pass
+
+        try:
+            extra_data["ip"] = str(data["ip"])
+        except Exception as ex:
+            __print__("Error getting IP: " + str(ex))
         
         try:
             extra_data["key"] = key_data
 
             if (key_data["tokens"] > 0 and key_data["connections"] > 0):
-                extra_data["conversation"] = key_data["key"]
+                extra_data["conversation"] = [key_data["key"], data["conversation"]]
                 res = RunService(data["cmd"], key_data, extra_data)
             else:
-                extra_data["conversation"] = key_data["key"]
+                extra_data["conversation"] = [key_data["key"], data["conversation"]]
                 res = RunService(data["cmd"], key_data, extra_data)
                 error = "ERROR ON API KEY: Not enough tokens or connections."
         except:
@@ -519,6 +558,7 @@ async def handle_client_ws(websocket):
 
         if (len(data) > 0):
             __print__("Received data from websocket: '" + str(data) + "'.")
+            data["ip"] = str(websocket.remote_address[0])
             server_response = on_receive(data)
 
             __print__("Server response: '" + str(server_response) + "'.")
@@ -553,7 +593,7 @@ def ws_server():
     event_loop.run_forever()
 
 def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extra_system_messages = [],
-    _plugins = cb.basics.Plugins.All(), _version = "TAO71 I4.0 for Servers") -> None:
+    _plugins = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins), _version = "TAO71 I4.0 for Servers") -> None:
     global max_buffer_length, max_users, args, extra_system_messages, plugins, version
 
     # Variables
@@ -569,7 +609,7 @@ def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extr
             f.close()
 
     if (requires_api_key and len(os.listdir("API/")) <= 0):
-        run_server_command("createkey")
+        run_server_command("createkey", {"ip": "0.0.0.0"})
 
     cfg.SaveConfig()
 

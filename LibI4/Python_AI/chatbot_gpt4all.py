@@ -19,7 +19,7 @@ def LoadModel() -> None:
 
     model = gpt4all.GPT4All(model_name = model_name, device = device, allow_download = True)
 
-def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: str = "server") -> str:
+def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: list[str] = ["", ""]) -> str:
     global system_messages
     LoadModel()
 
@@ -33,7 +33,7 @@ def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: st
         sm = sm[:-1]
 
     try:
-        conv_msg = conv.ConversationToStr(conversation_name)
+        conv_msg = conv.ConversationToStr(conversation_name[0], conversation_name[1])
 
         if (use_chat_history and len(conv_msg.strip()) > 0):
             if (not conv_msg.endswith("\n")):

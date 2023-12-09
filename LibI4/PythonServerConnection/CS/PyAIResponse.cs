@@ -126,7 +126,7 @@ namespace TAO.I4.PythonManager
 
         public static byte[] ExecuteService(string Message, Service ServiceData = Service.CustomCommand,
             string[] ExtraSystemMessages = null, string Translator = "", bool UseDefaultSysPrompts = true,
-            string AIArgs = "")
+            string AIArgs = "", string Conversation = "")
         {
             string sd = "service_";
             string jsonData = "";
@@ -172,7 +172,8 @@ namespace TAO.I4.PythonManager
             jsonData += "\"api_key\": \"" + APIKey + "\", \"cmd\": \"" + sd + msg + "\", " +
                 "\"extra_data\": {\"system_msgs\": " + Extra.ArrayToJson(ExtraSystemMessages) + ", " +
                 "\"translator\": \"" + Translator + "\", \"use_default_sys_prompts\": \"" +
-                UseDefaultSysPrompts.ToString().ToLower() + "\", \"ai_args\": \"" + AIArgs + "\"}";
+                UseDefaultSysPrompts.ToString().ToLower() + "\", \"ai_args\": \"" + AIArgs + "\"}, " +
+                "\"conversation\": \"" + Conversation + "\"";
             jsonData += "}";
 
             return SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData), true).Result;
@@ -280,13 +281,14 @@ namespace TAO.I4.PythonManager
             return streamBytes;
         }
 
-        public static string ExecuteCommandOnServer(string Command, int Server = -1)
+        public static string ExecuteCommandOnServer(string Command, int Server = -1, string Conversation = "")
         {
             ConnectToServer(Server);
             string jsonData = "";
 
             jsonData += "{";
-            jsonData += "\"api_key\": \"" + APIKey + "\", \"cmd\": \"" + Command + "\"";
+            jsonData += "\"api_key\": \"" + APIKey + "\", \"cmd\": \"" + Command + "\"," +
+                "\"conversation\": \"" + Conversation + "\"";
             jsonData += "}";
 
             byte[] response_data = SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData), false).Result;

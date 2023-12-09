@@ -9,10 +9,12 @@ import translation as tns
 import ai_generate_image as agi
 import ai_img_to_text as itt
 import ai_generate_audio as aga
+import ai_filters as filters
 import speech_recog as sr
 import ai_config as cfg
 import ai_conversation as conv
 import ai_logs as logs
+import PIL.Image as Image
 import openai
 import os
 import datetime
@@ -35,6 +37,8 @@ text2img - Image generation.
 img2text - Image to Text.
 whisper - Recognize audio using Whisper (Speech To Text).
 text2audio - Audio generation.
+nsfw_filter-text - Check if a text is NSFW.
+nsfw_filter-image - Check if an image is NSFW.
 """
 
 openai_model: str = cfg.current_data.openai_model
@@ -59,6 +63,42 @@ def SystemMessagesToStr(extra_system_messages: list[str] = None) -> str:
     
     sm_str += ") "
     return sm_str
+
+def GetAllModels() -> dict[str]:
+    models = order.split(" ")
+    mls = {}
+
+    for i in models:
+        if (i == "g4a"):
+            mls[i] = cfg.current_data.gpt4all_model
+        elif (i == "tf"):
+            mls[i] = "Custom TF Model"
+        elif (i == "cgpt"):
+            mls[i] = "ChatGPT"
+        elif (i == "hf"):
+            mls[i] = cfg.current_data.hf_model
+        elif (i == "sc"):
+            mls[i] = cfg.current_data.text_classification_model
+        elif (i == "tr"):
+            mls[i] = [cfg.current_data.translation_model_multiple] + list(cfg.current_data.translation_models.values())
+        elif (i == "int"):
+            mls[i] = cfg.current_data.internet_model
+        elif (i == "pt"):
+            mls[i] = "Custom PT Model"
+        elif (i == "text2img"):
+            mls[i] = cfg.current_data.image_generation_model
+        elif (i == "img2text"):
+            mls[i] = cfg.current_data.img_to_text_model
+        elif (i == "text2audio"):
+            mls[i] = cfg.current_data.text_to_audio_model
+        elif (i == "whisper"):
+            mls[i] = cfg.current_data.whisper_model
+        elif (i == "nsfw_filter-text"):
+            mls[i] = cfg.current_data.nsfw_filter_text_model
+        elif (i == "nsfw_filter-image"):
+            mls[i] = cfg.current_data.nsfw_filter_image_model
+    
+    return mls
 
 def LoadAllModels() -> None:
     models = order.split(" ")
@@ -88,9 +128,25 @@ def LoadAllModels() -> None:
             itt.LoadModel()
         elif (i == "text2audio"):
             aga.LoadModel()
+        elif (i == "nsfw_filter-text"):
+            filters.LoadTextModel()
+        elif (i == "nsfw_filter-image"):
+            filters.LoadImageModel()
+
+def IsTextNSFW(prompt: str) -> bool:
+    if (cfg.current_data.prompt_order.__contains__("nsfw_filter-text")):
+        return filters.IsTextNSFW(prompt)
+    
+    return None
+
+def IsImageNSFW(image: str | Image.Image) -> bool:
+    if (cfg.current_data.prompt_order.__contains__("nsfw_filter-image")):
+        return filters.IsImageNSFW(image)
+    
+    return None
 
 def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_system_msgs: list[str] = [],
-    translator: str = "", force_translator: bool = True, conversation: str = "",
+    translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""],
     use_default_sys_prompts: bool = True) -> dict:
     global order, current_emotion
     LoadAllModels()
@@ -100,8 +156,8 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
     if (cfg.current_data.use_default_system_messages):
         sm = system_messages if (use_default_sys_prompts) else []
 
-        for msg in extra_system_msgs:
-            sm.append(msg)
+    for msg in extra_system_msgs:
+        sm.append(msg)
 
     if (len(cfg.current_data.custom_system_messages.strip()) > 0):
         sm.append(cfg.current_data.custom_system_messages)
@@ -148,6 +204,21 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
     
     if (order_prompt.__contains__("tr") and force_translator):
         prompt = tns.TranslateFrom1To2(prompt)
+    
+    if (order_prompt.__contains__("nsfw_filter-text")):
+        is_nsfw = IsTextNSFW(prompt)
+
+        if (is_nsfw):
+            if (not cfg.current_data.allow_processing_if_nsfw):
+                return {
+                    "response": "ERROR",
+                    "model": "-1",
+                    "files": {},
+                    "tested_models": [],
+                    "text_classification": "-1",
+                    "title": "NO TITLE",
+                    "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                }
     
     if (args.__contains__("-ncb")):
         data = {
@@ -264,8 +335,9 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
 
                 if (len(response_conv.strip()) == 0):
                     response_conv = response
-
-                conv.SaveToConversation(conversation, prompt, response_conv)
+                
+                response_conv = response_conv.strip()
+                conv.AddToConversation(conversation[0], conversation[1], prompt, response_conv)
 
             if (order_prompt.__contains__("sc")):
                 try:
@@ -355,7 +427,8 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             if (len(response_conv.strip()) == 0):
                 response_conv = response
 
-            conv.SaveToConversation(conversation, prompt, response_conv)
+            response_conv = response_conv.strip()
+            conv.AddToConversation(conversation[0], conversation[1], prompt, response_conv)
         
         if (order_prompt.__contains__("sc")):
                 try:
@@ -429,4 +502,4 @@ def ImageToText(img: str) -> str:
     return itt.MakePrompt(img)
 
 def RecognizeAudio(audio: str) -> str:
-    return sr.RecognizeUsingAudio(audio)
+    return sr.Recognize(sr.FileToAudioData(audio))
