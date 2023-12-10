@@ -270,6 +270,21 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             elif (i == "pt"):
                 response = "### RESPONSE: " + cbpt.GenerateResponse((SystemMessagesToStr() if apply_system_messages_to_tensorflow else "") + prompt)
             elif (i == "img2text"):
+                if (order_prompt.__contains__("nsfw_filter-image")):
+                    is_nsfw = IsImageNSFW(prompt)
+
+                    if (is_nsfw):
+                        if (not cfg.current_data.allow_processing_if_nsfw):
+                            return {
+                                "response": "ERROR",
+                                "model": "-1",
+                                "files": {},
+                                "tested_models": [],
+                                "text_classification": "-1",
+                                "title": "NO TITLE",
+                                "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                            }
+            
                 response = "### RESPONSE: " + ImageToText(prompt)
             
             tested_models.append(i)

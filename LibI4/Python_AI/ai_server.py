@@ -101,9 +101,7 @@ def __print__(data: str = "", p: bool = False) -> None:
     t = threading.Thread(target = __print__, args = (data, True))
     t.start()
 
-def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [],
-        translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""],
-        use_default_sys_prompts: bool = True) -> dict:
+def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
     global queue
     queue += 1
 
@@ -116,9 +114,7 @@ def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [],
 
     return response
 
-def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [],
-        translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""],
-        use_default_sys_prompts: bool = True) -> dict:
+def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
     response = __prompt__(prompt, args, extra_system_messages, translator, force_translator, conversation,
         use_default_sys_prompts)
     
@@ -493,7 +489,7 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
     except Exception as ex:
         return "Error on the server: " + str(ex)
 
-def on_receive(data: dict[str]):
+def on_receive(data: dict[str]) -> dict:
     server_response = {}
     error = ""
     extra_data = {}
@@ -548,7 +544,7 @@ def on_receive(data: dict[str]):
 
     return server_response
 
-async def handle_client_ws(websocket):
+async def handle_client_ws(websocket) -> None:
     while (True):
         try:
             data = await websocket.recv()
@@ -566,7 +562,7 @@ async def handle_client_ws(websocket):
         else:
             break
 
-async def accept_client_ws(websocket):
+async def accept_client_ws(websocket) -> None:
     __print__("Incomming connection from '" + str(websocket.remote_address[0]) + ":" + str(websocket.remote_address[1]) + "'.")
     ip_ban.ReloadBannedIPs()
 
@@ -583,7 +579,7 @@ async def accept_client_ws(websocket):
 
     await handle_client_ws(websocket)
 
-def ws_server():
+def ws_server() -> None:
     event_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(event_loop)
     
@@ -592,8 +588,7 @@ def ws_server():
     event_loop.run_until_complete(server_ws)
     event_loop.run_forever()
 
-def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extra_system_messages = [],
-    _plugins = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins), _version = "TAO71 I4.0 for Servers") -> None:
+def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extra_system_messages = [], _plugins = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins), _version = "TAO71 I4.0 for Servers") -> None:
     global max_buffer_length, max_users, args, extra_system_messages, plugins, version
 
     # Variables

@@ -17,7 +17,7 @@ RAM: At least 4GB (8GB recommended).
 
 -----------------------------------
 
-Tested hardware:
+## Tested hardware:
 ```
 1. Alcoft's (main programmer of TAO71) PC:
     CPU: Ryzen 5 3600 (6 cores, 12 threads).
@@ -38,9 +38,12 @@ Tested hardware:
 
 -----------------------------------
 
-Contributors/Helpers:
+## License
+MIT
 
-[![AlcoftTAO](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/AlcoftTAO.jpeg?raw=true)](https://github.com/alcoftTAO)
-[![Coderarduinopython](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/Coderarduinopython.png?raw=true)](https://github.com/coderarduinopython)
-[![JLMR08](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/JLMR08.png?raw=true)](https://github.com/Jlmr08)
-[![DINOLT](https://github.com/TAO71-AI/I4.0/blob/assets/Contributors_Helpers/DINOLT.jpg?raw=true)](https://www.youtube.com/@GoldenClassicsStudios)
+## Contributors/Helpers:
+
+[![AlcoftTAO](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/AlcoftTAO.jpeg?raw=true)](https://github.com/alcoftTAO)
+[![Coderarduinopython](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/Coderarduinopython.png?raw=true)](https://github.com/coderarduinopython)
+[![JLMR08](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/JLMR08.png?raw=true)](https://github.com/Jlmr08)
+[![DINOLT](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/DINOLT.jpg?raw=true)](https://www.youtube.com/@GoldenClassicsStudios)
