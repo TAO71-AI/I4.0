@@ -23,3 +23,4 @@ scipy
 soundfile
 openai-whisper
 Pillow
+optimum

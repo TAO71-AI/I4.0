@@ -3,3 +3,4 @@ runhouse
 sentencepiece
 sacremoses
 accelerate
+bitsandbytes

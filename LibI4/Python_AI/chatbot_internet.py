@@ -13,18 +13,17 @@ websites: list[tuple[bool, str, int, str]] = [
 
 model: AutoModelForQuestionAnswering | TFAutoModelForQuestionAnswering = None
 tokenizer: AutoTokenizer = None
+device: str = "cpu"
 
 def __load_model__(model_name: str, device: str):
     if (cfg.current_data.use_tf_instead_of_pt):
         return TFAutoModelForQuestionAnswering.from_pretrained(model_name)
     else:
-        model = AutoModelForQuestionAnswering.from_pretrained(model_name)
-        model.to(device)
-        
+        model = AutoModelForQuestionAnswering.from_pretrained(model_name).to(device)
         return model
 
 def LoadModel() -> None:
-    global model, tokenizer
+    global model, tokenizer, device
 
     if (model != None and tokenizer != None):
         return
@@ -66,6 +65,10 @@ def MakePrompt(prompt: str) -> str:
 
     # Question answering with the internet data
     input_ids = tokenizer.encode(prompt, internet_data, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
+
+    if (not cfg.use_tf_instead_of_pt):
+        input_ids = input_ids.to(device)
+
     output = model.generate(input_ids, max_new_tokens = cfg.current_data.max_length)
     response = tokenizer.decode(output[0], skip_special_tokens = True)
 

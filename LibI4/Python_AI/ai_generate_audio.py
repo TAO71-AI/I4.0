@@ -1,19 +1,21 @@
-from transformers import AutoProcessor, AutoModel
+from transformers import AutoProcessor, AutoModel, TFAutoModel
 import torch
 import os
 import ai_config as cfg
 
-model: AutoModel = None
+model: AutoModel | TFAutoModel = None
 processor: AutoProcessor = None
+device: str = "cpu"
 
 def __load_model__(model_name: str, device: str):
-    model = AutoModel.from_pretrained(model_name)
-    model.to(device)
-        
+    if (cfg.current_data.use_tf_instead_of_pt):
+        return TFAutoModel.from_pretrained(model_name)
+    
+    model = AutoModel.from_pretrained(model_name).to(device)
     return model
 
 def LoadModel() -> None:
-    global model, processor
+    global model, processor, device
 
     if (model != None and processor != None):
         return
@@ -36,9 +38,13 @@ def GenerateAudio(prompt: str) -> bytes:
     if (prompt.endswith("\"") or prompt.endswith("'")):
         prompt = prompt[0:len(prompt) - 2]
 
-    input_ids = processor([processor], return_tensors = "pt")
-    audio = model.generate(**input_ids, do_sample = True)
+    input_ids = processor([processor], return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
 
+    if (not cfg.current_data.use_tf_instead_of_pt):
+        input_ids = input_ids.to(device)
+
+    audio = model.generate(**input_ids, do_sample = True)
+    
     audio_name = "ta.wav"
     audio_n = 0
 

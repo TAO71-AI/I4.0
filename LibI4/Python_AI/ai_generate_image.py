@@ -6,9 +6,10 @@ import traceback
 import ai_config as cfg
 
 pipeline: DiffusionPipeline = None
+device: str = "cpu"
 
 def LoadModel() -> None:
-    global pipeline
+    global pipeline, device
     
     if (pipeline != None):
         return

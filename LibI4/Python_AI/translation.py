@@ -4,6 +4,7 @@ import ai_config as cfg
 
 translation_tokenizer_1: AutoTokenizer = None
 translation_model_1: MarianMTModel | TFMarianMTModel = None
+device: str = "cpu"
 
 models: dict[str, (MarianMTModel | TFMarianMTModel, AutoTokenizer)] = {}
 models_loaded: bool = False
@@ -12,13 +13,11 @@ def __load_model__(model_name: str, device: str):
     if (cfg.current_data.use_tf_instead_of_pt):
         return TFMarianMTModel.from_pretrained(model_name)
     else:
-        model = MarianMTModel.from_pretrained(model_name)
-        model.to(device)
-        
+        model = MarianMTModel.from_pretrained(model_name).to(device)
         return model
 
 def LoadModels() -> None:
-    global translation_model_1, translation_tokenizer_1, models, models_loaded
+    global translation_model_1, translation_tokenizer_1, models, models_loaded, device
 
     if (models_loaded):
         return
@@ -43,6 +42,10 @@ def Translate(prompt: str, tokenizer: AutoTokenizer, model: MarianMTModel | TFMa
     LoadModels()
 
     inputs = tokenizer.encode(prompt, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
+
+    if (not cfg.current_data.use_tf_instead_of_pt):
+        inputs = inputs.to(device)
+
     response = model.generate(inputs)
     decoded_response = tokenizer.batch_decode(response, skip_special_tokens = True)[0]
 

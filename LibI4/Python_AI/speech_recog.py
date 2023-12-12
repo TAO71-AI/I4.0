@@ -6,59 +6,24 @@ import ai_config as cfg
 
 recognizer = sr.Recognizer()
 
-"""def __recognize_whisper__(audio_data: sr.AudioData | str, model: str = None, language: str = None, device: str = None) -> str:
-    if (model == None):
-        model = cfg.current_data.whisper_model
-    
-    if (device == None):
-        device = "cuda" if (cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("whisper") and torch.cuda.is_available()) else "cpu"
-    
-    if (type(audio_data) == sr.AudioData):
-        fid = 0
-
-        while (os.path.exists(str(fid) + ".wav")):
-            fid += 1
-
-        with open(str(fid) + ".wav", "wb") as f:
-            f.write(audio_data.get_wav_data())
-            f.close()
-
-        audio = str(fid) + ".wav"
-        delete_file = True
-    elif (type(audio_data) == str):
-        audio = audio_data
-        delete_file = False
-    else:
-        raise Exception("Audio data is not AudioData or str.")
-
-    print("Loading model...")
-    m = whisper.load_model(model).to(device)
-    audio = whisper.load_audio(audio)
-    audio = whisper.pad_or_trim(audio)
-    mel = whisper.log_mel_spectrogram(audio).to(m.device)
-
-    print("Set language...")
-    if (language == None):
-        _, probs = m.detect_language(mel)
-        language = max(probs, key = probs.get)
-    print("Language = " + language)
-    
-    print("Decoding...")
-    options = whisper.DecodingOptions()
-    result = whisper.decode(m, mel, options)
-    print("Decoded!")
-
-    if (delete_file):
-        os.remove(str(fid) + ".wav")
-
-    return result.text"""
-
 def Recognize(data: sr.AudioData) -> str:
     try:
-        if (cfg.current_data.use_google_instead_of_whisper):
-            return recognizer.recognize_google(data)
+        audio_name = "tmp_whisper_audio_0.wav"
+        audio_id = 0
+
+        while (os.path.exists(audio_name)):
+            audio_id += 1
+            audio_name = "tmp_whisper_audio_" + str(audio_id) + ".wav"
         
-        return recognizer.recognize_whisper(data, model = cfg.current_data.whisper_model)
+        with open(audio_name, "wb") as f:
+            f.write(data.get_wav_data())
+            f.close()
+
+        whisper_model = whisper.load_model(cfg.current_data.whisper_model, device = "cuda" if (cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("whisper") and torch.cuda.is_available()) else "cpu")
+        result = whisper_model.transcribe(audio_name)["text"]
+
+        os.remove(audio_name)
+        return result
     except sr.UnknownValueError:
         return "Audio could not be recognized."
     except sr.RequestError as ex:

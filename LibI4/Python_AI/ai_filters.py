@@ -6,6 +6,8 @@ import ai_config as cfg
 text_filter: AutoModelForSequenceClassification | TFAutoModelForSequenceClassification = None
 image_filter: Pipeline = None
 tokenizer_text: AutoTokenizer = None
+device_text: str = "cpu"
+device_image: str = "cpu"
 
 def __load_model__(model_name: str, device: str, type: str):
     if (cfg.current_data.use_tf_instead_of_pt):
@@ -23,37 +25,37 @@ def __load_model__(model_name: str, device: str, type: str):
         else:
             raise Exception("Filter model type is not 'text' or 'image'.")
 
-        model.to(device)
+        model = model.to(device)
         return model
 
 def LoadTextModel() -> None:
-    global text_filter, tokenizer_text
+    global text_filter, tokenizer_text, device_text
 
     if (text_filter != None and tokenizer_text != None):
         return
     
     move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("nsfw_filter-text")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device_text = "cuda" if (move_to_gpu) else "cpu"
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'NSFW Filter (Text)' on device '" + device + "'...")
+        print("Loading model 'NSFW Filter (Text)' on device '" + device_image + "'...")
     
     tokenizer_text = AutoTokenizer.from_pretrained(cfg.current_data.nsfw_filter_text_model)
-    text_filter = __load_model__(cfg.current_data.nsfw_filter_text_model, device, "text")
+    text_filter = __load_model__(cfg.current_data.nsfw_filter_text_model, device_text, "text")
 
 def LoadImageModel() -> None:
-    global image_filter
+    global image_filter, device_image
 
     if (image_filter != None):
         return
     
     move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("nsfw_filter-image")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device_image = "cuda" if (move_to_gpu) else "cpu"
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'NSFW Filter (Image)' on device '" + device + "'...")
+        print("Loading model 'NSFW Filter (Image)' on device '" + device_image + "'...")
     
-    image_filter = __load_model__(cfg.current_data.nsfw_filter_image_model, device, "image")
+    image_filter = __load_model__(cfg.current_data.nsfw_filter_image_model, device_image, "image")
 
 def IsTextNSFW(prompt: str) -> bool:
     # NOTE: The value 0 means NSFW, the value 1 means SFW.
@@ -63,6 +65,10 @@ def IsTextNSFW(prompt: str) -> bool:
         return None
 
     inputs = tokenizer_text.encode(prompt, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
+
+    if (not cfg.current_data.use_tf_instead_of_pt):
+        inputs = inputs.to(device_text)
+
     response = text_filter(inputs).logits
     predicted_class = response.argmax().item()
 

@@ -145,9 +145,7 @@ def IsImageNSFW(image: str | Image.Image) -> bool:
     
     return None
 
-def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_system_msgs: list[str] = [],
-    translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""],
-    use_default_sys_prompts: bool = True) -> dict:
+def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_system_msgs: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
     global order, current_emotion
     LoadAllModels()
 

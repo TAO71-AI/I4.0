@@ -3,20 +3,19 @@ import PIL.Image
 import torch
 import ai_config as cfg
 
-processor = None
-model = None
+processor: AutoProcessor = None
+model: AutoModelForCausalLM | TFAutoModelForCausalLM = None
+device: str = "cpu"
 
 def __load_model__(model_name: str, device: str):
     if (cfg.current_data.use_tf_instead_of_pt):
         return TFAutoModelForCausalLM.from_pretrained(model_name)
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_name)
-        model.to(device)
-        
+        model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
         return model
 
 def LoadModel() -> None:
-    global processor, model
+    global processor, model, device
 
     if (processor != None and model != None):
         return
@@ -28,13 +27,18 @@ def LoadModel() -> None:
         print("Loading model 'image to text' on device '" + device + "'...")
 
     processor = AutoProcessor.from_pretrained(cfg.current_data.img_to_text_model)
-    model = AutoModelForCausalLM.from_pretrained(cfg.current_data.img_to_text_model).to(device)
+    model = __load_model__(cfg.current_data.img_to_text_model, device)
 
 def MakePrompt(img: str) -> str:
     LoadModel()
 
     image = PIL.Image.open(img)
-    pixel_values = processor(images = [image], return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt")).pixel_values
+    pixel_values = processor(images = [image], return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
+
+    if (not cfg.current_data.use_tf_instead_of_pt):
+        pixel_values = pixel_values.to(device)
+    
+    pixel_values = pixel_values.pixel_values
 
     generated_ids = model.generate(pixel_values = pixel_values, max_length = cfg.current_data.max_length)
     generated_caption = processor.batch_decode(generated_ids, skip_special_tokes = True)[0]

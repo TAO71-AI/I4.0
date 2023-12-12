@@ -3,56 +3,45 @@ import torch
 import ai_config as cfg
 import ai_conversation as conv
 
-model_name: str = cfg.current_data.hf_model
-low_cpu_or_memory: bool = cfg.current_data.low_cpu_or_memory
-system_messages: list[str] = []
-chat_history: list[str] = []
-print_data: bool = False
-
 model: AutoModelForCausalLM | TFAutoModelForCausalLM = None
 tokenizer: AutoTokenizer = None
+system_messages: list[str] = []
+device: str = "cpu"
 
 def __load_model__(model_name: str, device: str):
     if (cfg.current_data.use_tf_instead_of_pt):
         return TFAutoModelForCausalLM.from_pretrained(model_name)
     else:
-        model = AutoModelForCausalLM.from_pretrained(model_name)
-        model.to(device)
-        
+        model = AutoModelForCausalLM.from_pretrained(model_name).to(device)
         return model
 
 def LoadModel() -> None:
-    global model, tokenizer
+    global model, tokenizer, device
 
     if (model != None and tokenizer != None):
         return
     
-    move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("hf")
-    device = "cuda" if (move_to_gpu) else "cpu"
-
     if (cfg.current_data.print_loading_message):
         print("Loading model 'chatbot (hf)' on device '" + device + "'...")
     
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = __load_model__(model_name, device)
+    move_to_gpu = torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("hf") and cfg.current_data.use_gpu_if_available
+    device = "cuda" if (move_to_gpu) else "cpu"
+
+    tokenizer = AutoTokenizer.from_pretrained(cfg.current_data.hf_model)
+    model = __load_model__(cfg.current_data.hf_model, device)
 
 def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: list[str] = ["", ""]) -> str:
-    global print_data, system_messages, chat_history
-    LoadModel()
-
-    content = ""
-    sm = ""
-
-    for smsg in system_messages:
-        sm += smsg + "\n"
+    if (model == None or tokenizer == None):
+        LoadModel()
     
-    content += sm
-    
-    if (len(content.strip()) > 0 and not content.endswith("\n")):
-        content += "\n\n"
-    elif (len(content.strip()) > 0 and content.endswith("\n")):
-        content += "\n"
+    prompt_str = ""
 
+    for msg in system_messages:
+        prompt_str += msg + "\n"
+    
+    if (len(msg.split()) > 0):
+        prompt_str += "\n"
+    
     try:
         conv_msg = conv.ConversationToStr(conversation_name[0], conversation_name[1])
 
@@ -60,20 +49,27 @@ def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: li
             if (not conv_msg.endswith("\n")):
                 conv_msg += "\n"
 
-            content += "### CONVERSATION:\n" + conv_msg + "\n"
+            prompt_str += "### CONVERSATION:\n" + conv_msg + "\n"
     except:
         pass
-    
-    content += "### USER: " + prompt + "\n### RESPONSE: "
+
+    prompt_str += "### USER: " + prompt + "\n### RESPONSE: "    
 
     if (cfg.current_data.print_prompt):
-        print(content)
+        print(prompt_str)
 
-    input_ids = tokenizer.encode(content, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"), truncation = True)
-    output = model.generate(input_ids, max_new_tokens = cfg.current_data.max_length)
-    response = tokenizer.decode(output[0], skip_special_tokens = True)
+    user_input_ids = tokenizer.encode(prompt_str, return_tensors = "tf" if (cfg.current_data.use_tf_instead_of_pt) else "pt")
+
+    if (not cfg.current_data.use_tf_instead_of_pt):
+        user_input_ids = user_input_ids.to(device)
+
+    with torch.no_grad():
+        response = model.generate(user_input_ids, max_new_tokens = cfg.current_data.max_length, temperature = cfg.current_data.temp, do_sample = True)
+    
+    response = tokenizer.batch_decode(response)[0]
+    response = response.replace(prompt_str, "")
 
     if (cfg.current_data.print_prompt):
         print(response)
 
-    return response
+    return "ERROR" if (len(response.strip()) < 1) else response.strip()
