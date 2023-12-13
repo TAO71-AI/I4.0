@@ -1,23 +1,19 @@
-from transformers import AutoProcessor, AutoModel, TFAutoModel
+from transformers import pipeline, Pipeline
+import soundfile as sf
 import torch
 import os
 import ai_config as cfg
 
-model: AutoModel | TFAutoModel = None
-processor: AutoProcessor = None
-device: str = "cpu"
+model_pipeline: Pipeline = None
 
 def __load_model__(model_name: str, device: str):
-    if (cfg.current_data.use_tf_instead_of_pt):
-        return TFAutoModel.from_pretrained(model_name)
-    
-    model = AutoModel.from_pretrained(model_name).to(device)
+    model = pipeline("text-to-audio", model_name, device = device)
     return model
 
 def LoadModel() -> None:
-    global model, processor, device
+    global model_pipeline
 
-    if (model != None and processor != None):
+    if (model_pipeline != None):
         return
     
     move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("text2audio")
@@ -26,8 +22,7 @@ def LoadModel() -> None:
     if (cfg.current_data.print_loading_message):
         print("Loading model 'text to audio' on device '" + device + "'...")
     
-    processor = AutoProcessor.from_pretrained(cfg.current_data.text_to_audio_model)
-    model = __load_model__(cfg.current_data.text_to_audio_model, device)
+    model_pipeline = __load_model__(cfg.current_data.text_to_audio_model, device)
 
 def GenerateAudio(prompt: str) -> bytes:
     LoadModel()
@@ -37,13 +32,11 @@ def GenerateAudio(prompt: str) -> bytes:
     
     if (prompt.endswith("\"") or prompt.endswith("'")):
         prompt = prompt[0:len(prompt) - 2]
+    
+    if (cfg.current_data.print_prompt):
+        print("AUDIO GENERATION: " + prompt)
 
-    input_ids = processor([processor], return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
-
-    if (not cfg.current_data.use_tf_instead_of_pt):
-        input_ids = input_ids.to(device)
-
-    audio = model.generate(**input_ids, do_sample = True)
+    result = model_pipeline(prompt)
     
     audio_name = "ta.wav"
     audio_n = 0
@@ -52,10 +45,7 @@ def GenerateAudio(prompt: str) -> bytes:
         audio_n += 1
         audio_name = "ta_" + str(audio_n) + ".wav"
 
-    with open(audio_name, "w+") as f:
-        f.close()
-    
-    audio.save(audio_name)
+    sf.write(audio_name, result["audio"][0].T, result["sampling_rate"])
 
     with open(audio_name, "rb") as f:
         audio = f.read()

@@ -56,6 +56,7 @@ class ConfigData:
     use_google_instead_of_whisper: bool = False
     allow_processing_if_nsfw: bool = False
     ban_if_nsfw: bool = True
+    use_local_ip: bool = False
 
 def Init() -> None:
     if (not os.path.exists("config.tcfg")):
@@ -227,6 +228,8 @@ def ReadConfig() -> ConfigData:
                 data.allow_processing_if_nsfw = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "ban_if_nsfw"):
                 data.ban_if_nsfw = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "use_local_ip"):
+                data.use_local_ip = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
 
         f.close()
     
@@ -289,6 +292,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "use_google_instead_of_whisper=" + ("true" if cfg.use_google_instead_of_whisper == True else "false") + "\n"
     text += "allow_processing_if_nsfw=" + ("true" if cfg.allow_processing_if_nsfw == True else "false") + "\n"
     text += "ban_if_nsfw=" + ("true" if cfg.ban_if_nsfw == True else "false") + "\n"
+    text += "use_local_ip=" + ("true" if cfg.use_local_ip == True else "false") + "\n"
 
     with open("config.tcfg", "w") as f:
         f.write(text)

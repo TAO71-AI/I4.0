@@ -108,15 +108,13 @@ def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [], tr
     while (queue > cfg.current_data.max_prompts):
         threading.Event().wait(0.1)
 
-    response = cb.MakePrompt(prompt, [], args, extra_system_messages, translator, force_translator, conversation,
-        use_default_sys_prompts)
+    response = cb.MakePrompt(prompt, [], args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
     queue -= 1
 
     return response
 
 def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
-    response = __prompt__(prompt, args, extra_system_messages, translator, force_translator, conversation,
-        use_default_sys_prompts)
+    response = __prompt__(prompt, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
     
     if (response["text_classification"] == "0"):
         cb.current_emotion = "angry"
@@ -583,7 +581,8 @@ def ws_server() -> None:
     event_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(event_loop)
     
-    server_ws = websockets.server.serve(accept_client_ws, "0.0.0.0", 8060)
+    ip = "127.0.0.1" if (cfg.current_data.use_local_ip) else "0.0.0.0"
+    server_ws = websockets.server.serve(accept_client_ws, ip, 8060)
 
     event_loop.run_until_complete(server_ws)
     event_loop.run_forever()
