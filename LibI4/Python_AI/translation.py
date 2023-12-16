@@ -19,6 +19,9 @@ def __load_model__(model_name: str, device: str):
 def LoadModels() -> None:
     global translation_model_1, translation_tokenizer_1, models, models_loaded, device
 
+    if (not cfg.current_data.prompt_order.__contains__("tr")):
+        raise Exception("Models are not in 'prompt_order'.")
+
     if (models_loaded):
         return
 

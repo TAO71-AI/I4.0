@@ -10,6 +10,9 @@ device: str = "cpu"
 
 def LoadModel() -> None:
     global pipeline, device
+
+    if (not cfg.current_data.prompt_order.__contains__("text2img")):
+        raise Exception("Model is not in 'prompt_order'.")
     
     if (pipeline != None):
         return
@@ -54,9 +57,7 @@ def __generate_image__(prompt: str, negative_prompt: str) -> bytes:
         print("Prompt: " + prompt)
         print("Negative prompt: " + negative_prompt)
 
-    image = pipeline(
-        prompt, num_inference_steps = cfg.current_data.image_generation_steps,
-        output_type = "pil", negative_prompt = negative_prompt).images[0]
+    image = pipeline(prompt, num_inference_steps = cfg.current_data.image_generation_steps, output_type = "pil", negative_prompt = negative_prompt, width = cfg.current_data.img_generation_width, height = cfg.current_data.img_generation_height).images[0]
     img_name = "ti.png"
     img_n = 0
 

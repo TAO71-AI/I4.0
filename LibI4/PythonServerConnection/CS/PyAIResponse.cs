@@ -37,10 +37,12 @@ namespace TAO.I4.PythonManager
             return File.ReadAllText("Python_Server_API_Key.txt").Trim();
         }
 
-        public static void ConnectToServer(string Server)
+        public static bool ConnectToServer(string Server)
         {
             ReadKeyFromFile();
             DisconnectFromServer();
+
+            bool r = false;
 
             if (OnConnectingToServerAction != null)
             {
@@ -64,6 +66,8 @@ namespace TAO.I4.PythonManager
                     Thread.Sleep(100);
                     currentTime += 1;
                 }
+
+                r = true;
             }
             catch (Exception ex)
             {
@@ -89,21 +93,23 @@ namespace TAO.I4.PythonManager
             {
 
             }
+
+            return r;
         }
 
-        public static void ConnectToServer(int Server)
+        public static bool ConnectToServer(int Server)
         {
             if (Server < 0 || Server >= Servers.Count)
             {
                 if (DefaultServer < 0 || DefaultServer >= Servers.Count)
                 {
-                    return;
+                    return false;
                 }
 
                 Server = DefaultServer;
             }
 
-            ConnectToServer(Servers[Server]);
+            return ConnectToServer(Servers[Server]);
         }
 
         public static void DisconnectFromServer()
@@ -237,9 +243,12 @@ namespace TAO.I4.PythonManager
 
         public static async Task<byte[]> SendAndWaitForReceive(byte[] SendData, bool Connect = true)
         {
-            if (Connect)
+            if (Connect && (ClientSocket == null || ClientSocket.State != WebSocketState.Open))
             {
-                ConnectToServer(DefaultServer);
+                if (!ConnectToServer(DefaultServer))
+                {
+                    throw new Exception("ConnectToServer returned 'false'. Please try to connect to a valid server.");
+                }
             }
 
             if (OnSendDataAction != null)
@@ -273,17 +282,19 @@ namespace TAO.I4.PythonManager
                 OnReceiveDataAction.Invoke(SendData);
             }
 
-            if (Connect)
-            {
-                DisconnectFromServer();
-            }
-
             return streamBytes;
         }
 
-        public static string ExecuteCommandOnServer(string Command, int Server = -1, string Conversation = "")
+        public static string ExecuteCommandOnServer(string Command, bool Connect = true, int Server = -1, string Conversation = "")
         {
-            ConnectToServer(Server);
+            if (Connect && (ClientSocket == null || ClientSocket.State != WebSocketState.Open))
+            {
+                if (!ConnectToServer(DefaultServer))
+                {
+                    throw new Exception("ConnectToServer returned 'false'. Please try to connect to a valid server.");
+                }
+            }
+
             string jsonData = "";
 
             jsonData += "{";
@@ -303,7 +314,6 @@ namespace TAO.I4.PythonManager
                 response = Encoding.ASCII.GetString(response_data);
             }
 
-            DisconnectFromServer();
             return response;
         }
 
@@ -351,6 +361,7 @@ namespace TAO.I4.PythonManager
             int totalChunks = (int)Math.Ceiling((double)FileBytes.Length / chunksize);
 
             client.Connect(new IPEndPoint(IPAddress.Parse(Servers[Server]), 8061));
+            Console.WriteLine("Con");
 
             try
             {

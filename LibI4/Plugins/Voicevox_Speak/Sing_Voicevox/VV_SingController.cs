@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Media;
 using System.Threading;
+using NAudio.Wave;
 using TAO.I4.Plugins.Sing;
 
 namespace TAO.I4.Plugins.Voicevox.Sing
@@ -183,6 +184,33 @@ namespace TAO.I4.Plugins.Voicevox.Sing
         public static bool ContainsByName(string SongName)
         {
             return SearchByName(SongName) != null;
+        }
+
+        public static VV_SongData[] GetSongsAuto()
+        {
+            if (!Directory.Exists("Sing_Plugin/"))
+            {
+                Directory.CreateDirectory("Sing_Plugin/");
+            }
+
+            List<VV_SongData> songs = new List<VV_SongData>();
+            FileInfo[] files = new DirectoryInfo("Sing_Plugin/").GetFiles();
+
+            foreach (FileInfo file in files)
+            {
+                WaveFileReader wf = new WaveFileReader(file.FullName);
+                songs.Add(new VV_SongData()
+                {
+                    Name = file.Name.Substring(0, file.Name.LastIndexOf(".")),
+                    SongInstrumental = file.Name,
+                    SongLyrics = new List<(int, string, VV_VoiceData)>()
+                    {
+                        ((int)wf.TotalTime.TotalMilliseconds, "", new VV_VoiceData(1, 1))
+                    }
+                });
+            }
+
+            return songs.ToArray();
         }
     }
 

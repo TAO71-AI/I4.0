@@ -5,6 +5,7 @@ import random
 import json
 import threading
 import time
+import ai_config as cfg
 import ip_banning as ip_ban
 
 max_buffer_length: int = 5000000
@@ -133,7 +134,7 @@ def UpdateFunction() -> None:
         time.sleep(update_every_seconds)
 
 server.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, max_buffer_length)
-server.bind(("0.0.0.0", 8061))
+server.bind(("127.0.0.1" if (cfg.current_data.use_local_ip) else "0.0.0.0", 8061))
 server.listen()
 
 server_thread = threading.Thread(target = AcceptClients)

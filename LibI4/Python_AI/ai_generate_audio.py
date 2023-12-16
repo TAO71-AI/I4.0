@@ -13,6 +13,9 @@ def __load_model__(model_name: str, device: str):
 def LoadModel() -> None:
     global model_pipeline
 
+    if (not cfg.current_data.prompt_order.__contains__("text2audio")):
+        raise Exception("Model is not in 'prompt_order'.")
+
     if (model_pipeline != None):
         return
     

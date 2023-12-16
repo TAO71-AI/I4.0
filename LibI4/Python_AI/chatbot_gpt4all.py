@@ -9,7 +9,10 @@ model: gpt4all.GPT4All = None
 def LoadModel() -> None:
     global model
 
-    if (len(model_name) <= 0 or model != None):
+    if (not cfg.current_data.prompt_order.__contains__("g4a")):
+        raise Exception("Model is not in 'prompt_order'.")
+
+    if (len(model_name) == 0 or model != None):
         return
 
     device = "gpu" if cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("g4a") else "cpu"

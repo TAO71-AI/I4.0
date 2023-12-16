@@ -25,6 +25,9 @@ def __load_model__(model_name: str, device: str):
 def LoadModel() -> None:
     global model, tokenizer, device
 
+    if (not cfg.current_data.prompt_order.__contains__("int")):
+        raise Exception("Model is not in 'prompt_order'.")
+        
     if (model != None and tokenizer != None):
         return
     

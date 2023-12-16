@@ -31,6 +31,9 @@ def __load_model__(model_name: str, device: str, type: str):
 def LoadTextModel() -> None:
     global text_filter, tokenizer_text, device_text
 
+    if (not cfg.current_data.prompt_order.__contains__("nsfw_filter-text")):
+        raise Exception("Model is not in 'prompt_order'.")
+
     if (text_filter != None and tokenizer_text != None):
         return
     
@@ -45,6 +48,9 @@ def LoadTextModel() -> None:
 
 def LoadImageModel() -> None:
     global image_filter, device_image
+
+    if (not cfg.current_data.prompt_order.__contains__("nsfw_filter-image")):
+        raise Exception("Model is not in 'prompt_order'.")
 
     if (image_filter != None):
         return

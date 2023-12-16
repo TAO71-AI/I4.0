@@ -18,6 +18,9 @@ def __load_model__(model_name: str, device: str):
 def LoadModel() -> None:
     global model, tokenizer, device
 
+    if (not cfg.current_data.prompt_order.__contains__("hf")):
+        raise Exception("Model is not in 'prompt_order'.")
+
     if (model != None and tokenizer != None):
         return
     
@@ -31,9 +34,8 @@ def LoadModel() -> None:
     model = __load_model__(cfg.current_data.hf_model, device)
 
 def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: list[str] = ["", ""]) -> str:
-    if (model == None or tokenizer == None):
-        LoadModel()
-    
+    LoadModel()
+
     prompt_str = ""
 
     for msg in system_messages:
