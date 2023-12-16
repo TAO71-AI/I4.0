@@ -361,7 +361,6 @@ namespace TAO.I4.PythonManager
             int totalChunks = (int)Math.Ceiling((double)FileBytes.Length / chunksize);
 
             client.Connect(new IPEndPoint(IPAddress.Parse(Servers[Server]), 8061));
-            Console.WriteLine("Con");
 
             try
             {
