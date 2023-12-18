@@ -13,6 +13,7 @@ server: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 received_files: list[dict[str]] = []
 max_sf_minutes: int = 15
 update_every_seconds: int = 300
+use_while = True
 
 if (not os.path.exists("ReceivedFiles/")):
     os.mkdir("ReceivedFiles/")
@@ -145,7 +146,7 @@ update_thread.start()
 
 UpdateServer()
 
-while True:
+while (use_while):
     command = input(">$ ")
 
     if (command == "quit" or command == "close" or command == "stop" or command == "exit"):

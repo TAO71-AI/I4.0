@@ -667,6 +667,10 @@ def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extr
         __print__("Server started and listening.")
     except Exception as ex:
         __print__("Error starting websocket: " + str(ex))
+    
+    if (cfg.current_data.auto_start_rec_files_server):
+        import rec_files as rf
+        rf.use_while = False
 
 CheckFiles()
 start_server()

@@ -164,6 +164,9 @@ namespace TAO.I4.PythonManager
                     case Service.Audio:
                         sd += "5";
                         break;
+                    case Service.DepthEstimation:
+                        sd += "6";
+                        break;
                 }
             }
             else
@@ -513,7 +516,8 @@ namespace TAO.I4.PythonManager
             Image = 2,
             ImageToText = 3,
             WhisperSTT = 4,
-            Audio = 5
+            Audio = 5,
+            DepthEstimation = 6
         }
     }
 
