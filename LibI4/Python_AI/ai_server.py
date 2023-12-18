@@ -26,7 +26,8 @@ times: dict[str, list[float]] = {
     "img2text": [],
     "chatbot": [],
     "translation": [],
-    "text2audio": []
+    "text2audio": [],
+    "depth_estimation": []
 }
 
 # Server
@@ -90,7 +91,7 @@ def __get_args__(ai_args: str) -> list[str]:
 
 def __print__(data: str = "", p: bool = False) -> None:
     if (p):
-        logs.AddToLog("PRINT: " + data)
+        logs.AddToLog("PRINT: " + str(data))
 
         while queue > 0:
             threading.Event().wait(0.1)
@@ -260,6 +261,44 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             __add_queue_time__("text2audio", end_timer - start_timer)
 
         return res
+    elif (command.startswith("ai_depth ")):
+        img = command[9:len(command)]
+        img_bytes = b""
+        
+        if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
+            return "The file id '" + img + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + img + "_file", "rb") as f:
+            img_bytes = f.read()
+            f.close()
+        
+        with open("ReceivedFiles/" + img + ".enc_file", "r") as f:
+            img = json.loads(f.read())
+            f.close()
+        
+        tid = 0
+
+        while os.path.exists("temp_img_" + str(tid) + ".png"):
+            tid += 1
+        
+        with open("temp_img_" + str(tid) + ".png", "wb") as f:
+            f.write(img_bytes)
+            f.close()
+        
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", "", "-ncb-depth", esm, translator)
+
+        if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("depth_estimation", end_timer - start_timer)
+
+        os.remove("temp_img_" + str(tid) + ".png")
+        return img
     elif (command.startswith("echo ") and admin):
         return command[5:len(command)]
     elif (command == "createkey" and admin and requires_api_key):
@@ -449,6 +488,11 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
             
             key_data["tokens"] -= (len(data) - 12) / 5
             server_response = run_server_command("-u ai_audio " + data[10:len(data)], extra_data)
+        elif (data.startswith("service_6 ") and api_key):
+            # Depth estimation
+            
+            key_data["tokens"] -= 35
+            server_response = run_server_command("-u ai_depth " + data[10:len(data)], extra_data)
         elif (data.lower().startswith("get_queue")):
             # Get queue
             server_response = run_server_command("-u get_queue", extra_data)

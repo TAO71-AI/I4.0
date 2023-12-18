@@ -19,6 +19,7 @@ class ConfigData:
     text_to_audio_model: str = "suno/bark-small"
     nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"
     nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"
+    depth_estimation_model: str = "Intel/dpt-beit-base-384"
     tf_epochs: int = 100
     force_api_key: bool = True
     low_cpu_or_memory: bool = False
@@ -57,8 +58,6 @@ class ConfigData:
     allow_processing_if_nsfw: bool = False
     ban_if_nsfw: bool = True
     use_local_ip: bool = False
-    img_generation_width: int = 768
-    img_generation_height: int = 768
 
 def Init() -> None:
     if (not os.path.exists("config.tcfg")):
@@ -133,6 +132,8 @@ def ReadConfig() -> ConfigData:
                 data.nsfw_filter_text_model = config_dict[i]
             elif (il == "nsfw_filter_image_model"):
                 data.nsfw_filter_image_model = config_dict[i]
+            elif (il == "depth_estimation_model"):
+                data.depth_estimation_model = config_dict[i]
             elif (il == "tf_epochs"):
                 try:
                     data.tf_epochs = int(config_dict[i])
@@ -232,16 +233,6 @@ def ReadConfig() -> ConfigData:
                 data.ban_if_nsfw = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "use_local_ip"):
                 data.use_local_ip = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
-            elif (il == "img_generation_width"):
-                try:
-                    data.img_generation_width = int(config_dict[i])
-                except:
-                    data.img_generation_width = 768
-            elif (il == "img_generation_height"):
-                try:
-                    data.img_generation_height = int(config_dict[i])
-                except:
-                    data.img_generation_height = 768
 
         f.close()
     
@@ -274,6 +265,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "text_to_audio_model=" + cfg.text_to_audio_model + "\n"
     text += "nsfw_filter_text_model=" + cfg.nsfw_filter_text_model + "\n"
     text += "nsfw_filter_image_model=" + cfg.nsfw_filter_image_model + "\n"
+    text += "depth_estimation_model=" + cfg.depth_estimation_model + "\n"
     text += "tf_epochs=" + str(cfg.tf_epochs) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "low_cpu_or_memory=" + ("true" if cfg.low_cpu_or_memory == True else "false") + "\n"
@@ -305,8 +297,6 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "allow_processing_if_nsfw=" + ("true" if cfg.allow_processing_if_nsfw == True else "false") + "\n"
     text += "ban_if_nsfw=" + ("true" if cfg.ban_if_nsfw == True else "false") + "\n"
     text += "use_local_ip=" + ("true" if cfg.use_local_ip == True else "false") + "\n"
-    text += "img_generation_width=" + str(cfg.img_generation_width) + "\n"
-    text += "img_generation_height=" + str(cfg.img_generation_height) + "\n"
 
     with open("config.tcfg", "w") as f:
         f.write(text)

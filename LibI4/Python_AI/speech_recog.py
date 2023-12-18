@@ -7,6 +7,9 @@ import ai_config as cfg
 recognizer = sr.Recognizer()
 
 def Recognize(data: sr.AudioData) -> str:
+    if (not cfg.current_data.prompt_order.__contains__("whisper")):
+        raise Exception("Model is not loaded in 'prompt_order'.")
+
     try:
         audio_name = "tmp_whisper_audio_0.wav"
         audio_id = 0

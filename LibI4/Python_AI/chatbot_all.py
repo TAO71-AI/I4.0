@@ -10,6 +10,7 @@ import ai_generate_image as agi
 import ai_img_to_text as itt
 import ai_generate_audio as aga
 import ai_filters as filters
+import ai_depth_estimation as de
 import speech_recog as sr
 import ai_config as cfg
 import ai_conversation as conv
@@ -97,6 +98,8 @@ def GetAllModels() -> dict[str]:
             mls[i] = cfg.current_data.nsfw_filter_text_model
         elif (i == "nsfw_filter-image"):
             mls[i] = cfg.current_data.nsfw_filter_image_model
+        elif (i == "depth"):
+            mls[i] = cfg.current_data.depth_estimation_model
     
     return mls
 
@@ -132,6 +135,8 @@ def LoadAllModels() -> None:
             filters.LoadTextModel()
         elif (i == "nsfw_filter-image"):
             filters.LoadImageModel()
+        elif (i == "depth"):
+            de.LoadModel()
 
 def IsTextNSFW(prompt: str) -> bool:
     if (cfg.current_data.prompt_order.__contains__("nsfw_filter-text")):
@@ -242,6 +247,11 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             data["files"]["audio"] = GenerateAudio(prompt)
             data["response"] = "[aga " + prompt + "]"
             data["tested_models"].append("text2audio")
+        
+        if (args.__contains__("-depth") and order_prompt.__contains__("depth")):
+            data["files"]["image"] = EstimateDepth(prompt)
+            data["response"] = "[de " + prompt + "]"
+            data["tested_models"].append("depth")
         
         data["files"] = str(data["files"])
         return data
@@ -372,7 +382,7 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
                 try:
                     aud_prompt = response[response.index("[aga ") + 5:response[response.index("[aga ") + 5:len(response)].index("]")]
                     response = response.replace("[aga " + aud_prompt + "]", "")
-                    files["audio"] = GenerateImage(aud_prompt)
+                    files["audio"] = GenerateAudio(aud_prompt)
 
                     tested_models.append("text2audio")
                 except Exception as ex:
@@ -463,7 +473,7 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
                 try:
                     aud_prompt = response[response.index("[aga ") + 5:response[response.index("[aga ") + 5:len(response)].index("]")]
                     response = response.replace("[aga " + aud_prompt + "]", "")
-                    files["audio"] = GenerateImage(aud_prompt)
+                    files["audio"] = GenerateAudio(aud_prompt)
 
                     tested_models.append("text2audio")
                 except Exception as ex:
@@ -501,6 +511,12 @@ def SaveTF(model_name_tf: str = "tf_model", model_name_pt: str = "pt_model") -> 
 
 def GenerateImage(prompt: str) -> str:
     img_response = agi.GenerateImage(prompt)
+    image = base64.b64encode(img_response).decode("utf-8")
+
+    return image
+
+def EstimateDepth(img: str) -> str:
+    img_response = de.EstimateDepth(img)
     image = base64.b64encode(img_response).decode("utf-8")
 
     return image

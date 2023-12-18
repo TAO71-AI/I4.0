@@ -2,7 +2,6 @@ from diffusers import DiffusionPipeline
 import torch
 import os
 import json
-import traceback
 import ai_config as cfg
 
 pipeline: DiffusionPipeline = None
@@ -57,7 +56,7 @@ def __generate_image__(prompt: str, negative_prompt: str) -> bytes:
         print("Prompt: " + prompt)
         print("Negative prompt: " + negative_prompt)
 
-    image = pipeline(prompt, num_inference_steps = cfg.current_data.image_generation_steps, output_type = "pil", negative_prompt = negative_prompt, width = cfg.current_data.img_generation_width, height = cfg.current_data.img_generation_height).images[0]
+    image = pipeline(prompt, num_inference_steps = cfg.current_data.image_generation_steps, output_type = "pil", negative_prompt = negative_prompt).images[0]
     img_name = "ti.png"
     img_n = 0
 

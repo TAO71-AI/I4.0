@@ -7,6 +7,7 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
+using Newtonsoft.Json;
 
 namespace TAO.I4.PythonManager
 {
@@ -130,9 +131,7 @@ namespace TAO.I4.PythonManager
             }
         }
 
-        public static byte[] ExecuteService(string Message, Service ServiceData = Service.CustomCommand,
-            string[] ExtraSystemMessages = null, string Translator = "", bool UseDefaultSysPrompts = true,
-            string AIArgs = "", string Conversation = "")
+        public static byte[] ExecuteService(string Message, Service ServiceData = Service.CustomCommand, string[] ExtraSystemMessages = null, string Translator = "", bool UseDefaultSysPrompts = true, string AIArgs = "", string Conversation = "")
         {
             string sd = "service_";
             string jsonData = "";
@@ -185,6 +184,11 @@ namespace TAO.I4.PythonManager
             return SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData), true).Result;
         }
 
+        public static byte[] TryShowImage(byte[] Data, bool OpenFile = true, bool DeleteOnClose = true)
+        {
+            return TryShowImage(Convert.ToBase64String(Data), OpenFile, DeleteOnClose);
+        }
+
         public static byte[] TryShowImage(string Data, bool OpenFile = true, bool DeleteOnClose = true)
         {
             byte[] buffer = Convert.FromBase64String(Data);
@@ -213,28 +217,33 @@ namespace TAO.I4.PythonManager
             return buffer;
         }
 
+        public static byte[] TryOpenAudio(byte[] Data, bool OpenFile = true, bool DeleteOnClose = true)
+        {
+            return TryOpenAudio(Convert.ToBase64String(Data), OpenFile, DeleteOnClose);
+        }
+
         public static byte[] TryOpenAudio(string Data, bool OpenFile = true, bool DeleteOnClose = true)
         {
             byte[] buffer = Convert.FromBase64String(Data);
 
-            if (!File.Exists("temp_audio.png"))
+            if (!File.Exists("temp_audio.wav"))
             {
-                File.Create("temp_audio.png").Close();
+                File.Create("temp_audio.wav").Close();
             }
 
-            File.WriteAllBytes("temp_audio.png", buffer);
+            File.WriteAllBytes("temp_audio.wav", buffer);
 
             if (OpenFile)
             {
                 System.Diagnostics.Process p = new System.Diagnostics.Process();
-                p.StartInfo.FileName = "temp_audio.png";
+                p.StartInfo.FileName = "temp_audio.wav";
 
                 p.Start();
                 p.WaitForExit();
 
                 if (DeleteOnClose)
                 {
-                    File.Delete("temp_audio.png");
+                    File.Delete("temp_audio.wav");
                 }
             }
 
@@ -243,7 +252,7 @@ namespace TAO.I4.PythonManager
 
         public static async Task<byte[]> SendAndWaitForReceive(byte[] SendData, bool Connect = true)
         {
-            if (Connect && (ClientSocket == null || ClientSocket.State != WebSocketState.Open))
+            if (Connect)
             {
                 if (!ConnectToServer(DefaultServer))
                 {
@@ -257,8 +266,7 @@ namespace TAO.I4.PythonManager
             }
 
             ReadKeyFromFile();
-            await ClientSocket.SendAsync(new ArraySegment<byte>(SendData), WebSocketMessageType.Text, true,
-                CancellationToken.None);
+            await ClientSocket.SendAsync(new ArraySegment<byte>(SendData), WebSocketMessageType.Text, true, CancellationToken.None);
 
             WebSocketReceiveResult result;
             MemoryStream stream = new MemoryStream();
@@ -282,14 +290,24 @@ namespace TAO.I4.PythonManager
                 OnReceiveDataAction.Invoke(SendData);
             }
 
+            if (Connect)
+            {
+                DisconnectFromServer();
+            }
+
             return streamBytes;
         }
 
         public static string ExecuteCommandOnServer(string Command, bool Connect = true, int Server = -1, string Conversation = "")
         {
-            if (Connect && (ClientSocket == null || ClientSocket.State != WebSocketState.Open))
+            if (Server < 0 || Server >= Servers.Count)
             {
-                if (!ConnectToServer(DefaultServer))
+                Server = DefaultServer;
+            }
+
+            if (Connect)
+            {
+                if (!ConnectToServer(Server))
                 {
                     throw new Exception("ConnectToServer returned 'false'. Please try to connect to a valid server.");
                 }
@@ -304,6 +322,11 @@ namespace TAO.I4.PythonManager
 
             byte[] response_data = SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData), false).Result;
             string response;
+
+            if (Connect)
+            {
+                DisconnectFromServer();
+            }
 
             try
             {
@@ -336,7 +359,7 @@ namespace TAO.I4.PythonManager
                 }
                 catch
                 {
-                    
+
                 }
             }
 
@@ -394,6 +417,95 @@ namespace TAO.I4.PythonManager
             return Convert.ToInt32(Encoding.UTF8.GetString(rbuffer));
         }
 
+        public static Response GetFullResponse(string Prompt, Service ServerService, string[] SystemPrompts = null, string Translator = "", bool UseDefaultSystemPrompts = true, string AIArgs = "", string Conversation = "", bool Connect = true)
+        {
+            if (SystemPrompts == null)
+            {
+                SystemPrompts = new string[0];
+            }
+
+            // Send
+            byte[] received = ExecuteService(Prompt.Replace("\"", "\'"), ServerService, SystemPrompts, Translator, UseDefaultSystemPrompts, AIArgs, Conversation);
+
+            // Receive
+            Response response = new Response();
+            List<string> errors = new List<string>();
+            dynamic jsonData = null;
+
+            try
+            {
+                jsonData = JsonConvert.DeserializeObject(Encoding.UTF8.GetString(received).TrimStart().TrimEnd());
+
+                response.JsonData = jsonData;
+                response.Command = jsonData["cmd"];
+
+                try
+                {
+                    dynamic responseData = JsonConvert.DeserializeObject(((string)jsonData["response"]).TrimStart().TrimEnd());
+                    List<string> testedModels = new List<string>();
+
+                    response.TextResponse = (string)responseData["response"];
+                    response.Model = (string)responseData["model"];
+                    response.TextClassification = (string)responseData["text_classification"];
+                    response.Title = (string)responseData["title"];
+
+                    foreach (string model in responseData["tested_models"])
+                    {
+                        testedModels.Add(model);
+                    }
+
+                    response.TestedModels = testedModels.ToArray();
+
+                    foreach (string error in responseData["errors"])
+                    {
+                        errors.Add(error);
+                    }
+
+                    try
+                    {
+                        dynamic filesData = JsonConvert.DeserializeObject(((string)responseData["files"]).TrimStart().TrimEnd());
+                        List<Response.ResponseFile> files = new List<Response.ResponseFile>();
+
+                        if (filesData.ContainsKey("image"))
+                        {
+                            files.Add(new Response.ResponseFile()
+                            {
+                                FileType = "image",
+                                FileBytes = Convert.FromBase64String((string)filesData["image"])
+                            });
+                        }
+
+                        if (filesData.ContainsKey("audio"))
+                        {
+                            files.Add(new Response.ResponseFile()
+                            {
+                                FileType = "audio",
+                                FileBytes = Convert.FromBase64String((string)filesData["audio"])
+                            });
+                        }
+
+                        response.Files = files.ToArray();
+                    }
+                    catch (Exception ex)
+                    {
+                        errors.Add("(C#) Could not deserialize file data. Error: " + ex.Message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    errors.Add("(C#) Could not deserialize the response, returning full response as string. Error: " + ex.Message);
+                    response.TextResponse = (string)jsonData["response"];
+                }
+            }
+            catch (Exception ex)
+            {
+                errors.Add("(C#) Error in GetFullResponse: " + ex.Message);
+            }
+
+            response.Errors = errors.ToArray();
+            return response;
+        }
+
         public enum Service
         {
             Chatbot = 0,
@@ -403,5 +515,24 @@ namespace TAO.I4.PythonManager
             WhisperSTT = 4,
             Audio = 5
         }
+    }
+
+    public class Response
+    {
+        public class ResponseFile
+        {
+            public string FileType = "";
+            public byte[] FileBytes = new byte[0];
+        }
+
+        public dynamic JsonData = new Dictionary<string, string>();
+        public string Title = "";
+        public string TextResponse = "";
+        public string Model = "";
+        public string Command = "";
+        public string TextClassification = "";
+        public string[] TestedModels = new string[0];
+        public string[] Errors = new string[0];
+        public ResponseFile[] Files = new ResponseFile[0];
     }
 }
