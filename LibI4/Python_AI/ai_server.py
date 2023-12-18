@@ -670,7 +670,6 @@ def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extr
     
     if (cfg.current_data.auto_start_rec_files_server):
         import rec_files as rf
-        rf.use_while = False
 
 CheckFiles()
 start_server()

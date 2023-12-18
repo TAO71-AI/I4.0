@@ -2,7 +2,6 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Net;
-using System.Net.Sockets;
 using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
@@ -369,7 +368,7 @@ namespace TAO.I4.PythonManager
             return -1;
         }
 
-        public static int SendFileToServer(string FilePath, int Server = -1)
+        public static async Task<int> SendFileToServer(string FilePath, int Server = -1)
         {
             if (!File.Exists(FilePath))
             {
@@ -381,12 +380,25 @@ namespace TAO.I4.PythonManager
                 Server = DefaultServer;
             }
 
-            Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+            ClientWebSocket client = new ClientWebSocket();
             byte[] FileBytes = File.ReadAllBytes(FilePath);
             int chunksize = 4096;
             int totalChunks = (int)Math.Ceiling((double)FileBytes.Length / chunksize);
+            int maxTime = 50;
+            int time = 0;
 
-            client.Connect(new IPEndPoint(IPAddress.Parse(Servers[Server]), 8061));
+            await client.ConnectAsync(new Uri("ws://" + Servers[Server] + ":8061"), CancellationToken.None);
+
+            while (client.State != WebSocketState.Open)
+            {
+                if (time > maxTime)
+                {
+                    throw new Exception("Could not connect to Rec Files server.");
+                }
+
+                time++;
+                Thread.Sleep(100);
+            }
 
             try
             {
@@ -397,7 +409,8 @@ namespace TAO.I4.PythonManager
                     byte[] chunk = new byte[length];
 
                     Array.Copy(FileBytes, offset, chunk, 0, length);
-                    client.Send(chunk);
+
+                    await client.SendAsync(new ArraySegment<byte>(chunk), WebSocketMessageType.Binary, true, CancellationToken.None);
 
                     if (i == totalChunks - 1)
                     {
@@ -405,19 +418,19 @@ namespace TAO.I4.PythonManager
                     }
                 }
 
-                client.Send(Encoding.UTF8.GetBytes("<end>"));
+                await client.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("<end>")), WebSocketMessageType.Binary, true, CancellationToken.None);
             }
-            catch
+            catch (Exception ex)
             {
-                client.Close();
+                await client.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
                 throw new Exception("Bytes limit error.");
             }
 
-            byte[] rbuffer = new byte[32];
-            client.Receive(rbuffer);
+            ArraySegment<byte> rbuffer = new ArraySegment<byte>(new byte[64]);
+            await client.ReceiveAsync(rbuffer, CancellationToken.None);
 
-            client.Close();
-            return Convert.ToInt32(Encoding.UTF8.GetString(rbuffer));
+            await client.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+            return Convert.ToInt32(Encoding.UTF8.GetString(rbuffer.Array));
         }
 
         public static Response GetFullResponse(string Prompt, Service ServerService, string[] SystemPrompts = null, string Translator = "", bool UseDefaultSystemPrompts = true, string AIArgs = "", string Conversation = "", bool Connect = true)

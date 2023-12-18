@@ -1,19 +1,18 @@
-import socket
+import websockets.server
+import asyncio
+import threading
 import datetime
 import os
 import random
 import json
-import threading
 import time
+import sys
 import ai_config as cfg
 import ip_banning as ip_ban
 
-max_buffer_length: int = 5000000
-server: socket.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 received_files: list[dict[str]] = []
 max_sf_minutes: int = 15
 update_every_seconds: int = 300
-use_while = True
 
 if (not os.path.exists("ReceivedFiles/")):
     os.mkdir("ReceivedFiles/")
@@ -56,32 +55,34 @@ def UpdateServer() -> None:
             print("Error checking files: " + str(ex))
             received_files.remove(rf)
 
-def ProcessClient(client: socket.socket, ip: tuple) -> None:
-    if (ip_ban.IsIPBanned(str(ip[0]))):
+async def ProcessClient(websocket) -> None:
+    if (ip_ban.IsIPBanned(str(websocket.remote_address[0]))):
         print("Banned IP, ignoring...")
-        client.close()
+        await websocket.close()
 
         return
     
     data_bytes = b""
+    recf = ""
+    print("Receiving file from " + str(websocket.remote_address[0]) + "...")
 
     while True:
-        recf = client.recv(4096)
+        recf = await websocket.recv()
 
-        if not recf:
+        if (len(recf) == 0):
             break
 
         if (not recf.endswith(b"<end>")):
             data_bytes += recf
         else:
-            data_bytes += recf[: -len(b"<end>")]
+            data_bytes += recf[:-len(b"<end>")]
             break
     
     if (len(recf) > 0):
-        print("Received file from client '" + str(ip[0]) + "' (" + str(len(data_bytes)) + " bytes).")
+        print("Received file from client '" + str(websocket.remote_address[0]) + "' (" + str(len(data_bytes)) + " bytes).")
     else:
         print("Bytes limit error.")
-        client.close()
+        await websocket.close()
 
         return
     
@@ -114,43 +115,90 @@ def ProcessClient(client: socket.socket, ip: tuple) -> None:
         server_response = "Could not save file."
         print("ERROR: " + str(ex))
 
-    client.send(server_response.encode("utf-8"))
-    client.close()
+    await websocket.send(server_response)
+    await websocket.close()
 
     UpdateServer()
 
-def AcceptClients() -> None:
-    while True:
-        try:
-            client, address = server.accept()
-            client_thread = threading.Thread(target = ProcessClient, args = (client, address))
+"""async def ProcessClient(websocket):
+    try:
+        while True:
+            data = await websocket.recv()
 
-            client_thread.start()
-        except Exception as ex:
-            print("An error has ocurred! (" + str(ex) + ").")
+            if (not data or len(data) == 0):
+                break
+
+            try:
+                files = os.listdir("ReceivedFiles/")
+                id = random.randint(-99999, 99999)
+                file_info = {
+                    "c_day": datetime.datetime.now().day,
+                    "c_month": datetime.datetime.now().month,
+                    "c_year": datetime.datetime.now().year,
+                    "c_hour": datetime.datetime.now().hour,
+                    "c_minute": datetime.datetime.now().minute,
+                    "id": str(id)
+                }
+
+                while (files.count(str(id) + ".enc_file") > 0):
+                    id = random.randint(-99999, 99999)
+                        
+                with open("ReceivedFiles/" + str(id) + ".enc_file", "w+") as f:
+                    f.write(json.dumps(file_info))
+                    f.close()
+                
+                with open("ReceivedFiles/" + str(id) + "_file", "wb") as f:
+                    f.write(data)
+                    f.close()
+                        
+                received_files.append(file_info)
+                server_response = str(id)
+            except Exception as ex:
+                server_response = "Could not save file."
+                print("ERROR: " + str(ex))
+            
+            websocket.send(server_response)
+    except Exception as ex:
+        print("(Rec Files) ERROR: " + str(ex))
+    
+    websocket.close()"""
+
+async def AcceptClient(websocket) -> None:
+    print("(Rec Files) Incomming connection from '" + str(websocket.remote_address[0]) + ":" + str(websocket.remote_address[1]) + "'.")
+    await ProcessClient(websocket)
 
 def UpdateFunction() -> None:
     while True:
         UpdateServer()
         time.sleep(update_every_seconds)
 
-server.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, max_buffer_length)
-server.bind(("127.0.0.1" if (cfg.current_data.use_local_ip) else "0.0.0.0", 8061))
-server.listen()
+def WSServer() -> None:
+    event_loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(event_loop)
+    
+    ip = "127.0.0.1" if (cfg.current_data.use_local_ip) else "0.0.0.0"
+    server_ws = websockets.server.serve(AcceptClient, ip, 8061)
 
-server_thread = threading.Thread(target = AcceptClients)
-server_thread.start()
+    event_loop.run_until_complete(server_ws)
+    event_loop.run_forever()
+
+try:
+    ws_server_thread = threading.Thread(target = WSServer)
+    ws_server_thread.start()
+
+    print("Rec Files server started and listening.")
+except Exception as ex:
+    print("Error starting Rec Files websocket: " + str(ex))
 
 update_thread = threading.Thread(target = UpdateFunction)
 update_thread.start()
 
 UpdateServer()
 
-while (use_while):
-    command = input(">$ ")
+if (sys.argv.__contains__("-l") or sys.argv.__contains__("--loop")):
+    while True:
+        command = input(">$ ")
 
-    if (command == "quit" or command == "close" or command == "stop" or command == "exit"):
-        print("Closing server...")
-
-        server.close()
-        os._exit(0)
+        if (command == "quit" or command == "close" or command == "stop" or command == "exit"):
+            print("Closing server...")
+            os._exit(0)
