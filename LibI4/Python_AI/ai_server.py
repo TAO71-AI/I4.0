@@ -588,6 +588,8 @@ def on_receive(data: dict[str]) -> dict:
 
 async def handle_client_ws(websocket) -> None:
     while (True):
+        UpdateServer()
+
         try:
             data = await websocket.recv()
             data = json.loads(data)

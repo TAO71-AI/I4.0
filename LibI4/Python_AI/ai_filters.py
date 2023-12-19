@@ -41,7 +41,7 @@ def LoadTextModel() -> None:
     device_text = "cuda" if (move_to_gpu) else "cpu"
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'NSFW Filter (Text)' on device '" + device_image + "'...")
+        print("Loading model 'NSFW Filter (Text)' on device '" + device_text + "'...")
     
     tokenizer_text = AutoTokenizer.from_pretrained(cfg.current_data.nsfw_filter_text_model)
     text_filter = __load_model__(cfg.current_data.nsfw_filter_text_model, device_text, "text")

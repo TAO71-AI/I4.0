@@ -7,6 +7,8 @@ if (not os.path.exists("BannedIPs.txt")):
         f.close()
 
 def ReloadBannedIPs() -> None:
+    banned_ips = []
+
     with open("BannedIPs.txt", "r") as f:
         for b_ip in f.readlines():
             if (len(b_ip.strip()) == 0):
