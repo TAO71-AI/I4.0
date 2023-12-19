@@ -67,6 +67,7 @@ def UpdateServer() -> None:
             sb.SaveKey(api_key)
     
     conv.SaveConversations()
+    ip_ban.ReloadBannedIPs()
 
 def __add_queue_time__(model: str, time: float) -> None:
     if (len(times[model]) <= cfg.current_data.max_predicted_queue_time):
@@ -428,7 +429,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         else:
             __print__("This IP is already banned.")
     elif (command.startswith("unban ") and admin):
-        if (ip_ban.UnbanIP(command[4:len(command)])):
+        if (ip_ban.UnbanIP(command[6:len(command)])):
             __print__("IP unbanned!")
         else:
             __print__("This IP isn't banned.")

@@ -7,11 +7,9 @@ if (not os.path.exists("BannedIPs.txt")):
         f.close()
 
 def ReloadBannedIPs() -> None:
-    banned_ips = []
-
     with open("BannedIPs.txt", "r") as f:
         for b_ip in f.readlines():
-            if (len(b_ip.strip()) == 0):
+            if (len(b_ip.strip()) == 0 or banned_ips.count(b_ip.strip()) > 0):
                 continue
 
             banned_ips.append(b_ip.strip())
