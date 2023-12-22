@@ -449,7 +449,32 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     
     return "Invalid command."
 
-def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> dict:
+def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
+    __print__("Executing service without API key: " + service)
+
+    try:
+        if (service.lower().startswith("get_queue")):
+            # Get queue
+            server_response = run_server_command("-u get_queue", extra_data)
+        elif (service.lower().startswith("get_tos")):
+            # Get Terms Of Service (TOS)
+            server_response = "ERROR: Could not get TOS file."
+
+            with open("TOS.txt", "r") as f:
+                server_response = f.read()
+                f.close()
+            
+            if (len(server_response.strip()) == 0):
+                server_response = "[NO TOS]"
+        else:
+            raise Exception("Service doesn't exist or is not free.")
+        
+        return str(server_response)
+    except Exception as ex:
+        logs.AddToLog("[ERROR: NO API SERVICE]: " + str(ex))
+        return "Error executing service."
+
+def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[str]) -> str:
     if (key_data == None):
         key_data = sb.GenerateKey(0, 0, False)
         api_key = not requires_api_key
@@ -457,48 +482,49 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
     else:
         api_key = (not requires_api_key or (key_data["tokens"] > 0 and key_data["connections"] > 0))
         temp_key = False
+    
+    if (not api_key):
+        return __execute_service_without_key__(service, extra_data)
+    
+    __print__("Executing service with API key: " + service)
 
     try:
-        if (data.startswith("service_0 ") and api_key):
+        if (service.startswith("service_0 ")):
             # Chatbot full-response
 
-            key_data["tokens"] -= (len(data) - 12) / 6
-            server_response = run_server_command("-u ai_fresponse " + data[10:len(data)], extra_data)
-        elif (data.startswith("service_1 ") and api_key):
+            key_data["tokens"] -= 30
+            server_response = run_server_command("-u ai_fresponse " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_1 ")):
             # Custom server command
 
-            key_data["tokens"] -= (len(data) - 10)
-            server_response = run_server_command("-u " + data[10:len(data)], extra_data)
-        elif (data.startswith("service_2 ") and api_key):
+            key_data["tokens"] -= 50
+            server_response = run_server_command("-u " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_2 ")):
             # Image generation
             
-            key_data["tokens"] -= (len(data) - 12) / 4
-            server_response = run_server_command("-u ai_image " + data[10:len(data)], extra_data)
-        elif (data.startswith("service_3 ") and api_key):
+            key_data["tokens"] -= 25
+            server_response = run_server_command("-u ai_image " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_3 ")):
             # Image to Text
 
             key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_img_to_text " + data[10:len(data)], extra_data)
-        elif (data.startswith("service_4 ") and api_key):
+            server_response = run_server_command("-u ai_img_to_text " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_4 ")):
             # Whisper audio recognition
 
-            key_data["tokens"] -= 12
-            server_response = run_server_command("-u ai_whisper " + data[10:len(data)], extra_data)
-        elif (data.startswith("service_5 ") and api_key):
+            key_data["tokens"] -= 20
+            server_response = run_server_command("-u ai_whisper " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_5 ")):
             # Audio generation
             
-            key_data["tokens"] -= (len(data) - 12) / 5
-            server_response = run_server_command("-u ai_audio " + data[10:len(data)], extra_data)
-        elif (data.startswith("service_6 ") and api_key):
+            key_data["tokens"] -= 25
+            server_response = run_server_command("-u ai_audio " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_6 ")):
             # Depth estimation
             
             key_data["tokens"] -= 35
-            server_response = run_server_command("-u ai_depth " + data[10:len(data)], extra_data)
-        elif (data.lower().startswith("get_queue")):
-            # Get queue
-            server_response = run_server_command("-u get_queue", extra_data)
-            key_data["connections"] += 1
-        elif (data.lower().startswith("clear_my_history") and requires_api_key and cfg.current_data.save_conversations):
+            server_response = run_server_command("-u ai_depth " + service[10:len(service)], extra_data)
+        elif (service.lower().startswith("clear_my_history") and cfg.current_data.save_conversations):
             # Clear chat history
             try:
                 run_server_command("-u clear_my_history", extra_data)
@@ -507,16 +533,8 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
                 pass
 
             key_data["connections"] += 1
-        elif (data.lower().startswith("get_tos")):
-            # Get Terms Of Service (TOS)
-            with open("TOS.txt", "r+") as f:
-                server_response = f.read()
-                f.close()
-            
-            key_data["connections"] += 1
         else:
-            server_response = ""
-            key_data["connections"] += 1
+            raise Exception("Service doesn't exists.")
 
         key_data["connections"] -= 1
 
@@ -529,6 +547,13 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
         UpdateServer()
 
         return str(server_response)
+    except Exception as ex:
+        logs.AddToLog("[ERROR: API SERVICE]: " + str(ex))
+        raise Exception("Error executing service: " + str(ex))
+
+def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> str:
+    try:
+        return __execute_service_with_key__(data, key_data, extra_data)
     except Exception as ex:
         return "Error on the server: " + str(ex)
 
@@ -568,7 +593,7 @@ def on_receive(data: dict[str]) -> dict:
                 res = RunService(data["cmd"], key_data, extra_data)
             else:
                 extra_data["conversation"] = [key_data["key"], data["conversation"]]
-                res = RunService(data["cmd"], key_data, extra_data)
+                res = RunService(data["cmd"], None, extra_data)
                 error = "ERROR ON API KEY: Not enough tokens or connections."
         except:
             res = RunService(data["cmd"], None, extra_data)
