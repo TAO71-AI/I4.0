@@ -4,7 +4,6 @@ using System.IO;
 using System.Media;
 using System.Threading;
 using NAudio.Wave;
-using TAO.I4.Plugins.Sing;
 
 namespace TAO.I4.Plugins.Voicevox.Sing
 {
@@ -51,6 +50,8 @@ namespace TAO.I4.Plugins.Voicevox.Sing
                 MusicPlayer player = new MusicPlayer("Sing_Plugin/" + Songs[SongIndex].SongInstrumental);
                 string lastDialog = "";
 
+                Console.WriteLine("1");
+
                 foreach ((int, string, VV_VoiceData) data in Songs[SongIndex].SongLyrics)
                 {
                     if (data.Item2.Trim().Length <= 0)
@@ -93,6 +94,8 @@ namespace TAO.I4.Plugins.Voicevox.Sing
                         }, -1).Result);
                 }
 
+                Console.WriteLine("2");
+
                 if (OnStartSingingAction != null)
                 {
                     OnStartSingingAction.Invoke(Songs[SongIndex]);
@@ -110,11 +113,13 @@ namespace TAO.I4.Plugins.Voicevox.Sing
                         }
                     );
                 }
-                
+
                 player.Play();
+                Console.WriteLine("3");
 
                 foreach ((int, string, VV_VoiceData) index in Songs[SongIndex].SongLyrics)
                 {
+                    Console.WriteLine("Time to sleep: " + (index.Item1 - lastMs).ToString());
                     Thread.Sleep(index.Item1 - lastMs);
 
                     lastMs = index.Item1;
@@ -133,6 +138,7 @@ namespace TAO.I4.Plugins.Voicevox.Sing
                     }
                 }
 
+                Console.WriteLine("4");
                 player.Stop();
 
                 if (Songs[SongIndex].Temporal || ForceTemporal)
@@ -199,15 +205,18 @@ namespace TAO.I4.Plugins.Voicevox.Sing
             foreach (FileInfo file in files)
             {
                 WaveFileReader wf = new WaveFileReader(file.FullName);
-                songs.Add(new VV_SongData()
+                VV_SongData data = new VV_SongData()
                 {
                     Name = file.Name.Substring(0, file.Name.LastIndexOf(".")),
                     SongInstrumental = file.Name,
+                    IgnoreLyrics = true,
                     SongLyrics = new List<(int, string, VV_VoiceData)>()
                     {
                         ((int)wf.TotalTime.TotalMilliseconds, "", new VV_VoiceData(1, 1))
                     }
-                });
+                };
+
+                songs.Add(data);
             }
 
             return songs.ToArray();
@@ -218,10 +227,15 @@ namespace TAO.I4.Plugins.Voicevox.Sing
     {
         public string Name = "";
         public string SongInstrumental = "";
-        public bool UseVoice = true;
         public VV_VoiceData VoiceData = new VV_VoiceData(1, 1);
         public bool Temporal = false;
+        public bool IgnoreLyrics = false;
         public List<(int, string, VV_VoiceData)> SongLyrics = new List<(int, string, VV_VoiceData)>();
+
+        public override string ToString()
+        {
+            return "Song name: " + Name + "\n   Instrumental: " + SongInstrumental + "\n   " + SongLyrics.Count.ToString() + " lyrics";
+        }
 
         public bool TryGetMS(int Ms, out int Index, List<int> ExceptIndex = null)
         {
