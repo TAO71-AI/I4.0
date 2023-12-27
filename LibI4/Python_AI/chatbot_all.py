@@ -269,8 +269,7 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             elif (i == "tf"):
                 response = "### RESPONSE: " + cbtf.get_ai_response((SystemMessagesToStr() if apply_system_messages_to_tensorflow else "") + prompt)
             elif (i == "cgpt"):
-                response = "### RESPONSE: " + openai.Completion.create(model = openai_model, messages = openai_msgs,
-                    temperature = cfg.current_data.temp, max_tokens = openai_max_tokens)
+                response = "### RESPONSE: " + openai.Completion.create(model = openai_model, messages = openai_msgs, temperature = cfg.current_data.temp, max_tokens = openai_max_tokens)
             elif (i == "hf"):
                 response = "### RESPONSE: " + cba.MakePrompt(prompt, use_chat_history_if_available, conversation)
             elif (i == "int"):

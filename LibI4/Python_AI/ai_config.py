@@ -15,7 +15,7 @@ class ConfigData:
     internet_model: str = "distilbert-base-cased-distilled-squad"
     image_generation_model: str = "SimianLuo/LCM_Dreamshaper_v7"
     image_generation_steps: int = 10
-    img_to_text_model: str = "microsoft/git-large-r-coco"
+    img_to_text_model: str = "microsoft/git-base-textcaps"
     text_to_audio_model: str = "suno/bark-small"
     nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"
     nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"

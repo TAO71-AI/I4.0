@@ -1,9 +1,3 @@
-# For whisper recognition
-speechrecognition
-soundfile
-pyaudio
-openai-whisper
-
 # For opencv
 opencv-python
 numpy
@@ -12,3 +6,4 @@ numpy
 pyautogui
 keyboard
 screeninfo
+Pillow

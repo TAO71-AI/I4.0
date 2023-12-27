@@ -25,7 +25,6 @@ namespace TAO.I4.PythonManager
         public static Action<byte[]> OnSendDataAction = null;
         public static Action<byte[]> OnReceiveDataAction = null;
         public static Action<string> OnReceiveWelcomeMessageAction = null;
-        public static string APIKey = ReadKeyFromFile();
 
         public static string ReadKeyFromFile()
         {
@@ -176,7 +175,7 @@ namespace TAO.I4.PythonManager
             sd += " ";
 
             jsonData += "{";
-            jsonData += "\"api_key\": \"" + APIKey + "\", \"cmd\": \"" + sd + msg + "\", " +
+            jsonData += "\"api_key\": \"" + ReadKeyFromFile() + "\", \"cmd\": \"" + sd + msg + "\", " +
                 "\"extra_data\": {\"system_msgs\": " + Extra.ArrayToJson(ExtraSystemMessages) + ", " +
                 "\"translator\": \"" + Translator + "\", \"use_default_sys_prompts\": \"" +
                 UseDefaultSysPrompts.ToString().ToLower() + "\", \"ai_args\": \"" + AIArgs + "\"}, " +
@@ -318,7 +317,7 @@ namespace TAO.I4.PythonManager
             string jsonData = "";
 
             jsonData += "{";
-            jsonData += "\"api_key\": \"" + APIKey + "\", \"cmd\": \"" + Command + "\"," +
+            jsonData += "\"api_key\": \"" + ReadKeyFromFile() + "\", \"cmd\": \"" + Command + "\"," +
                 "\"conversation\": \"" + Conversation + "\"";
             jsonData += "}";
 
@@ -420,7 +419,7 @@ namespace TAO.I4.PythonManager
 
                 await client.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("<end>")), WebSocketMessageType.Binary, true, CancellationToken.None);
             }
-            catch (Exception ex)
+            catch
             {
                 await client.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
                 throw new Exception("Bytes limit error.");

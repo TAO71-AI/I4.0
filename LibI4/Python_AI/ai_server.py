@@ -475,15 +475,7 @@ def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
         return "Error executing service."
 
 def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[str]) -> str:
-    if (key_data == None):
-        key_data = sb.GenerateKey(0, 0, False)
-        api_key = not requires_api_key
-        temp_key = True
-    else:
-        api_key = (not requires_api_key or (key_data["tokens"] > 0 and key_data["connections"] > 0))
-        temp_key = False
-    
-    if (not api_key):
+    if (requires_api_key and (key_data == None or key_data["tokens"] <= 0 or key_data["connections"] <= 0)):
         return __execute_service_without_key__(service, extra_data)
     
     __print__("Executing service with API key: " + service)
@@ -537,11 +529,7 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             raise Exception("Service doesn't exists.")
 
         key_data["connections"] -= 1
-
-        if (temp_key):
-            sb.DeleteKey(key_data["key"])
-        else:
-            sb.SaveKey(key_data)
+        sb.SaveKey(key_data)
 
         # Update server
         UpdateServer()
