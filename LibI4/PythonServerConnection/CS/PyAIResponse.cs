@@ -529,7 +529,8 @@ namespace TAO.I4.PythonManager
             ImageToText = 3,
             WhisperSTT = 4,
             Audio = 5,
-            DepthEstimation = 6
+            DepthEstimation = 6,
+            ObjectDetection = 7
         }
     }
 

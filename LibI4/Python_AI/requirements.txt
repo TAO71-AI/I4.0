@@ -24,3 +24,4 @@ soundfile
 openai-whisper
 Pillow
 optimum
+opencv-python

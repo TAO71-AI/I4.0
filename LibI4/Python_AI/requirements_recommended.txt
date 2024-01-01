@@ -4,3 +4,4 @@ sentencepiece
 sacremoses
 accelerate
 bitsandbytes
+timm

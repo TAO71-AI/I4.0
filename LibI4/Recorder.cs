@@ -9,7 +9,7 @@ namespace TAO.I4
     {
         private static readonly string PythonCode = "import speech_recognition as sr\n" +
             "recognizer = sr.Recognizer()\nwith sr.Microphone() as source:\n    data = recognizer.listen(source)\n" +
-            "with open(\"[SR_PATH]tmp_whisper_audio.wav\", \"wb\") as f:\n    f.write(data.get_wav_data())\n    f.close()";
+            "with open(\"[$PATH]tmp_whisper_audio.wav\", \"wb\") as f:\n    f.write(data.get_wav_data())\n    f.close()";
         public static List<string> Commands = new List<string>()
         {
             "py",
@@ -64,15 +64,21 @@ namespace TAO.I4
             string path = Path;
             byte[] dataB = new byte[0];
 
-            if (!path.EndsWith("/"))
+            if (!path.EndsWith("/") && path.Trim().Length > 0)
             {
                 path += "/";
             }
 
             string code = PythonCode;
-            code.Replace("[SR_PATH]", path);
+            code = code.Replace("[$PATH]", path);
 
-            int data = RunCommand("-c \"" + code + "\"");
+            if (!File.Exists(path + "tmp_whisper_audio.py"))
+            {
+                File.Create(path + "tmp_whisper_audio.py").Close();
+            }
+
+            File.WriteAllText(path + "tmp_whisper_audio.py", code);
+            int data = RunCommand(path + "tmp_whisper_audio.py");
 
             if (data == 0)
             {

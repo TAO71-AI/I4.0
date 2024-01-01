@@ -1,27 +1,22 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, TFAutoModelForSequenceClassification
+from transformers import Pipeline, pipeline
 import torch
 import ai_config as cfg
 
 model_name: str = cfg.current_data.text_classification_model
 
-tokenizer: AutoTokenizer = None
-model: AutoModelForSequenceClassification | TFAutoModelForSequenceClassification = None
+pipe: Pipeline = None
 device: str = "cpu"
 
 def __load_model__(model_name: str, device: str):
-    if (cfg.current_data.use_tf_instead_of_pt):
-        return TFAutoModelForSequenceClassification.from_pretrained(model_name)
-    else:
-        model = AutoModelForSequenceClassification.from_pretrained(model_name).to(device)
-        return model
+    return pipeline(task = "text-classification", model = model_name, device = device)
 
 def LoadModel() -> None:
-    global tokenizer, model, device
+    global pipe, device
 
     if (not cfg.current_data.prompt_order.__contains__("sc")):
         raise Exception("Model is not in 'prompt_order'.")
 
-    if ((tokenizer != None and model != None) or len(model_name.strip()) <= 0):
+    if (pipe != None or len(model_name.strip()) == 0):
         return
     
     move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("sc")
@@ -29,22 +24,16 @@ def LoadModel() -> None:
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'text classification' on device '" + device + "'...")
-    
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = __load_model__(model_name, device)
+
+    pipe = __load_model__(model_name, device)
 
 def DoPrompt(prompt: str) -> str:
     LoadModel()
 
-    if (tokenizer == None or model == None):
+    if (pipe == None):
         return "-1"
 
-    inputs = tokenizer.encode(prompt, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
+    result = pipe(prompt)
+    result = result[0]["label"]
 
-    if (not cfg.current_data.use_tf_instead_of_pt):
-        inputs = inputs.to(device)
-
-    response = model(inputs).logits
-    predicted_class = response.argmax().item()
-
-    return str(predicted_class)
+    return str(result).lower()

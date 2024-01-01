@@ -27,7 +27,9 @@ times: dict[str, list[float]] = {
     "chatbot": [],
     "translation": [],
     "text2audio": [],
-    "depth_estimation": []
+    "depth_estimation": [],
+    "whisper": [],
+    "od": []
 }
 
 # Server
@@ -300,6 +302,44 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         os.remove("temp_img_" + str(tid) + ".png")
         return img
+    elif (command.startswith("ai_object_detection ")):
+        img = command[20:]
+        img_bytes = b""
+        
+        if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
+            return "The file id '" + img + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + img + "_file", "rb") as f:
+            img_bytes = f.read()
+            f.close()
+        
+        with open("ReceivedFiles/" + img + ".enc_file", "r") as f:
+            img = json.loads(f.read())
+            f.close()
+        
+        tid = 0
+
+        while os.path.exists("temp_img_" + str(tid) + ".png"):
+            tid += 1
+        
+        with open("temp_img_" + str(tid) + ".png", "wb") as f:
+            f.write(img_bytes)
+            f.close()
+        
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", "", "-ncb-od", esm, translator)
+
+        if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("od", end_timer - start_timer)
+
+        os.remove("temp_img_" + str(tid) + ".png")
+        return img
     elif (command.startswith("echo ") and admin):
         return command[5:len(command)]
     elif (command == "createkey" and admin and requires_api_key):
@@ -309,19 +349,19 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     elif (command == "getallkeys" and admin and requires_api_key):
         return str(sb.GetAllKeys())
     elif (command.startswith("sr ")):
-        lang = "en"
-        data = ""
+        data = command[3:len(command)]
+        result = ""
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
         
-        try:
-            if (command.startswith("sr -l ")):
-                lang = command[6:command[6:len(command)].index(" ")]
-                data = command[command.index(lang) + 1:len(command)]
-            else:
-                data = command[3:len(command)]
-        except:
-            data = command[3:len(command)]
-        
-        return cb.RecognizeSpeech(lang, data)
+        result = cb.RecognizeAudio(data)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("whisper", end_timer - start_timer)
+
+        return result
     elif (command.startswith("get_queue")):
         q = int(queue / cfg.current_data.max_prompts)
         pt = {}
@@ -516,6 +556,11 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             
             key_data["tokens"] -= 35
             server_response = run_server_command("-u ai_depth " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_7 ")):
+            # Depth estimation
+            
+            key_data["tokens"] -= 20
+            server_response = run_server_command("-u ai_object_detection " + service[10:len(service)], extra_data)
         elif (service.lower().startswith("clear_my_history") and cfg.current_data.save_conversations):
             # Clear chat history
             try:

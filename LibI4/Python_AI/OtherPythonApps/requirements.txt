@@ -7,3 +7,4 @@ pyautogui
 keyboard
 screeninfo
 Pillow
+gym

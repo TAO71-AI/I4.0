@@ -11,6 +11,7 @@ import ai_img_to_text as itt
 import ai_generate_audio as aga
 import ai_filters as filters
 import ai_depth_estimation as de
+import ai_object_detection as od
 import speech_recog as sr
 import ai_config as cfg
 import ai_conversation as conv
@@ -21,6 +22,7 @@ import os
 import datetime
 import calendar
 import base64
+import json
 
 """
 README
@@ -40,6 +42,7 @@ whisper - Recognize audio using Whisper (Speech To Text).
 text2audio - Audio generation.
 nsfw_filter-text - Check if a text is NSFW.
 nsfw_filter-image - Check if an image is NSFW.
+od - Object Detection.
 """
 
 openai_model: str = cfg.current_data.openai_model
@@ -100,6 +103,8 @@ def GetAllModels() -> dict[str]:
             mls[i] = cfg.current_data.nsfw_filter_image_model
         elif (i == "depth"):
             mls[i] = cfg.current_data.depth_estimation_model
+        elif (i == "od"):
+            mls[i] = cfg.current_data.object_detection_model
     
     return mls
 
@@ -137,6 +142,8 @@ def LoadAllModels() -> None:
             filters.LoadImageModel()
         elif (i == "depth"):
             de.LoadModel()
+        elif (i == "od"):
+            od.LoadModel()
 
 def IsTextNSFW(prompt: str) -> bool:
     if (cfg.current_data.prompt_order.__contains__("nsfw_filter-text")):
@@ -183,10 +190,15 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
     
     if (cfg.current_data.system_messages_in_first_person):
         sm = basics.ToFirstPerson(sm)
+    
+    if (order_prompt.__contains__("cgpt")):
+        openai_client = openai.Client()
 
-    with open("openai_api_key.txt", "r") as oak:
-        openai.api_key = oak.read()
-        oak.close()
+        with open("openai_api_key.txt", "r") as oak:
+            openai_client.api_key = oak.read()
+            openai.api_key = oak.read()
+            
+            oak.close()
     
     for sp in sm:
         if (len(sp.split()) == 0):
@@ -249,9 +261,43 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             data["tested_models"].append("text2audio")
         
         if (args.__contains__("-depth") and order_prompt.__contains__("depth")):
+            is_nsfw = IsImageNSFW(prompt)
+
+            if (is_nsfw):
+                if (not cfg.current_data.allow_processing_if_nsfw):
+                    return {
+                        "response": "ERROR",
+                        "model": "-1",
+                        "files": {},
+                        "tested_models": [],
+                        "text_classification": "-1",
+                        "title": "NO TITLE",
+                        "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                    }
+
             data["files"]["image"] = EstimateDepth(prompt)
             data["response"] = "[de " + prompt + "]"
             data["tested_models"].append("depth")
+        
+        if (args.__contains__("-od") and order_prompt.__contains__("od")):
+            is_nsfw = IsImageNSFW(prompt)
+
+            if (is_nsfw):
+                if (not cfg.current_data.allow_processing_if_nsfw):
+                    return {
+                        "response": "ERROR",
+                        "model": "-1",
+                        "files": {},
+                        "tested_models": [],
+                        "text_classification": "-1",
+                        "title": "NO TITLE",
+                        "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                    }
+                
+            od = DetectObjects(prompt)
+            data["files"]["image"] = od["image"]
+            data["response"] = str(od["objects"])
+            data["tested_models"].append("od")
         
         data["files"] = str(data["files"])
         return data
@@ -269,7 +315,7 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             elif (i == "tf"):
                 response = "### RESPONSE: " + cbtf.get_ai_response((SystemMessagesToStr() if apply_system_messages_to_tensorflow else "") + prompt)
             elif (i == "cgpt"):
-                response = "### RESPONSE: " + openai.Completion.create(model = openai_model, messages = openai_msgs, temperature = cfg.current_data.temp, max_tokens = openai_max_tokens)
+                response = "### RESPONSE: " + openai_client.chat.completions.create(model = openai_model, messages = openai_msgs, temperature = cfg.current_data.temp, max_tokens = openai_max_tokens).choices[0].message
             elif (i == "hf"):
                 response = "### RESPONSE: " + cba.MakePrompt(prompt, use_chat_history_if_available, conversation)
             elif (i == "int"):
@@ -531,3 +577,12 @@ def ImageToText(img: str) -> str:
 
 def RecognizeAudio(audio: str) -> str:
     return sr.Recognize(sr.FileToAudioData(audio))
+
+def DetectObjects(img: str) -> dict[str]:
+    data = od.MakePrompt(img)
+    image = base64.b64encode(data["image"]).decode("utf-8")
+
+    return {
+        "objects": data["objects"],
+        "image": image
+    }

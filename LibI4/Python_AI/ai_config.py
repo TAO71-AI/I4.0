@@ -20,14 +20,15 @@ class ConfigData:
     nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"
     nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"
     depth_estimation_model: str = "Intel/dpt-beit-base-384"
+    object_detection_model: str = "hustvl/yolos-tiny"
     tf_epochs: int = 100
     force_api_key: bool = True
     low_cpu_or_memory: bool = False
-    max_length: int = 1000
+    max_length: int = 250
     use_chat_history: bool = True
     use_dynamic_system_args: bool = True
     prompt_order: str = "tr sc g4a nsfw_filter-text"
-    move_to_gpu: str = "tr sc g4a hf int pt tf cgpt text2img img2text text2audio nsfw_filter-text nsfw_filter-image"
+    move_to_gpu: str = "tr sc g4a hf int pt tf cgpt text2img img2text text2audio nsfw_filter-text nsfw_filter-image whisper od"
     use_gpu_if_available: bool = False
     ai_args: str = ""
     custom_system_messages: str = ""
@@ -135,6 +136,8 @@ def ReadConfig() -> ConfigData:
                 data.nsfw_filter_image_model = config_dict[i]
             elif (il == "depth_estimation_model"):
                 data.depth_estimation_model = config_dict[i]
+            elif (il == "object_detection_model"):
+                data.object_detection_model = config_dict[i]
             elif (il == "tf_epochs"):
                 try:
                     data.tf_epochs = int(config_dict[i])
@@ -148,7 +151,7 @@ def ReadConfig() -> ConfigData:
                 try:
                     data.max_length = int(config_dict[i])
                 except:
-                    data.max_length = 10000
+                    data.max_length = 250
             elif (il == "use_chat_history"):
                 data.use_chat_history = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "use_dynamic_system_args"):
@@ -269,6 +272,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "nsfw_filter_text_model=" + cfg.nsfw_filter_text_model + "\n"
     text += "nsfw_filter_image_model=" + cfg.nsfw_filter_image_model + "\n"
     text += "depth_estimation_model=" + cfg.depth_estimation_model + "\n"
+    text += "object_detection_model=" + cfg.object_detection_model + "\n"
     text += "tf_epochs=" + str(cfg.tf_epochs) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "low_cpu_or_memory=" + ("true" if cfg.low_cpu_or_memory == True else "false") + "\n"
