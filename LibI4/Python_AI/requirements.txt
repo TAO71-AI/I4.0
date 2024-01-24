@@ -1,27 +1,38 @@
+# General
 numpy
 torch
 torchtext
 torchvision
 torchaudio
 tensorflow
-gpt4all
-transformers
-sockets
+tflite
 keras
-openai
+keras-nlp
+transformers==4.37.0
+diffusers==0.25.1
+datasets
+
+# Server dependencies
 asyncio
-speechrecognition
 websockets
-mysql-connector-python
+mysql-connector-python==8.3.0
+
+# For inference
+gpt4all==2.1.0
+openai==1.9.0
+speechrecognition==3.10.1
+openai-whisper
+
+# For train or fine-tune
+autotrain-advanced
+
+# Other
 requests
 beautifulsoup4
-datasets
-keras-nlp
-diffusers
-tflite
-scipy
 soundfile
-openai-whisper
-Pillow
-optimum
+scipy
+evaluate
 opencv-python
+optimum
+Pillow
+pandas

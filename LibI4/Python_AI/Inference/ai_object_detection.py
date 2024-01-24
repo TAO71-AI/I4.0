@@ -71,7 +71,7 @@ def MakePrompt(img: str) -> dict[str]:
         cv_image = f.read()
         f.close()
 
-    #os.remove(file_name + str(file_name_id) + ".png")
+    os.remove(file_name + str(file_name_id) + ".png")
     return {
         "objects": result,
         "image": cv_image

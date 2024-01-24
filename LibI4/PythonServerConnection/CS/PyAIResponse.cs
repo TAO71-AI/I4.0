@@ -15,7 +15,7 @@ namespace TAO.I4.PythonManager
         public static List<string> Servers = new List<string>()
         {
             "127.0.0.1", // Localhost
-            "147.78.87.113", //TAO71 Server
+            "tao71-software.ddns.net", //TAO71 Server
         };
         public static int DefaultServer = 0;
         private static ClientWebSocket ClientSocket = null;
@@ -25,6 +25,7 @@ namespace TAO.I4.PythonManager
         public static Action<byte[]> OnSendDataAction = null;
         public static Action<byte[]> OnReceiveDataAction = null;
         public static Action<string> OnReceiveWelcomeMessageAction = null;
+        private static bool Connected = false;
 
         public static string ReadKeyFromFile()
         {
@@ -48,30 +49,24 @@ namespace TAO.I4.PythonManager
                 OnConnectingToServerAction.Invoke(Server);
             }
 
-            try
+            ClientSocket = new ClientWebSocket();
+            ClientSocket.ConnectAsync(new Uri("ws://" + Server + ":8060"), CancellationToken.None);
+
+            int currentTime = 0;
+
+            while (ClientSocket.State != WebSocketState.Open)
             {
-                ClientSocket = new ClientWebSocket();
-                ClientSocket.ConnectAsync(new Uri("ws://" + Server + ":8060"), CancellationToken.None);
-
-                int currentTime = 0;
-
-                while (ClientSocket.State != WebSocketState.Open)
+                if (currentTime >= 50)
                 {
-                    if (currentTime >= 50)
-                    {
-                        throw new Exception("Error connecting to the server. Make sure it is started.");
-                    }
-
-                    Thread.Sleep(100);
-                    currentTime += 1;
+                    throw new Exception("Error connecting to the server. Make sure it is started.");
                 }
 
-                r = true;
+                Thread.Sleep(100);
+                currentTime += 1;
             }
-            catch (Exception ex)
-            {
-                throw ex;
-            }
+
+            r = true;
+            Connected = true;
 
             if (OnConnectToServerAction != null)
             {
@@ -111,6 +106,11 @@ namespace TAO.I4.PythonManager
             return ConnectToServer(Servers[Server]);
         }
 
+        public static bool IsConnected()
+        {
+            return Connected;
+        }
+
         public static void DisconnectFromServer()
         {
             if (ClientSocket != null)
@@ -120,7 +120,10 @@ namespace TAO.I4.PythonManager
                     ClientSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
                 }
 
+                ClientSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed connection", CancellationToken.None);
                 ClientSocket = null;
+
+                Connected = false;
 
                 if (OnDisconnectFromServerAction != null)
                 {
@@ -348,7 +351,6 @@ namespace TAO.I4.PythonManager
                 try
                 {
                     ConnectToServer(server);
-                    DisconnectFromServer();
                     int id = Servers.IndexOf(server);
 
                     if (SetFirstAsDefault)
@@ -478,25 +480,31 @@ namespace TAO.I4.PythonManager
 
                     try
                     {
-                        dynamic filesData = JsonConvert.DeserializeObject(((string)responseData["files"]).TrimStart().TrimEnd());
+                        dynamic filesData = responseData["files"];
                         List<Response.ResponseFile> files = new List<Response.ResponseFile>();
 
-                        if (filesData.ContainsKey("image"))
+                        if (filesData.ContainsKey("images"))
                         {
-                            files.Add(new Response.ResponseFile()
+                            foreach (string image in filesData["images"])
                             {
-                                FileType = "image",
-                                FileBytes = Convert.FromBase64String((string)filesData["image"])
-                            });
+                                files.Add(new Response.ResponseFile()
+                                {
+                                    FileType = "image",
+                                    FileBytes = Convert.FromBase64String(image)
+                                });
+                            }
                         }
 
-                        if (filesData.ContainsKey("audio"))
+                        if (filesData.ContainsKey("audios"))
                         {
-                            files.Add(new Response.ResponseFile()
+                            foreach (string audio in filesData["audios"])
                             {
-                                FileType = "audio",
-                                FileBytes = Convert.FromBase64String((string)filesData["audio"])
-                            });
+                                files.Add(new Response.ResponseFile()
+                                {
+                                    FileType = "audio",
+                                    FileBytes = Convert.FromBase64String(audio)
+                                });
+                            }
                         }
 
                         response.Files = files.ToArray();

@@ -13,6 +13,16 @@ namespace TAO.I4.Plugins.VTuber.Godot
         private static Socket Client = null;
         private static byte[] ReceivedBytes = new byte[16];
 
+        public static bool IsConnected()
+        {
+            if (ConnectionSocket == null || Client == null)
+            {
+                return false;
+            }
+
+            return Client.Connected;
+        }
+
         public static void StartServer(string IP = "0.0.0.0", int Port = 2052)
         {
             StartServer(new IPEndPoint(IPAddress.Parse(IP), Port));
@@ -75,12 +85,15 @@ namespace TAO.I4.Plugins.VTuber.Godot
             }
         }
 
-        public static void SendData(string Message)
+        public static byte[] SendData(string Message)
         {
+            byte[] rbuffer = new byte[8];
+
             SendData(Encoding.UTF8.GetBytes(Message));
-            Client.Receive(new byte[8]);
+            Client.Receive(rbuffer);
 
             Thread.Sleep(100);
+            return rbuffer;
         }
 
         private static void AcceptClient(IAsyncResult Result)

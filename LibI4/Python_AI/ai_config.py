@@ -60,6 +60,7 @@ class ConfigData:
     ban_if_nsfw: bool = True
     use_local_ip: bool = False
     auto_start_rec_files_server: bool = True
+    seed: int = -1
 
 def Init() -> None:
     if (not os.path.exists("config.tcfg")):
@@ -239,7 +240,12 @@ def ReadConfig() -> ConfigData:
                 data.use_local_ip = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "auto_start_rec_files_server"):
                 data.auto_start_rec_files_server = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
-
+            elif (il == "seed"):
+                try:
+                    data.seed = int(config_dict[i])
+                except:
+                    data.seed = -1
+        
         f.close()
     
     return data
@@ -305,6 +311,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "ban_if_nsfw=" + ("true" if cfg.ban_if_nsfw == True else "false") + "\n"
     text += "use_local_ip=" + ("true" if cfg.use_local_ip == True else "false") + "\n"
     text += "auto_start_rec_files_server=" + ("true" if cfg.auto_start_rec_files_server == True else "false") + "\n"
+    text += "seed=" + str(cfg.seed) + "\n"
 
     with open("config.tcfg", "w") as f:
         f.write(text)

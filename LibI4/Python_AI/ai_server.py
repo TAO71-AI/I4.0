@@ -74,6 +74,7 @@ def UpdateServer() -> None:
 def __add_queue_time__(model: str, time: float) -> None:
     if (len(times[model]) <= cfg.current_data.max_predicted_queue_time):
         times[model].append(time)
+        logs.AddToLog("Added queue time for model '" + model + "' at the time '" + str(time) + "'.")
 
 def __get_args__(ai_args: str) -> list[str]:
     args = []
@@ -120,11 +121,11 @@ def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [], tr
 def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
     response = __prompt__(prompt, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
     
-    if (response["text_classification"] == "0"):
+    if (response["text_classification"] == "0 stars"):
         cb.current_emotion = "angry"
-    elif (response["text_classification"] == "1"):
+    elif (response["text_classification"] == "1 stars"):
         cb.current_emotion = "sad"
-    elif (response["text_classification"] == "4"):
+    elif (response["text_classification"] == "4 stars"):
         cb.current_emotion = "happy"
     else:
         try:
@@ -485,7 +486,6 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             return str(os.system(command))
         except Exception as ex:
             __print__("Error on command: '" + str(ex) + "'.")
-            pass
     
     return "Invalid command."
 
@@ -566,15 +566,20 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             try:
                 run_server_command("-u clear_my_history", extra_data)
                 server_response = ""
-            except:
-                pass
+            except Exception as ex:
+                __print__("Error deleting chat history: " + str(ex))
 
             key_data["connections"] += 1
         else:
             raise Exception("Service doesn't exists.")
+        
+        logs.AddToLog("Server response for '" + service + "': '" + str(server_response) + "'.")
+        logs.AddToLog("Saving key '" + key_data["key"] + "'...")
 
         key_data["connections"] -= 1
         sb.SaveKey(key_data)
+
+        logs.AddToLog("Key '" + key_data["key"] + "' saved successfully. New key data: " + str(key_data))
 
         # Update server
         UpdateServer()
@@ -588,6 +593,7 @@ def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> 
     try:
         return __execute_service_with_key__(data, key_data, extra_data)
     except Exception as ex:
+        logs.AddToLog("Error on the server: " + str(ex))
         return "Error on the server: " + str(ex)
 
 def on_receive(data: dict[str]) -> dict:
@@ -601,6 +607,7 @@ def on_receive(data: dict[str]) -> dict:
         try:
             extra_data = json.loads(data["extra_data"])
         except:
+            logs.AddToLog("Could not load received extra_data, using default.")
             extra_data = {
                 "system_msgs": [],
                 "translator": ""
@@ -611,7 +618,7 @@ def on_receive(data: dict[str]) -> dict:
             api_key = data["api_key"]
             key_data = sb.GetKey(api_key)
         except:
-            pass
+            __print__("Could not get API key.")
 
         try:
             extra_data["ip"] = str(data["ip"])

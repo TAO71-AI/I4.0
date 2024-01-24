@@ -42,7 +42,6 @@ RAM: At least 4GB (8GB recommended).
 MIT
 
 ## Contributors/Helpers:
-
 [![AlcoftTAO](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/AlcoftTAO.jpeg?raw=true)](https://github.com/alcoftTAO)
 [![Coderarduinopython](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/Coderarduinopython.png?raw=true)](https://github.com/coderarduinopython)
 [![JLMR08](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/JLMR08.png?raw=true)](https://github.com/Jlmr08)
