@@ -4,23 +4,24 @@ import json
 class ConfigData:
     gpt4all_model: str = "mistral-7b-instruct-v0.1.Q4_0.gguf"
     hf_model: str = "gpt2"
-    text_classification_model: str = "nlptown/bert-base-multilingual-uncased-sentiment"
+    text_classification_model: str = "joeddav/distilbert-base-uncased-go-emotions-student"
     translation_model_multiple: str = "Helsinki-NLP/opus-mt-mul-en"
     translation_models: dict[str, str] = {
         "spanish": "Helsinki-NLP/opus-mt-en-es"
     }
     whisper_model: str = "tiny"
-    tf_data_file: str = "tf_train_data_es.txt"
     openai_model: str = "gpt-3.5-turbo"
-    internet_model: str = "distilbert-base-cased-distilled-squad"
     image_generation_model: str = "SimianLuo/LCM_Dreamshaper_v7"
     image_generation_steps: int = 10
-    img_to_text_model: str = "microsoft/git-base-textcaps"
+    img_to_text_model: str = "Salesforce/blip-image-captioning-base"
     text_to_audio_model: str = "suno/bark-small"
     nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"
     nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"
     depth_estimation_model: str = "Intel/dpt-beit-base-384"
     object_detection_model: str = "hustvl/yolos-tiny"
+    rvc_model_path: str = "" # WILL BE USED SOON!
+    rvc_index_path: str = "" # WILL BE USED SOON!
+    rvc_method: str = "rmvpe" # WILL BE USED SOON!
     tf_epochs: int = 100
     force_api_key: bool = True
     low_cpu_or_memory: bool = False
@@ -28,7 +29,7 @@ class ConfigData:
     use_chat_history: bool = True
     use_dynamic_system_args: bool = True
     prompt_order: str = "tr sc g4a nsfw_filter-text"
-    move_to_gpu: str = "tr sc g4a hf int pt tf cgpt text2img img2text text2audio nsfw_filter-text nsfw_filter-image whisper od"
+    move_to_gpu: str = "tr sc g4a hf text2img img2text text2audio nsfw_filter-text nsfw_filter-image whisper od"
     use_gpu_if_available: bool = False
     ai_args: str = ""
     custom_system_messages: str = ""
@@ -114,12 +115,8 @@ def ReadConfig() -> ConfigData:
                     data.translation_models[lang.lower()] = models[lang]
             elif (il == "whisper_model"):
                 data.whisper_model = config_dict[i]
-            elif (il == "tf_data_file"):
-                data.tf_data_file = config_dict[i]
             elif (il == "openai_model"):
                 data.openai_model = config_dict[i]
-            elif (il == "internet_model"):
-                data.internet_model = config_dict[i]
             elif (il == "image_generation_model"):
                 data.image_generation_model = config_dict[i]
             elif (il == "image_generation_steps"):
@@ -139,6 +136,12 @@ def ReadConfig() -> ConfigData:
                 data.depth_estimation_model = config_dict[i]
             elif (il == "object_detection_model"):
                 data.object_detection_model = config_dict[i]
+            elif (il == "rvc_model_path"):
+                data.rvc_model_path = config_dict[i]
+            elif (il == "rvc_index_path"):
+                data.rvc_index_path = config_dict[i]
+            elif (il == "rvc_method"):
+                data.rvc_method = config_dict[i]
             elif (il == "tf_epochs"):
                 try:
                     data.tf_epochs = int(config_dict[i])
@@ -268,9 +271,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "translation_model_mult=" + cfg.translation_model_multiple + "\n"
     text += "translation_models=" + json.dumps(cfg.translation_models) + "\n"
     text += "whisper_model=" + cfg.whisper_model + "\n"
-    text += "tf_data_file=" + cfg.tf_data_file + "\n"
     text += "openai_model=" + cfg.openai_model + "\n"
-    text += "internet_model=" + cfg.internet_model + "\n"
     text += "image_generation_model=" + cfg.image_generation_model + "\n"
     text += "image_generation_steps=" + str(cfg.image_generation_steps) + "\n"
     text += "img_to_text_model=" + cfg.img_to_text_model + "\n"
@@ -279,6 +280,9 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "nsfw_filter_image_model=" + cfg.nsfw_filter_image_model + "\n"
     text += "depth_estimation_model=" + cfg.depth_estimation_model + "\n"
     text += "object_detection_model=" + cfg.object_detection_model + "\n"
+    text += "rvc_model_path=" + cfg.rvc_model_path + "\n"
+    text += "rvc_index_path=" + cfg.rvc_index_path + "\n"
+    text += "rvc_method=" + cfg.rvc_method + "\n"
     text += "tf_epochs=" + str(cfg.tf_epochs) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "low_cpu_or_memory=" + ("true" if cfg.low_cpu_or_memory == True else "false") + "\n"

@@ -6,3 +6,4 @@ sacremoses
 accelerate
 bitsandbytes
 timm
+einops

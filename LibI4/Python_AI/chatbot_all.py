@@ -1,7 +1,6 @@
 # Import the models
 import Inference.chatbot_gpt4all as cbg4a
 import Inference.chatbot_hf as cba
-import Inference.chatbot_internet as cbi
 import Inference.text_classification as tc
 import Inference.translation as tns
 import Inference.ai_generate_image as agi
@@ -16,11 +15,11 @@ import ai_config as cfg
 import ai_conversation as conv
 import ai_logs as logs
 import PIL.Image as Image
-import openai
 import os
 import datetime
 import calendar
 import base64
+import json
 
 # Please read this
 """
@@ -28,11 +27,9 @@ README
 
 Models:
 g4a - GPT4All chatbot (Text Generation).
-cgpt - ChatGPT (API Key required) chatbot (Text Generation).
 hf - Hugging Face selected model (Text Generation).
 sc - Text classification (Sequence Classification).
 tr - Translation.
-int - Internet chatbot (Question Answering).
 text2img - Image generation.
 img2text - Image to Text.
 whisper - Recognize audio using Whisper (Speech To Text).
@@ -106,8 +103,6 @@ def LoadAllModels() -> None:
             tc.LoadModel()
         elif (i == "tr"):
             tns.LoadModels()
-        elif (i == "int"):
-            cbi.LoadModel()
         elif (i == "text2img"):
             agi.LoadModel()
         elif (i == "img2text"):
@@ -122,6 +117,8 @@ def LoadAllModels() -> None:
             de.LoadModel()
         elif (i == "od"):
             od.LoadModel()
+        elif (i == "whisper"):
+            sr.LoadModel()
 
 # Check if a text prompt is NSFW
 def IsTextNSFW(prompt: str) -> bool:
@@ -142,7 +139,7 @@ def IsImageNSFW(image: str | Image.Image) -> bool:
     return None
 
 # Process the user prompt
-def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_system_msgs: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
+def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system_msgs: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
     # Import some global variables and load the models if not loaded
     global order, current_emotion
     LoadAllModels()
@@ -186,16 +183,6 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
     # Set the System Prompts to first person if allowed
     if (cfg.current_data.system_messages_in_first_person):
         sm = basics.ToFirstPerson(sm)
-    
-    # Set OpenAI API Key if the server allows the use of ChatGPT
-    if (order_prompt.__contains__("cgpt")):
-        openai_client = openai.Client()
-
-        with open("openai_api_key.txt", "r") as oak:
-            openai_client.api_key = oak.read()
-            openai.api_key = oak.read()
-            
-            oak.close()
     
     # Strip the System Prompts
     for sp in sm:
@@ -255,6 +242,31 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
         if (len(translator.strip()) > 0 and order_prompt.__contains__("tr")):
             data["response"] = tns.TranslateFrom2To1(prompt, translator)
             data["tested_models"].append("tr")
+        else:
+            data["response"] = prompt
+
+        # Check the Image to Text if the user requests it
+        if (args.count("img2text") >= 1 and order_prompt.__contains__("img2text")):
+            # Check if the user's image is NSFW (if allowed)
+            if (order_prompt.__contains__("nsfw_filter-image")):
+                # Check if the user's image is NSFW
+                is_nsfw = IsImageNSFW(prompt)
+
+                # If the user's image is NSFW and the use of NSFW is not allowed, return an error
+                if (is_nsfw and not not cfg.current_data.allow_processing_if_nsfw):
+                    return {
+                        "response": "ERROR",
+                        "model": "-1",
+                        "files": {},
+                        "tested_models": [],
+                        "text_classification": "-1",
+                        "title": "NO TITLE",
+                        "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                    }
+            
+            # Get response from the Image To Text model
+            data["response"] = ImageToText(prompt)
+            data["tested_models"].append("img2text")
 
         # Generate an image if the user requests it
         if (args.count("img") >= 1 and order_prompt.__contains__("text2img")):
@@ -262,22 +274,25 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             
             try:
                 # Try to append all the images. If the list is not set, will return an error
-                for img in imgs:
-                    data["files"]["images"].append(img)
+                data["files"]["images"] += imgs
             except:
                 # Create the list if there is an error
-                data["files"]["images"] = []
-
-                # Append all the images
-                for img in imgs:
-                    data["files"]["images"].append(img)
-
+                data["files"]["images"] = imgs
+            
             data["response"] = "[agi " + prompt + "]"
             data["tested_models"].append("text2img")
         
         # Generate an audio if the user requests it
         if (args.count("aud") >= 1 and order_prompt.__contains__("text2audio")):
-            data["files"]["audios"] += [GenerateAudio(prompt)]
+            aud = GenerateAudio(prompt)
+
+            try:
+                # Try to append all the audios. If the list is not set, will return an error
+                data["files"]["audios"].append(aud)
+            except:
+                # Create the list if there is an error
+                data["files"]["audios"] = [aud]
+            
             data["response"] = "[aga " + prompt + "]"
             data["tested_models"].append("text2audio")
         
@@ -362,35 +377,9 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
             if (i == "g4a"):
                 # Get response from GPT4All (if allowed)
                 response = cbg4a.MakePrompt(prompt, use_chat_history_if_available, conversation)
-            elif (i == "cgpt"):
-                # Get response from ChatGPT (if allowed)
-                response = openai_client.chat.completions.create(model = openai_model, messages = openai_msgs, temperature = cfg.current_data.temp, max_tokens = openai_max_tokens).choices[0].message
             elif (i == "hf"):
                 # Get response from HuggingFace's Text Generation model (if allowed)
                 response = cba.MakePrompt(prompt, use_chat_history_if_available, conversation)
-            elif (i == "int"):
-                # Get response from the internet (if allowed)
-                response = cbi.MakePrompt(prompt)
-            elif (i == "img2text"):
-                # Check if the user's image is NSFW (if allowed)
-                if (order_prompt.__contains__("nsfw_filter-image")):
-                    # Check if the user's image is NSFW
-                    is_nsfw = IsImageNSFW(prompt)
-
-                    # If the user's image is NSFW and the use of NSFW is not allowed, return an error
-                    if (is_nsfw and not not cfg.current_data.allow_processing_if_nsfw):
-                        return {
-                            "response": "ERROR",
-                            "model": "-1",
-                            "files": {},
-                            "tested_models": [],
-                            "text_classification": "-1",
-                            "title": "NO TITLE",
-                            "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
-                        }
-            
-                # Get response from the Image To Text model
-                response = ImageToText(prompt)
             else:
                 # If the model is not here, try next model
                 continue
@@ -502,21 +491,30 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
     if (order_prompt.__contains__("text2img") and response.__contains__("[agi ")):
         try:
             # ...Try to separate the response from the image to generate, then generate the image
-            img_prompt = response[response.index("[agi ") + 5:response[response.index("[agi ") + 5:len(response)].index("]")]
+            img_prompt = response[response.index("[agi ") + 5:]
+            img_prompt = img_prompt[:img_prompt.index("]")]
+
+            # Remove the double quotes from the image prompt, if it starts with it
+            if (img_prompt.startswith("\"")):
+                img_prompt = img_prompt[1:]
+            
+            # Remove the double quotes from the image prompt, if it ends with it
+            if (img_prompt.endswith("\"")):
+                img_prompt = img_prompt[:-1]
+
+            # Cut the response
             response = response.replace("[agi " + img_prompt + "]", "")
-            imgs = GenerateImages(img_prompt)
+
+            # Set the img_prompt to a dict, then run the image generation command
+            img_prompt = json.dumps({"prompt": img_prompt, "negative_prompt": ""})
+            imgs = MakePrompt(img_prompt, "".join(i for i in order_prompt), "-ncb-img", extra_system_msgs, translator, force_translator, conversation, use_default_sys_prompts)["files"]["images"]
 
             try:
-                # Try to append all the images, if the list is not set this will return an error
-                for img in imgs:
-                    files["images"].append(img)
+                # Try to add the generated images to the list
+                files["images"] += imgs
             except:
-                # If there is an error, create the list
-                files["images"] = []
-
-                # Append the images
-                for img in imgs:
-                    files["images"].append(img)
+                # If the try fails, create the list and add the images to the list
+                files["images"] = imgs
 
             # Append the Image Generation model to the tested models list
             tested_models.append("text2img")
@@ -529,9 +527,24 @@ def MakePrompt(prompt: str, order_prompt: list[str] = [], args: str = "", extra_
     if (order_prompt.__contains__("text2audio") and response.__contains__("[aga ")):
         try:
             # ...Try to separate the response from the audio to generate, then generate the audio
-            aud_prompt = response[response.index("[aga ") + 5:response[response.index("[aga ") + 5:len(response)].index("]")]
+            aud_prompt = response[response.index("[aga ") + 5:]
+            aud_prompt = aud_prompt[:aud_prompt.index("]")]
+
+            # Remove the double quotes from the image prompt, if it starts with it
+            if (aud_prompt.startswith("\"")):
+                aud_prompt = aud_prompt[1:]
+            
+            # Remove the double quotes from the image prompt, if it ends with it
+            if (aud_prompt.endswith("\"")):
+                aud_prompt = aud_prompt[:-1]
+
             response = response.replace("[aga " + aud_prompt + "]", "")
-            files["audios"] += [GenerateAudio(aud_prompt)]
+            auds = MakePrompt(aud_prompt, order_prompt, "-ncb-aud", extra_system_msgs, translator, force_translator, conversation, use_default_sys_prompts)["files"]["audios"]
+
+            try:
+                files["audios"] += auds
+            except:
+                files["audios"] = auds
 
             # Append the Audio Generation model to the tested models list
             tested_models.append("text2audio")

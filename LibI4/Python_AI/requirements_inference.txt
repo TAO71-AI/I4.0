@@ -1,0 +1,4 @@
+gpt4all>=2.2.1
+openai>=1.11.0
+speechrecognition>=3.10.1
+openai-whisper>=1.0.0

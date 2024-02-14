@@ -19,7 +19,6 @@ while (True):
         ai_server.__print__("Closing server...")
 
         ai_server.cfg.SaveConfig()
-        ai_server.sb.StopDB()
         ai_server.logs.WriteToFile()
         ai_server.UpdateServer()
         os._exit(0)

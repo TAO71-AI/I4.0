@@ -20,7 +20,6 @@ queue: int = 0
 args: list[str] = []
 extra_system_messages: list[str] = []
 plugins: list[str] = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins)
-version: str = "TAO71 I4.0 for Servers"
 times: dict[str, list[float]] = {
     "text2img": [],
     "img2text": [],
@@ -31,6 +30,7 @@ times: dict[str, list[float]] = {
     "whisper": [],
     "od": []
 }
+__version__: str = "v4.1.0"
 
 # Server
 def CheckFiles() -> None:
@@ -113,7 +113,7 @@ def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [], tr
     while (queue > cfg.current_data.max_prompts):
         threading.Event().wait(0.1)
 
-    response = cb.MakePrompt(prompt, [], args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
+    response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
     queue -= 1
 
     return response
@@ -197,24 +197,12 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
     # Execute command
     if (command.startswith("ai_response ")):
-        if (cfg.current_data.enable_predicted_queue_time):
-            start_timer = time.time()
-        
-        res = DoPrompt(command[12:len(command)], "", esm, translator, True, conver, use_default_sys_prompts)
-
-        if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
-            ip_ban.BanIP(ip)
-        
-        if (cfg.current_data.enable_predicted_queue_time):
-            end_timer = time.time()
-            __add_queue_time__("chatbot", end_timer - start_timer)
-
-        return res["response"]
+        return run_server_command("-u ai_fresponse " + command[12:], extra_data)
     elif (command.startswith("ai_fresponse ")):
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = DoPrompt(command[13:len(command)], "", esm, translator, True, conver, use_default_sys_prompts)
+        res = DoPrompt(command[13:], "", esm, translator, True, conver, use_default_sys_prompts)
 
         if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
@@ -255,7 +243,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = DoPrompt(command[9:len(command)], "-ncb-aud", esm, translator, True, conver, use_default_sys_prompts)
+        res = DoPrompt(command[9:], "-ncb-aud", esm, translator, True, conver, use_default_sys_prompts)
 
         if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
@@ -292,7 +280,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", "", "-ncb-depth", esm, translator)
+        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", cfg.current_data.prompt_order, "-ncb-depth", esm, translator)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
@@ -330,7 +318,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", "", "-ncb-od", esm, translator)
+        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", cfg.current_data.prompt_order, "-ncb-od", esm, translator)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
@@ -349,20 +337,6 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         return sb.GenerateKey(-1, -1, True)["key"]
     elif (command == "getallkeys" and admin and requires_api_key):
         return str(sb.GetAllKeys())
-    elif (command.startswith("sr ")):
-        data = command[3:len(command)]
-        result = ""
-
-        if (cfg.current_data.enable_predicted_queue_time):
-            start_timer = time.time()
-        
-        result = cb.RecognizeAudio(data)
-
-        if (cfg.current_data.enable_predicted_queue_time):
-            end_timer = time.time()
-            __add_queue_time__("whisper", end_timer - start_timer)
-
-        return result
     elif (command.startswith("get_queue")):
         q = int(queue / cfg.current_data.max_prompts)
         pt = {}
@@ -382,7 +356,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         return str({"queue": q, "time": pt})
     elif (command.startswith("version")):
-        return str(version)
+        return str(__version__)
     elif (command.startswith("clear_my_history")):
         try:
             conv.ClearConversation(conver[0], conver[1])
@@ -418,7 +392,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             start_timer = time.time()
 
         img = cb.ImageToText("temp_img_" + str(tid) + ".png")
-        img = cb.MakePrompt(img, "", "-ncb", esm, translator)
+        img = cb.MakePrompt(img, cfg.current_data.prompt_order, "-ncb-tr", esm, translator)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
@@ -453,17 +427,21 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             f.write(audio_bytes)
             f.close()
 
-        audio = cb.RecognizeAudio("temp_audio_" + str(tid) + ".wav")
-        audio = cb.MakePrompt(audio, "", "-ncb", esm, translator)
+        audio = json.loads(cb.RecognizeAudio("temp_audio_" + str(tid) + ".wav"))
+        text = audio["text"]
+        lang = audio["lang"]
 
-        if (audio["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+        text = cb.MakePrompt(text, cfg.current_data.prompt_order, "-ncb-tr", esm, translator)
+        audio = json.dumps({
+            "text": text["response"],
+            "lang": lang
+        })
+
+        if (text["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
 
         os.remove("temp_audio_" + str(tid) + ".wav")
-        return audio
-    elif (command.startswith("save_tf_model") and admin):
-        cb.SaveTF()
-        return "Done!"
+        return str(audio)
     elif (command.startswith("ban ") and admin):
         if (ip_ban.BanIP(command[4:len(command)])):
             __print__("IP banned!")
@@ -506,13 +484,16 @@ def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
             
             if (len(server_response.strip()) == 0):
                 server_response = "[NO TOS]"
+        elif (service.lower().startswith("get_all_models")):
+            # Get all models
+            server_response = run_server_command("-u get_models", extra_data)
         else:
             raise Exception("Service doesn't exist or is not free.")
         
         return str(server_response)
     except Exception as ex:
         logs.AddToLog("[ERROR: NO API SERVICE]: " + str(ex))
-        return "Error executing service."
+        return "Error executing service. Make sure this service exists" + (" and you're using a valid API key." if (cfg.current_data.force_api_key) else ".")
 
 def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[str]) -> str:
     if (requires_api_key and (key_data == None or key_data["tokens"] <= 0 or key_data["connections"] <= 0)):
@@ -557,7 +538,7 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             key_data["tokens"] -= 35
             server_response = run_server_command("-u ai_depth " + service[10:len(service)], extra_data)
         elif (service.startswith("service_7 ")):
-            # Depth estimation
+            # Object detection
             
             key_data["tokens"] -= 20
             server_response = run_server_command("-u ai_object_detection " + service[10:len(service)], extra_data)
@@ -569,6 +550,9 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             except Exception as ex:
                 __print__("Error deleting chat history: " + str(ex))
 
+            key_data["connections"] += 1
+        elif (service.lower().startswith("get_my_conversation")):
+            server_response = run_server_command("-u get_my_conversation", extra_data)
             key_data["connections"] += 1
         else:
             raise Exception("Service doesn't exists.")
@@ -699,8 +683,8 @@ def ws_server() -> None:
     event_loop.run_until_complete(server_ws)
     event_loop.run_forever()
 
-def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extra_system_messages = [], _plugins = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins), _version = "TAO71 I4.0 for Servers") -> None:
-    global max_buffer_length, max_users, args, extra_system_messages, plugins, version
+def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extra_system_messages = [], _plugins = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins)) -> None:
+    global max_buffer_length, max_users, args, extra_system_messages, plugins
 
     # Variables
     max_buffer_length = _max_buffer_length
@@ -708,7 +692,8 @@ def start_server(_max_buffer_length = 4096, _max_users = 1000, _args = [], _extr
     args = _args
     extra_system_messages = _extra_system_messages
     plugins = _plugins
-    version = _version
+
+    print("Starting I4.0 server version " + __version__)
 
     if (not os.path.exists("TOS.txt")):
         with open("TOS.txt", "w+") as f:

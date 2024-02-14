@@ -43,14 +43,13 @@ namespace TAO.I4.PythonManager
             DisconnectFromServer();
 
             bool r = false;
+            ClientSocket = new ClientWebSocket();
+            ClientSocket.ConnectAsync(new Uri("ws://" + Server + ":8060"), CancellationToken.None);
 
             if (OnConnectingToServerAction != null)
             {
                 OnConnectingToServerAction.Invoke(Server);
             }
-
-            ClientSocket = new ClientWebSocket();
-            ClientSocket.ConnectAsync(new Uri("ws://" + Server + ":8060"), CancellationToken.None);
 
             int currentTime = 0;
 
@@ -120,9 +119,7 @@ namespace TAO.I4.PythonManager
                     ClientSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
                 }
 
-                ClientSocket.CloseAsync(WebSocketCloseStatus.NormalClosure, "Closed connection", CancellationToken.None);
                 ClientSocket = null;
-
                 Connected = false;
 
                 if (OnDisconnectFromServerAction != null)
@@ -153,7 +150,7 @@ namespace TAO.I4.PythonManager
                     case Service.CustomCommand:
                         sd += "1";
                         break;
-                    case Service.Image:
+                    case Service.ImageGeneration:
                         sd += "2";
                         break;
                     case Service.ImageToText:
@@ -167,6 +164,12 @@ namespace TAO.I4.PythonManager
                         break;
                     case Service.DepthEstimation:
                         sd += "6";
+                        break;
+                    case Service.ObjectDetection:
+                        sd += "7";
+                        break;
+                    case Service.RVC:
+                        sd += "8";
                         break;
                 }
             }
@@ -533,12 +536,13 @@ namespace TAO.I4.PythonManager
         {
             Chatbot = 0,
             CustomCommand = 1,
-            Image = 2,
+            ImageGeneration = 2,
             ImageToText = 3,
             WhisperSTT = 4,
             Audio = 5,
             DepthEstimation = 6,
-            ObjectDetection = 7
+            ObjectDetection = 7,
+            RVC = 8
         }
     }
 

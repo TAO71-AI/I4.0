@@ -120,49 +120,6 @@ async def ProcessClient(websocket) -> None:
 
     UpdateServer()
 
-"""async def ProcessClient(websocket):
-    try:
-        while True:
-            data = await websocket.recv()
-
-            if (not data or len(data) == 0):
-                break
-
-            try:
-                files = os.listdir("ReceivedFiles/")
-                id = random.randint(-99999, 99999)
-                file_info = {
-                    "c_day": datetime.datetime.now().day,
-                    "c_month": datetime.datetime.now().month,
-                    "c_year": datetime.datetime.now().year,
-                    "c_hour": datetime.datetime.now().hour,
-                    "c_minute": datetime.datetime.now().minute,
-                    "id": str(id)
-                }
-
-                while (files.count(str(id) + ".enc_file") > 0):
-                    id = random.randint(-99999, 99999)
-                        
-                with open("ReceivedFiles/" + str(id) + ".enc_file", "w+") as f:
-                    f.write(json.dumps(file_info))
-                    f.close()
-                
-                with open("ReceivedFiles/" + str(id) + "_file", "wb") as f:
-                    f.write(data)
-                    f.close()
-                        
-                received_files.append(file_info)
-                server_response = str(id)
-            except Exception as ex:
-                server_response = "Could not save file."
-                print("ERROR: " + str(ex))
-            
-            websocket.send(server_response)
-    except Exception as ex:
-        print("(Rec Files) ERROR: " + str(ex))
-    
-    websocket.close()"""
-
 async def AcceptClient(websocket) -> None:
     print("(Rec Files) Incomming connection from '" + str(websocket.remote_address[0]) + ":" + str(websocket.remote_address[1]) + "'.")
     await ProcessClient(websocket)

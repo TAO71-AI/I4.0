@@ -1,19 +1,19 @@
-from transformers import AutoTokenizer, MarianMTModel, TFMarianMTModel
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, TFAutoModelForSeq2SeqLM
 import torch
 import ai_config as cfg
 
 translation_tokenizer_1: AutoTokenizer = None
-translation_model_1: MarianMTModel | TFMarianMTModel = None
+translation_model_1: AutoModelForSeq2SeqLM | TFAutoModelForSeq2SeqLM = None
 device: str = "cpu"
 
-models: dict[str, (MarianMTModel | TFMarianMTModel, AutoTokenizer)] = {}
+models: dict[str, (AutoModelForSeq2SeqLM | TFAutoModelForSeq2SeqLM, AutoTokenizer)] = {}
 models_loaded: bool = False
 
 def __load_model__(model_name: str, device: str):
     if (cfg.current_data.use_tf_instead_of_pt):
-        return TFMarianMTModel.from_pretrained(model_name)
+        return TFAutoModelForSeq2SeqLM.from_pretrained(model_name)
     else:
-        model = MarianMTModel.from_pretrained(model_name).to(device)
+        model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
         return model
 
 def LoadModels() -> None:
@@ -41,7 +41,7 @@ def LoadModels() -> None:
     
     models_loaded = True
 
-def Translate(prompt: str, tokenizer: AutoTokenizer, model: MarianMTModel | TFMarianMTModel) -> str:
+def Translate(prompt: str, tokenizer: AutoTokenizer, model: AutoModelForSeq2SeqLM | TFAutoModelForSeq2SeqLM) -> str:
     LoadModels()
 
     inputs = tokenizer.encode(prompt, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))

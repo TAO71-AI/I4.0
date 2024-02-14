@@ -2,30 +2,25 @@ import os
 import random
 import json
 import datetime
-import mysql.connector
+import pymysql as mysql
+import pymysql.cursors as mysql_c
 import ai_config as cfg
 
 default_tokens: int = 5000
 default_max_connections: int = 100
-use_database: bool = (cfg.current_data.keys_db["use"].lower() == "true")
-db = None
-db_con = None
+use_mysql: bool = cfg.current_data.keys_db["use"] if (type(cfg.current_data.keys_db["user"]) == bool) else (str(cfg.current_data.keys_db["user"]).lower() == "true")
+mysql_connection = None
+mysql_cursor = None
 
 if (not os.path.exists("API/")):
     os.mkdir("API/")
 
 def ReloadDB() -> None:
-    if (use_database):
-        db_con = mysql.connector.connect(
-            host = cfg.current_data.keys_db["server"],
-            user = cfg.current_data.keys_db["user"],
-            password = cfg.current_data.keys_db["password"],
-            database = cfg.current_data.keys_db["database"],
-            raise_on_warnings = False
-        )
-        db = db_con.cursor()
+    global mysql_connection, mysql_cursor
 
-ReloadDB()
+    if (use_mysql):
+        mysql_connection = mysql.connect(host = cfg.current_data.keys_db["server"], user = cfg.current_data.keys_db["user"], password = cfg.current_data.keys_db["password"], database = cfg.current_data.keys_db["database"], cursorclass = mysql_c.DictCursor)
+        mysql_cursor = mysql_connection.cursor()
 
 def Init() -> None:
     global default_tokens
@@ -35,6 +30,8 @@ def Init() -> None:
     
     if (default_tokens < 0):
         default_tokens = 1
+    
+    ReloadDB()
 
 def GetCurrentDateDict() -> dict[str, str]:
     return {
@@ -88,9 +85,9 @@ def GenerateKey(tokens: int = -1, max_connections: int = -1, daily_key: bool = F
 
 def SaveKey(key_data: dict) -> str:
     try:
-        if (key_data["user_id"] > 0 and use_database):
+        if (key_data["user_id"] > 0 and use_mysql):
             raise Exception()
-        
+
         with open("API/" + key_data["key"] + ".key", "w+") as f:
             f.write(json.dumps(key_data))
             f.close()
@@ -99,24 +96,20 @@ def SaveKey(key_data: dict) -> str:
     except:
         pass
 
-    if (use_database):
+    if (use_mysql):
         try:
-            db.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET " +
-                "tokens = '" + str(key_data["tokens"]) + "', connections = '" + str(key_data["connections"]) + "', date = '" +
-                json.dumps(key_data["date"]).replace("'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
-            db_con.commit()
+            mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', connections = '" + key_data["connections"] + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+            mysql_connection.commit()
 
-            return "Database updated, " + str(db.rowcount) + " record(s) updated!"
+            return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
         except:
             ReloadDB()
 
             try:
-                db.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET " +
-                    "tokens = '" + str(key_data["tokens"]) + "', connections = '" + str(key_data["connections"]) + "', date = '" +
-                    json.dumps(key_data["date"]).replace("'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
-                db_con.commit()
+                mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', connections = '" + key_data["connections"] + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+                mysql_connection.commit()
 
-                return "Database updated, " + str(db.rowcount) + " record(s) updated!"
+                return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
             except Exception as ex:
                 return "ERROR SAVING KEY ON DB: " + str(ex)
     
@@ -133,26 +126,25 @@ def GetAllKeys() -> list[dict]:
 
             keys.append(content)
     
-    if (use_database):
+    if (use_mysql):
         try:
-            db.execute("SELECT * FROM " + cfg.current_data.keys_db["table"])
-            results = db.fetchall()
+            mysql_cursor.execute("SELECT * FROM " + cfg.current_data.keys_db["table"])
+            results = mysql_cursor.fetchall()
 
             for db_key in results:
                 try:
-                    key_data = {}
-
-                    key_data["user_id"] = int(db_key[1])
-                    key_data["tokens"] = float(db_key[2])
-                    key_data["connections"] = int(db_key[3])
-                    key_data["key"] = db_key[4]
-                    key_data["daily"] = (int(db_key[5]) == 1)
-                    key_data["date"] = json.loads(db_key[6])
-                    key_data["default"] = {
-                        "tokens": float(db_key[7]),
-                        "connections": int(db_key[8])
+                    key_data = {
+                        "user_id": int(db_key[1]),
+                        "tokens": float(db_key[2]),
+                        "connections": int(db_key[3]),
+                        "key": db_key[4],
+                        "daily": (int(db_key[5]) == 1 or str(db_key[5]).lower() == "true"),
+                        "date": json.loads(db_key[6]),
+                        "default": {
+                            "tokens": float(db_key[7]),
+                            "connections": int(db_key[8])
+                        }
                     }
-
                     keys.append(key_data)
                 except:
                     continue
@@ -160,24 +152,23 @@ def GetAllKeys() -> list[dict]:
             ReloadDB()
 
             try:
-                db.execute("SELECT * FROM " + cfg.current_data.keys_db["table"])
-                results = db.fetchall()
+                mysql_cursor.execute("SELECT * FROM " + cfg.current_data.keys_db["table"])
+                results = mysql_cursor.fetchall()
 
                 for db_key in results:
                     try:
-                        key_data = {}
-
-                        key_data["user_id"] = int(db_key[1])
-                        key_data["tokens"] = float(db_key[2])
-                        key_data["connections"] = int(db_key[3])
-                        key_data["key"] = db_key[4]
-                        key_data["daily"] = (int(db_key[5]) == 1)
-                        key_data["date"] = json.loads(db_key[6])
-                        key_data["default"] = {
-                            "tokens": float(db_key[7]),
-                            "connections": int(db_key[8])
+                        key_data = {
+                            "user_id": int(db_key[1]),
+                            "tokens": float(db_key[2]),
+                            "connections": int(db_key[3]),
+                            "key": db_key[4],
+                            "daily": (int(db_key[5]) == 1 or str(db_key[5]).lower() == "true"),
+                            "date": json.loads(db_key[6]),
+                            "default": {
+                                "tokens": float(db_key[7]),
+                                "connections": int(db_key[8])
+                            }
                         }
-
                         keys.append(key_data)
                     except:
                         continue
@@ -204,10 +195,11 @@ def DeleteKey(key: str) -> None:
     
     os.remove("API/" + key + ".key")
 
+
 def StopDB() -> None:
-    if (use_database):
+    if (use_mysql):
         try:
-            db.close()
-            db_con.close()
+            mysql_cursor.close()
+            mysql_connection.close()
         except:
             pass

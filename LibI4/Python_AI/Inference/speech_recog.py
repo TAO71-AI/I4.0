@@ -2,9 +2,22 @@ import speech_recognition as sr
 import whisper
 import os
 import torch
+import json
 import ai_config as cfg
 
-recognizer = sr.Recognizer()
+recognizer: sr.Recognizer = sr.Recognizer()
+device: str = "cpu"
+whisper_model: whisper.Whisper = None
+
+def __load_model__(model: str, device: str) -> None:
+    global whisper_model
+    whisper_model = whisper.load_model(model, device = device)
+
+def LoadModel() -> None:
+    global device
+
+    device = "cuda" if (cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("whisper") and torch.cuda.is_available()) else "cpu"
+    __load_model__(cfg.current_data.whisper_model, device)
 
 def Recognize(data: sr.AudioData) -> str:
     if (not cfg.current_data.prompt_order.__contains__("whisper")):
@@ -21,9 +34,16 @@ def Recognize(data: sr.AudioData) -> str:
         with open(audio_name, "wb") as f:
             f.write(data.get_wav_data())
             f.close()
+        
+        result = whisper_model.transcribe(audio_name, temperature = cfg.current_data.temp)
+        result = {
+            "text": result["text"],
+            "lang": result["language"]
+        }
+        result = json.dumps(result)
 
-        whisper_model = whisper.load_model(cfg.current_data.whisper_model, device = "cuda" if (cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("whisper") and torch.cuda.is_available()) else "cpu")
-        result = whisper_model.transcribe(audio_name)["text"]
+        if (cfg.current_data.print_prompt):
+            print("RESULT FROM WHISPER: " + str(result))
 
         os.remove(audio_name)
         return result

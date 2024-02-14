@@ -2,6 +2,9 @@
 ## What is this?
 TAO71 I4.0 is an AI created by TAO71 in C# and Python. It uses GPT4All, Hugging Face Transformers, Hugging Face Diffusers, Tensorflow and OpenAI's ChatGPT (API key required).
 
+> [!IMPORTANT]
+> In order to use I4.0 as expected, you must create a Python VENV.
+
 ## If I don't want a plugin, can I remove it?
 Yes, you can remove every plugin of the AI and you will not need to fix bugs in the AI code.
 
