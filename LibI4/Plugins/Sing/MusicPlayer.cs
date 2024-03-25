@@ -2,7 +2,7 @@
 using System.Media;
 using System.Threading;
 
-namespace TAO.I4.Plugins.Voicevox.Sing
+namespace TAO.I4.Plugins.Sing
 {
     public class MusicPlayer
     {

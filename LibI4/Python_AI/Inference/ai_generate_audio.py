@@ -1,6 +1,5 @@
 from transformers import pipeline, Pipeline
 import soundfile as sf
-import torch
 import os
 import ai_config as cfg
 
@@ -19,8 +18,7 @@ def LoadModel() -> None:
     if (model_pipeline != None):
         return
     
-    move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("text2audio")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device = cfg.GetGPUDevice("text2audio")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'text to audio' on device '" + device + "'...")

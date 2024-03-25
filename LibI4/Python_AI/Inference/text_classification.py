@@ -1,5 +1,4 @@
 from transformers import Pipeline, pipeline
-import torch
 import ai_config as cfg
 
 model_name: str = cfg.current_data.text_classification_model
@@ -19,8 +18,7 @@ def LoadModel() -> None:
     if (pipe != None or len(model_name.strip()) == 0):
         return
     
-    move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("sc")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device = cfg.GetGPUDevice("sc")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'text classification' on device '" + device + "'...")

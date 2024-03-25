@@ -17,6 +17,7 @@ namespace TAO.I4.PythonManager
             "127.0.0.1", // Localhost
             "tao71-software.ddns.net", //TAO71 Server
         };
+        private static Dictionary<int, Service[]> ServersTasks = new Dictionary<int, Service[]>();
         public static int DefaultServer = 0;
         private static ClientWebSocket ClientSocket = null;
         public static Action<string> OnConnectingToServerAction = null;
@@ -37,6 +38,126 @@ namespace TAO.I4.PythonManager
             return File.ReadAllText("Python_Server_API_Key.txt").Trim();
         }
 
+        public static void ClearServersTasks()
+        {
+            ServersTasks.Clear();
+        }
+
+        public static Dictionary<int, Service[]> GetServicesFromAllServers()
+        {
+            ServersTasks.Clear();
+            Dictionary<int, Service[]> services = new Dictionary<int, Service[]>();
+
+            for (int server = 0; server < Servers.Count; server++)
+            {
+                try
+                {
+                    bool connected = ConnectToServer(server);
+
+                    if (!connected)
+                    {
+                        continue;
+                    }
+                }
+                catch
+                {
+                    continue;
+                }
+
+                try
+                {
+                    string json = "{\"cmd\": \"get_all_models\"}";
+                    dynamic data = Encoding.UTF8.GetString(
+                        SendAndWaitForReceive(Encoding.UTF8.GetBytes(json)).Result
+                    );
+                    data = JsonConvert.DeserializeObject(data);
+                    data = (string)data["response"];
+
+                    Dictionary<string, object> tasks = JsonConvert.DeserializeObject<Dictionary<string, object>>(data);
+                    List<Service> servs = new List<Service>();
+
+                    foreach (string task in tasks.Keys)
+                    {
+                        string ttask = task;
+
+                        if (ttask == "g4a" || ttask == "hf")
+                        {
+                            ttask = "chatbot";
+                        }
+
+                        servs.Add(ServiceManager.FromString(ttask));
+                    }
+
+                    services[server] = servs.ToArray();
+                }
+                catch
+                {
+                    continue;
+                }
+            }
+
+            return services;
+        }
+
+        public static (int, byte[]) FindBestServerToExecuteFromService(Service Service, string Message, string[] ExtraSystemMessages = null, string Translator = "", bool UseDefaultSysPrompts = true, string AIArgs = "", string Conversation = "")
+        {
+            int server = FindBestServerToExecuteCommandWithService_Base(Service);
+            return (server, ExecuteService(Message, Service, ExtraSystemMessages, Translator, UseDefaultSysPrompts, AIArgs, Conversation));
+        }
+
+        public static (int, string) FindBestServerToExecuteCommand(Service Service, string Command, string Conversation = "")
+        {
+            int server = FindBestServerToExecuteCommandWithService_Base(Service);
+            return (server, ExecuteCommandOnServer(Command, Conversation));
+        }
+
+        public static int FindBestServerToExecuteCommandWithService_Base(Service Service)
+        {
+            int server = -1;
+
+            if (Service == Service.CustomCommand)
+            {
+                server = TryAllServer(false);
+                ConnectToServer(server);
+
+                return server;
+            }
+
+            if (ServersTasks.Count == 0)
+            {
+                ServersTasks = GetServicesFromAllServers();
+            }
+
+            bool foundTask = false;
+
+            foreach (int serv in ServersTasks.Keys)
+            {
+                if (foundTask)
+                {
+                    break;
+                }
+
+                foreach (Service servi in ServersTasks[serv])
+                {
+                    if (servi == Service)
+                    {
+                        server = serv;
+                        foundTask = true;
+
+                        break;
+                    }
+                }
+            }
+
+            if (!foundTask)
+            {
+                throw new Exception("The service could not be found in the current server list.");
+            }
+
+            ConnectToServer(server);
+            return server;
+        }
+
         public static bool ConnectToServer(string Server)
         {
             ReadKeyFromFile();
@@ -55,12 +176,12 @@ namespace TAO.I4.PythonManager
 
             while (ClientSocket.State != WebSocketState.Open)
             {
-                if (currentTime >= 50)
+                if (currentTime >= 1)
                 {
                     throw new Exception("Error connecting to the server. Make sure it is started.");
                 }
 
-                Thread.Sleep(100);
+                Thread.Sleep(1000);
                 currentTime += 1;
             }
 
@@ -114,17 +235,30 @@ namespace TAO.I4.PythonManager
         {
             if (ClientSocket != null)
             {
-                if (ClientSocket.State != WebSocketState.Closed)
+                try
                 {
-                    ClientSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+                    if (ClientSocket.State != WebSocketState.Closed)
+                    {
+                        ClientSocket.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
+                    }
+
+                    ClientSocket = null;
+                    Connected = false;
+
+                    if (OnDisconnectFromServerAction != null)
+                    {
+                        OnDisconnectFromServerAction.Invoke();
+                    }
                 }
-
-                ClientSocket = null;
-                Connected = false;
-
-                if (OnDisconnectFromServerAction != null)
+                catch
                 {
-                    OnDisconnectFromServerAction.Invoke();
+                    ClientSocket = null;
+                    Connected = false;
+
+                    if (OnDisconnectFromServerAction != null)
+                    {
+                        OnDisconnectFromServerAction.Invoke();
+                    }
                 }
             }
         }
@@ -140,44 +274,7 @@ namespace TAO.I4.PythonManager
                 ExtraSystemMessages = new string[0];
             }
 
-            if (ServiceData < 0)
-            {
-                switch (ServiceData)
-                {
-                    case Service.Chatbot:
-                        sd += "0";
-                        break;
-                    case Service.CustomCommand:
-                        sd += "1";
-                        break;
-                    case Service.ImageGeneration:
-                        sd += "2";
-                        break;
-                    case Service.ImageToText:
-                        sd += "3";
-                        break;
-                    case Service.WhisperSTT:
-                        sd += "4";
-                        break;
-                    case Service.Audio:
-                        sd += "5";
-                        break;
-                    case Service.DepthEstimation:
-                        sd += "6";
-                        break;
-                    case Service.ObjectDetection:
-                        sd += "7";
-                        break;
-                    case Service.RVC:
-                        sd += "8";
-                        break;
-                }
-            }
-            else
-            {
-                sd += ((int)ServiceData).ToString();
-            }
-
+            sd += ServiceManager.ToInt(ServiceData).ToString();
             sd += " ";
 
             jsonData += "{";
@@ -188,7 +285,7 @@ namespace TAO.I4.PythonManager
                 "\"conversation\": \"" + Conversation + "\"";
             jsonData += "}";
 
-            return SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData), true).Result;
+            return SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData)).Result;
         }
 
         public static byte[] TryShowImage(byte[] Data, bool OpenFile = true, bool DeleteOnClose = true)
@@ -257,14 +354,11 @@ namespace TAO.I4.PythonManager
             return buffer;
         }
 
-        public static async Task<byte[]> SendAndWaitForReceive(byte[] SendData, bool Connect = true)
+        public static async Task<byte[]> SendAndWaitForReceive(byte[] SendData)
         {
-            if (Connect)
+            if (ClientSocket == null)
             {
-                if (!ConnectToServer(DefaultServer))
-                {
-                    throw new Exception("ConnectToServer returned 'false'. Please try to connect to a valid server.");
-                }
+                throw new Exception("You're not connected to any server, please connect to a server first.");
             }
 
             if (OnSendDataAction != null)
@@ -297,29 +391,11 @@ namespace TAO.I4.PythonManager
                 OnReceiveDataAction.Invoke(SendData);
             }
 
-            if (Connect)
-            {
-                DisconnectFromServer();
-            }
-
             return streamBytes;
         }
 
-        public static string ExecuteCommandOnServer(string Command, bool Connect = true, int Server = -1, string Conversation = "")
+        public static string ExecuteCommandOnServer(string Command, string Conversation = "")
         {
-            if (Server < 0 || Server >= Servers.Count)
-            {
-                Server = DefaultServer;
-            }
-
-            if (Connect)
-            {
-                if (!ConnectToServer(Server))
-                {
-                    throw new Exception("ConnectToServer returned 'false'. Please try to connect to a valid server.");
-                }
-            }
-
             string jsonData = "";
 
             jsonData += "{";
@@ -327,13 +403,8 @@ namespace TAO.I4.PythonManager
                 "\"conversation\": \"" + Conversation + "\"";
             jsonData += "}";
 
-            byte[] response_data = SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData), false).Result;
+            byte[] response_data = SendAndWaitForReceive(Encoding.UTF8.GetBytes(jsonData)).Result;
             string response;
-
-            if (Connect)
-            {
-                DisconnectFromServer();
-            }
 
             try
             {
@@ -437,7 +508,7 @@ namespace TAO.I4.PythonManager
             return Convert.ToInt32(Encoding.UTF8.GetString(rbuffer.Array));
         }
 
-        public static Response GetFullResponse(string Prompt, Service ServerService, string[] SystemPrompts = null, string Translator = "", bool UseDefaultSystemPrompts = true, string AIArgs = "", string Conversation = "", bool Connect = true)
+        public static Response GetFullResponse(string Prompt, Service ServerService, string[] SystemPrompts = null, string Translator = "", bool UseDefaultSystemPrompts = true, string AIArgs = "", string Conversation = "", bool UseBestServer = true)
         {
             if (SystemPrompts == null)
             {
@@ -445,7 +516,16 @@ namespace TAO.I4.PythonManager
             }
 
             // Send
-            byte[] received = ExecuteService(Prompt.Replace("\"", "\'"), ServerService, SystemPrompts, Translator, UseDefaultSystemPrompts, AIArgs, Conversation);
+            byte[] received = new byte[0];
+
+            if (UseBestServer)
+            {
+                received = FindBestServerToExecuteFromService(ServerService, Prompt.Replace("\"", "\'"), SystemPrompts, Translator, UseDefaultSystemPrompts, AIArgs, Conversation).Item2;
+            }
+            else
+            {
+                received = ExecuteService(Prompt.Replace("\"", "\'"), ServerService, SystemPrompts, Translator, UseDefaultSystemPrompts, AIArgs, Conversation);
+            }
 
             // Receive
             Response response = new Response();
@@ -530,19 +610,6 @@ namespace TAO.I4.PythonManager
 
             response.Errors = errors.ToArray();
             return response;
-        }
-
-        public enum Service
-        {
-            Chatbot = 0,
-            CustomCommand = 1,
-            ImageGeneration = 2,
-            ImageToText = 3,
-            WhisperSTT = 4,
-            Audio = 5,
-            DepthEstimation = 6,
-            ObjectDetection = 7,
-            RVC = 8
         }
     }
 

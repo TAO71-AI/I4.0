@@ -7,7 +7,6 @@ import pymysql.cursors as mysql_c
 import ai_config as cfg
 
 default_tokens: int = 5000
-default_max_connections: int = 100
 use_mysql: bool = cfg.current_data.keys_db["use"] if (type(cfg.current_data.keys_db["user"]) == bool) else (str(cfg.current_data.keys_db["user"]).lower() == "true")
 mysql_connection = None
 mysql_cursor = None
@@ -42,14 +41,11 @@ def GetCurrentDateDict() -> dict[str, str]:
         "minute": str(datetime.datetime.now().minute)
     }
 
-def GenerateKey(tokens: int = -1, max_connections: int = -1, daily_key: bool = False) -> dict:
+def GenerateKey(tokens: int = -1, daily_key: bool = False) -> dict:
     Init()
 
     if (tokens < 0):
         tokens = default_tokens
-    
-    if (max_connections < 0):
-        max_connections = default_max_connections
     
     char_list = "abcdefghijklmnopqrstuvwxyz0123456789"
     key = ""
@@ -65,16 +61,14 @@ def GenerateKey(tokens: int = -1, max_connections: int = -1, daily_key: bool = F
         i += 1
     
     if (os.path.exists("API/" + key + ".key")):
-        return GenerateKey(tokens)
+        return GenerateKey(tokens, daily_key)
     
     default_key = {
-        "tokens": tokens,
-        "connections": max_connections
+        "tokens": tokens
     }
     
     key_data["user_id"] = -1
     key_data["tokens"] = tokens
-    key_data["connections"] = max_connections
     key_data["key"] = key
     key_data["daily"] = "true" if daily_key else "false"
     key_data["date"] = GetCurrentDateDict()
@@ -98,7 +92,7 @@ def SaveKey(key_data: dict) -> str:
 
     if (use_mysql):
         try:
-            mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', connections = '" + key_data["connections"] + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+            mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
             mysql_connection.commit()
 
             return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
@@ -106,7 +100,7 @@ def SaveKey(key_data: dict) -> str:
             ReloadDB()
 
             try:
-                mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', connections = '" + key_data["connections"] + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+                mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
                 mysql_connection.commit()
 
                 return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
@@ -136,13 +130,11 @@ def GetAllKeys() -> list[dict]:
                     key_data = {
                         "user_id": int(db_key[1]),
                         "tokens": float(db_key[2]),
-                        "connections": int(db_key[3]),
-                        "key": db_key[4],
-                        "daily": (int(db_key[5]) == 1 or str(db_key[5]).lower() == "true"),
-                        "date": json.loads(db_key[6]),
+                        "key": db_key[3],
+                        "daily": (int(db_key[4]) == 1 or str(db_key[4]).lower() == "true"),
+                        "date": json.loads(db_key[5]),
                         "default": {
-                            "tokens": float(db_key[7]),
-                            "connections": int(db_key[8])
+                            "tokens": float(db_key[6])
                         }
                     }
                     keys.append(key_data)
@@ -160,13 +152,11 @@ def GetAllKeys() -> list[dict]:
                         key_data = {
                             "user_id": int(db_key[1]),
                             "tokens": float(db_key[2]),
-                            "connections": int(db_key[3]),
-                            "key": db_key[4],
-                            "daily": (int(db_key[5]) == 1 or str(db_key[5]).lower() == "true"),
-                            "date": json.loads(db_key[6]),
+                            "key": db_key[3],
+                            "daily": (int(db_key[4]) == 1 or str(db_key[4]).lower() == "true"),
+                            "date": json.loads(db_key[5]),
                             "default": {
-                                "tokens": float(db_key[7]),
-                                "connections": int(db_key[8])
+                                "tokens": float(db_key[6])
                             }
                         }
                         keys.append(key_data)
@@ -194,7 +184,6 @@ def DeleteKey(key: str) -> None:
         return
     
     os.remove("API/" + key + ".key")
-
 
 def StopDB() -> None:
     if (use_mysql):

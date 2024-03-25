@@ -33,8 +33,8 @@ namespace TAO.I4.Plugins.VideoReaction
             string imageID = PyAIResponse.SendFileToServer("tmp_pil_image.png", -1).Result.ToString();
             string whisperID = PyAIResponse.SendFileToServer("tmp_whisper_audio.wav", -1).Result.ToString();
 
-            Response imageDescription = PyAIResponse.GetFullResponse(imageID, PyAIResponse.Service.ImageToText, null, "", false, "", "", true);
-            Response whisperRecognition = PyAIResponse.GetFullResponse(whisperID, PyAIResponse.Service.WhisperSTT, null, "", false, "", "", true);
+            Response imageDescription = PyAIResponse.GetFullResponse(imageID, Service.ImageToText, null, "", false, "", "", true);
+            Response whisperRecognition = PyAIResponse.GetFullResponse(whisperID, Service.WhisperSTT, null, "", false, "", "", true);
             string prompt = "What you see on the video: " + imageDescription.TextResponse + "\nWhat you hear on the video: " + whisperRecognition.TextResponse;
 
             if (imageDescription.Errors.Length > 0 || whisperRecognition.Errors.Length > 0)
@@ -65,7 +65,7 @@ namespace TAO.I4.Plugins.VideoReaction
                 }
             }
 
-            return PyAIResponse.GetFullResponse(prompt, PyAIResponse.Service.Chatbot, new string[]
+            return PyAIResponse.GetFullResponse(prompt, Service.Chatbot, new string[]
             {
                 "You're reacting to a video."
             }, Translator, true, AIArgs, Conversation, true);

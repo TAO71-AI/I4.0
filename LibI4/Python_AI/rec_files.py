@@ -72,11 +72,20 @@ async def ProcessClient(websocket) -> None:
         if (len(recf) == 0):
             break
 
-        if (not recf.endswith(b"<end>")):
-            data_bytes += recf
+        if (type(recf) == bytes):
+            if (not recf.endswith(b"<end>")):
+                data_bytes += recf
+            else:
+                data_bytes += recf[:-len(b"<end>")]
+                break
+        elif (type(recf) == str):
+            if (not recf.endswith("<end>")):
+                data_bytes += recf.encode("utf-8")
+            else:
+                data_bytes += recf[:-len("<end>")].encode("utf-8")
+                break
         else:
-            data_bytes += recf[:-len(b"<end>")]
-            break
+            raise Exception("Could not receive file from client because it was not a string or bytes.")
     
     if (len(recf) > 0):
         print("Received file from client '" + str(websocket.remote_address[0]) + "' (" + str(len(data_bytes)) + " bytes).")

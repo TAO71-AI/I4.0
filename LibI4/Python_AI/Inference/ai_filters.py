@@ -1,32 +1,23 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, TFAutoModelForSequenceClassification, pipeline, Pipeline
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline, Pipeline
 from PIL import Image
-import torch
 import ai_config as cfg
 
-text_filter: AutoModelForSequenceClassification | TFAutoModelForSequenceClassification = None
+text_filter: AutoModelForSequenceClassification = None
 image_filter: Pipeline = None
 tokenizer_text: AutoTokenizer = None
 device_text: str = "cpu"
 device_image: str = "cpu"
 
 def __load_model__(model_name: str, device: str, type: str):
-    if (cfg.current_data.use_tf_instead_of_pt):
-        if (type == "text"):
-            return TFAutoModelForSequenceClassification.from_pretrained(model_name)
-        elif (type == "image"):
-            return pipeline("image-classification", model = model_name, device = device)
-        
-        raise Exception("Filter model type is not 'text' or 'image'.")
+    if (type == "text"):
+        model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    elif (type == "image"):
+        return pipeline("image-classification", model = model_name, device = device)
     else:
-        if (type == "text"):
-            model = AutoModelForSequenceClassification.from_pretrained(model_name)
-        elif (type == "image"):
-            return pipeline("image-classification", model = model_name, device = device)
-        else:
-            raise Exception("Filter model type is not 'text' or 'image'.")
+        raise Exception("Filter model type is not 'text' or 'image'.")
 
-        model = model.to(device)
-        return model
+    model = model.to(device)
+    return model
 
 def LoadTextModel() -> None:
     global text_filter, tokenizer_text, device_text
@@ -37,8 +28,7 @@ def LoadTextModel() -> None:
     if (text_filter != None and tokenizer_text != None):
         return
     
-    move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("nsfw_filter-text")
-    device_text = "cuda" if (move_to_gpu) else "cpu"
+    device_text = cfg.GetGPUDevice("nsfw_filter-text")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'NSFW Filter (Text)' on device '" + device_text + "'...")
@@ -55,8 +45,7 @@ def LoadImageModel() -> None:
     if (image_filter != None):
         return
     
-    move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("nsfw_filter-image")
-    device_image = "cuda" if (move_to_gpu) else "cpu"
+    device_image = cfg.GetGPUDevice("nsfw_filter-image")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'NSFW Filter (Image)' on device '" + device_image + "'...")
@@ -70,10 +59,8 @@ def IsTextNSFW(prompt: str) -> bool:
     if (tokenizer_text == None or text_filter == None):
         return None
 
-    inputs = tokenizer_text.encode(prompt, return_tensors = ("tf" if cfg.current_data.use_tf_instead_of_pt else "pt"))
-
-    if (not cfg.current_data.use_tf_instead_of_pt):
-        inputs = inputs.to(device_text)
+    inputs = tokenizer_text.encode(prompt, return_tensors = "pt")
+    inputs = inputs.to(device_text)
 
     response = text_filter(inputs).logits
     predicted_class = response.argmax().item()

@@ -7,7 +7,7 @@ import asyncio
 import requests
 import imghdr
 import wave
-import base64
+import traceback
 import math
 from discord.ext import commands
 
@@ -47,79 +47,85 @@ if (os.path.exists("temp/discord_trs.json")):
         translators = json.loads(f.read())
         f.close()
 
-async def connect_to_server_and_send(send_data: str = "", is_file: bool = False) -> str:
+async def connect_to_server_and_send(send_data: str | bytes, is_file: bool = False) -> str:
     global websocket, fwebsocket
 
+    if (type(send_data) == str):
+        send_data = send_data.encode("utf-8")
+
     for ip in ips:
-        try:
-            uri = "ws://" + ip + ":8060"
-            
-            if (websocket == None or websocket.state != 1):
-                websocket = await websockets.connect(uri)
+        if (is_file):
+            try:
+                uri = "ws://" + ip + ":8061"
 
-            s = 0
-            c = False
-
-            while (websocket.state != 1):
-                if (s >= 10):
-                    c = True
-                    break
-
-                time.sleep(1)
-                s += 1
+                if (fwebsocket == None or fwebsocket.state != 1):
+                    fwebsocket = await websockets.connect(uri)
                 
-            if (c):
-                continue
-            
-            try:
-                await websocket.send(send_data)
-                response = await websocket.recv()
+                s = 0
+                c = False
 
-                return response
+                while (fwebsocket.state != 1):
+                    if (s > 10):
+                        c = True
+                        break
+                
+                if (c):
+                    continue
+
+                try:
+                    chunk_size = 4096
+                    chunks = math.ceil(len(send_data) / chunk_size)
+
+                    for i in range(chunks):
+                        offset = i * chunk_size
+                        chunk = send_data[offset:offset + chunk_size]
+
+                        await fwebsocket.send(chunk)
+
+                    await fwebsocket.send(b"<end>")
+                    response = await fwebsocket.recv()
+
+                    return response
+                except Exception as ex:
+                    print("Error sending file: " + str(ex))
+                
+                raise Exception("Could not send or receive file from server.")
             except Exception as ex:
-                print("Error sending: " + str(ex))
-
-            raise Exception("Could not send or receive from server.")
-        except Exception as ex:
-            print("ERROR CONNECTING TO I4.0 SERVER: " + str(ex))
-    
-        try:
-            uri = "ws://" + ip + ":8061"
-
-            if (fwebsocket == None or fwebsocket.state != 1):
-                fwebsocket = await websockets.connect(uri)
-            
-            s = 0
-            c = False
-
-            while (fwebsocket.state != 1):
-                if (s > 10):
-                    c = True
-                    break
-            
-            if (c):
-                continue
-
+                print("ERROR CONNECTING TO I4.0 FILES SERVER: " + str(ex))
+        else:
             try:
-                chunk_size = 4096
-                chunks = math.ceil(len(send_data) / chunk_size)
+                uri = "ws://" + ip + ":8060"
+                
+                if (websocket == None or websocket.state != 1):
+                    websocket = await websockets.connect(uri)
 
-                for i in range(chunks):
-                    offset = i * chunk_size
-                    chunk = send_data[offset:offset + chunk_size]
+                s = 0
+                c = False
 
-                    await fwebsocket.send(chunk)
+                while (websocket.state != 1):
+                    if (s >= 10):
+                        c = True
+                        break
 
-                await fwebsocket.send(b"<end>")
-                response = await fwebsocket.recv()
+                    time.sleep(1)
+                    s += 1
+                    
+                if (c):
+                    continue
+                
+                try:
+                    await websocket.send(send_data)
+                    response = await websocket.recv()
+                    response = str(response)
 
-                return response
+                    return response
+                except Exception as ex:
+                    print("Error sending: " + str(ex))
+                    traceback.print_exc()
+
+                raise Exception("Could not send or receive from server.")
             except Exception as ex:
-                print("Error sending file: " + str(ex))
-            
-            raise Exception("Could not send or receive file from server.")
-        except Exception as ex:
-            print("ERROR CONNECTING TO I4.0 FILES SERVER: " + str(ex))
+                print("ERROR CONNECTING TO I4.0 SERVER: " + str(ex))
 
     return "ERROR CONNECTING TO ALL SERVERS."
 
@@ -196,12 +202,12 @@ def __get_audios_from_message__(message, download: bool) -> list[str]:
     
     return audios
 
-async def __prepare_audios_for_inference__(message, user, translator) -> str:
+async def __prepare_audios_for_inference__(message, user) -> str:
     audios_str = ""
     audios = __get_audios_from_message__(message, True)
 
     for audio in range(len(audios)):
-        audios_str += "AUDIO #" + str(audio + 1) + ": "
+        audios_str += "AUDIO TRANSCRIPTION #" + str(audio + 1) + ": "
 
         with open(audios[audio], "rb") as f:
             audio_bytes = f.read()
@@ -213,23 +219,17 @@ async def __prepare_audios_for_inference__(message, user, translator) -> str:
                     
         p = {
             "cmd": "service_4 " + str(audio_id),
-            "api_key": server_api_key,
-            "conversation": conversation + user,
-            "extra_data": {
-                "translator": translator
-            }
+            "conversation": conversation + user
         }
-        p = json.dumps(p)
-        res = await connect_to_server_and_send(p, False)
-        res = json.loads(res)["response"]
-        res = json.loads(res)["text"]
+        res = await __execute_service__(p)
+        res = str(res["text"]).strip()
 
-        audios_str += res + "\n"
+        audios_str += "'" + res + "'" + "\n"
                 
     audios_str = audios_str.strip()
     return audios_str
 
-async def __prepare_images_for_inference__(message, user, translator) -> str:
+async def __prepare_images_for_inference__(message, user) -> str:
     images_str = ""
     images = __get_images_from_message__(message, True)
 
@@ -246,22 +246,58 @@ async def __prepare_images_for_inference__(message, user, translator) -> str:
                     
         p = {
             "cmd": "service_3 " + str(image_id),
-            "api_key": server_api_key,
-            "conversation": conversation + user,
-            "extra_data": {
-                "translator": translator
-            }
+            "conversation": conversation + user
         }
-        p = json.dumps(p)
-        res = await connect_to_server_and_send(p, False)
-        res = json.loads(res)
-        res = eval(str(res["response"]))
+        res = await __execute_service__(p)
         res = str(res["response"])
 
-        images_str += res + "\n"
+        images_str += "'" + res + "'" + "\n"
                 
     images_str = images_str.strip()
     return images_str
+
+async def __execute_service__(data: dict[str, str]) -> str | dict[str]:
+    data["api_key"] = server_api_key
+
+    p = json.dumps(data)
+    res = await connect_to_server_and_send(p)
+                
+    try:
+        res = json.loads(res)
+                    
+        try:
+            res = eval(res["response"])
+        except:
+            res = json.loads(res["response"])
+    except Exception as ex:
+        try:
+            res = str(res["response"])
+        except:
+            res = "Unknown error."
+            print("ERROR: " + str(ex))
+    
+    return res
+
+async def __get_queue__(service: str) -> tuple[int, float]:
+    queue = json.loads(await connect_to_server_and_send(json.dumps({
+        "cmd": "get_queue"
+    })))["response"]
+    queue = json.loads(queue.replace("\'", "\""))
+    queue_users = queue["queue"]
+    queue_time = queue["time"][service]
+
+    return (queue_users, queue_time)
+
+async def Translate(lang: str, prompt: str) -> str:
+    p = {
+        "cmd": "service_9 " + prompt,
+        "extra_data": {
+            "translator": lang
+        }
+    }
+    res = await __execute_service__(p)
+
+    return res.strip()
 
 @bot.event
 async def on_ready() -> None:
@@ -294,49 +330,49 @@ async def on_message(message) -> None:
                 res += "\nReplace [OPTION] with a valid option and [MESSAGE] with your message."
                 res += "\nThe available options are:\nresponse - send a message to I4.0."
                 res += "\ncc - clear the conversation. If you're having errors and you don't know why, use this option."
-                res += "\ntr - set the I4.0 translator to your favourite language."
+                res += "\nlang - set the I4.0 translator to your favourite language."
                 res += "\ntrans - transcribe an audio."
                 res += "\nitt - test the I4.0's Image To Text."
+                res += "\ntr - translate a prompt."
+                res += "\ntrm - translate a prompt to the server's language."
                 res += "\nhelp - see this help message."
             elif (t == "response"):
-                queue = json.loads(await connect_to_server_and_send(json.dumps({
-                    "cmd": "get_queue"
-                })))["response"]
-                queue = json.loads(queue.replace("\'", "\""))
-                queue_users = queue["queue"]
-                queue_time = queue["time"]["chatbot"]
+                queue_users, queue_time = await __get_queue__("chatbot")
 
                 if (queue_time < 0):
                     queue_time = "Unknown"
 
                 await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
 
-                #images = await __prepare_images_for_inference__(message, user, translator)
-                #audios = await __prepare_audios_for_inference__(message, user, translator)
-                images = ""
-                audios = ""
+                images = await __prepare_images_for_inference__(message, user)
+                audios = await __prepare_audios_for_inference__(message, user)
 
-                p = images + "\n" + audios + "'" + user + "' says to you:\n" + p
+                if (len(images) > 0 and not (images.endswith(".") or images.endswith("?") or images.endswith("!"))):
+                    images += "."
+                
+                if (len(audios) > 0 and not (audios.endswith(".") or audios.endswith("?") or audios.endswith("!"))):
+                    audios += "."
+
+                p = images + "\n" + audios + "\n'" + user + "' says to you:\n" + p
                 p = p.strip()
 
-                p = json.dumps({
-                    "cmd": "service_0 " + p,
-                    "api_key": server_api_key,
-                    "conversation": conversation + user,
-                    "extra_data": {
-                        "translator": translator
-                    }
-                })
-                res = await connect_to_server_and_send(p)
-                
                 try:
-                    res = dict(json.loads(res))
-                    res = dict(json.loads(res["response"].replace("'", "\"")))
+                    p = await Translate("mul", p)
+                except:
+                    pass
 
-                    res = str(mention + " " + res["response"])
-                except Exception as ex:
-                    res = res["response"]
-                    print("ERROR: " + str(ex))
+                res = await __execute_service__({
+                    "cmd": "service_0 " + p,
+                    "conversation": conversation + user
+                })
+                res = str(res["response"])
+
+                try:
+                    res = await Translate(translator, res)
+                except:
+                    pass
+
+                res = mention + " " + res
             elif (t == "cc"):
                 p = json.dumps({
                     "cmd": "clear_my_history",
@@ -347,13 +383,61 @@ async def on_message(message) -> None:
                 res = json.loads(res)
                 res = res["response"]
                 res = "Conversation deleted!"
-            elif (t == "tr"):
+            elif (t == "lang"):
                 translators[user] = p
                 res = "Translator set to '" + p + "'!"
             elif (t == "trans"):
-                res = await __prepare_audios_for_inference__(message, user, translator)
+                queue_users, queue_time = await __get_queue__("whisper")
+
+                if (queue_time < 0):
+                    queue_time = "Unknown"
+
+                await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
+
+                res = await __prepare_audios_for_inference__(message, user)
+
+                try:
+                    res = await Translate(translator, res)
+                except:
+                    pass
+
+                res = mention + " " + res
             elif (t == "itt"):
-                res = await __prepare_images_for_inference__(message, user, translator)
+                queue_users, queue_time = await __get_queue__("img2text")
+
+                if (queue_time < 0):
+                    queue_time = "Unknown"
+
+                await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
+
+                res = await __prepare_images_for_inference__(message, user)
+
+                try:
+                    res = await Translate(translator, res)
+                except:
+                    pass
+
+                res = mention + " " + res
+            elif (t == "tr"):
+                queue_users, queue_time = await __get_queue__("tr")
+
+                if (queue_time < 0):
+                    queue_time = "Unknown"
+
+                await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
+
+                res = Translate(translator, p)
+                res = mention + " " + res
+            elif (t == "trm"):
+                queue_users, queue_time = await __get_queue__("tr")
+
+                if (queue_time < 0):
+                    queue_time = "Unknown"
+
+                await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
+
+                res = Translate("mul", p)
+                res = mention + " " + res
             else:
                 raise Exception("Please see the I4.0 help using the command `!i4 help`, you got the syntax wrong.")
                 

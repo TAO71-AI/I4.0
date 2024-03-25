@@ -4,7 +4,6 @@ import torch
 import cv2
 import os
 import random
-import base64
 import ai_config as cfg
 
 processor: AutoImageProcessor = None
@@ -26,8 +25,7 @@ def LoadModel() -> None:
     if (processor != None and model != None):
         return
     
-    move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("od")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device = cfg.GetGPUDevice("od")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'object detection' on device '" + device + "'...")

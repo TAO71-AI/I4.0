@@ -10,16 +10,18 @@ import Inference.ai_filters as filters
 import Inference.ai_depth_estimation as de
 import Inference.ai_object_detection as od
 import Inference.speech_recog as sr
+import Inference.rvc_inf as rvc
+import Inference.tts as tts
 import chatbot_basics as basics
 import ai_config as cfg
 import ai_conversation as conv
 import ai_logs as logs
 import PIL.Image as Image
 import os
-import datetime
-import calendar
 import base64
 import json
+import datetime
+import calendar
 
 # Please read this
 """
@@ -36,17 +38,16 @@ whisper - Recognize audio using Whisper (Speech To Text).
 text2audio - Audio generation.
 nsfw_filter-text - Check if a text is NSFW.
 nsfw_filter-image - Check if an image is NSFW.
+de - Depth Estimation.
 od - Object Detection.
+rvc - Uses RVC on an audio file.
+tts - Text to Speech.
 """
 
 # Set some variables
-openai_model: str = cfg.current_data.openai_model
-openai_max_tokens: int = cfg.current_data.max_length
 system_messages: list[str] = []
-apply_system_messages_to_tensorflow: bool = False
 use_chat_history_if_available: bool = cfg.current_data.use_chat_history
 order: str = cfg.current_data.prompt_order
-model_pt_name: str = "pt_model"
 current_emotion: str = "neutral"
 
 # Get the models' name
@@ -79,10 +80,14 @@ def GetAllModels() -> dict[str]:
             mls[i] = cfg.current_data.nsfw_filter_text_model
         elif (i == "nsfw_filter-image"):
             mls[i] = cfg.current_data.nsfw_filter_image_model
-        elif (i == "depth"):
+        elif (i == "de"):
             mls[i] = cfg.current_data.depth_estimation_model
         elif (i == "od"):
             mls[i] = cfg.current_data.object_detection_model
+        elif (i == "rvc"):
+            mls[i] = str(list(cfg.current_data.rvc_models.keys()))
+        elif (i == "tts"):
+            mls[i] = str(tts.GetVoices())
     
     return mls
 
@@ -113,12 +118,14 @@ def LoadAllModels() -> None:
             filters.LoadTextModel()
         elif (i == "nsfw_filter-image"):
             filters.LoadImageModel()
-        elif (i == "depth"):
+        elif (i == "de"):
             de.LoadModel()
         elif (i == "od"):
             od.LoadModel()
         elif (i == "whisper"):
             sr.LoadModel()
+        elif (i == "tts"):
+            tts.LoadTTS()
 
 # Check if a text prompt is NSFW
 def IsTextNSFW(prompt: str) -> bool:
@@ -156,10 +163,8 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
 
     # Set extra or custom System Prompts
     for msg in extra_system_msgs:
-        sm.append(msg)
-
-    if (len(cfg.current_data.custom_system_messages.strip()) > 0):
-        sm.append(cfg.current_data.custom_system_messages)
+        if (sm.count(msg.strip()) == 0):
+            sm.append(msg.strip())
 
     # Set dynamic System Prompts if allowed
     if (cfg.current_data.use_dynamic_system_args):
@@ -178,7 +183,8 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             + ("0" + str(current_dt.minute) if current_dt.minute < 10 else str(current_dt.minute)) + ".")
 
         for m in dsm:
-            sm.append(m)
+            if (sm.count(m) == 0):
+                sm.append(m)
     
     # Set the System Prompts to first person if allowed
     if (cfg.current_data.system_messages_in_first_person):
@@ -194,7 +200,6 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
     # Apply the System Prompts to models
     cbg4a.system_messages = sm
     cba.system_messages = sm
-    openai_msgs = [{"role": "system", "content": msg} for msg in sm] + [{"role": "user", "content": prompt}]
 
     # Set the prompt order
     if (len(order_prompt) <= 0):
@@ -205,16 +210,19 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             order = order_prompt
     
     # Translate if the use of translators are forced
-    if (order_prompt.__contains__("tr") and force_translator):
-        prompt = tns.TranslateFrom1To2(prompt)
+    if (force_translator and cfg.current_data.use_other_services_on_chatbot):
+        prompt = Translate("mul", prompt)
     
     # Check if the prompt is NSFW
-    if (order_prompt.__contains__("nsfw_filter-text")):
+    if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
         # Check the prompt
-        is_nsfw = IsTextNSFW(prompt)
+        is_nsfw = FilterNSFWText(prompt)
+
+        if (is_nsfw == None):
+            is_nsfw = False
 
         # If it's NSFW and the use of NSFW is not allowed, return an error
-        if (is_nsfw and not cfg.current_data.allow_processing_if_nsfw):
+        if (is_nsfw):
             return {
                 "response": "ERROR",
                 "model": "-1",
@@ -239,8 +247,8 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         }
 
         # Translate if use the use of translators are allowed
-        if (len(translator.strip()) > 0 and order_prompt.__contains__("tr")):
-            data["response"] = tns.TranslateFrom2To1(prompt, translator)
+        if (len(translator.strip()) > 0 and cfg.current_data.use_other_services_on_chatbot):
+            data["response"] = Translate(translator, prompt)
             data["tested_models"].append("tr")
         else:
             data["response"] = prompt
@@ -248,9 +256,12 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Check the Image to Text if the user requests it
         if (args.count("img2text") >= 1 and order_prompt.__contains__("img2text")):
             # Check if the user's image is NSFW (if allowed)
-            if (order_prompt.__contains__("nsfw_filter-image")):
+            if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
                 # Check if the user's image is NSFW
-                is_nsfw = IsImageNSFW(prompt)
+                is_nsfw = FilterNSFWImage(prompt)
+
+                if (is_nsfw == None):
+                    is_nsfw = False
 
                 # If the user's image is NSFW and the use of NSFW is not allowed, return an error
                 if (is_nsfw and not not cfg.current_data.allow_processing_if_nsfw):
@@ -297,21 +308,25 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             data["tested_models"].append("text2audio")
         
         # Estimate depth if the user requests it
-        if (args.count("depth") >= 1 and order_prompt.__contains__("depth")):
+        if (args.count("de") >= 1 and order_prompt.__contains__("de")):
             # Check if the user's image is NSFW
-            is_nsfw = IsImageNSFW(prompt)
+            if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
+                is_nsfw = FilterNSFWImage(prompt)
 
-            # If the user's image is NSFW and the use of NSFW is not allowed, return an error
-            if (is_nsfw and not cfg.current_data.allow_processing_if_nsfw):
-                return {
-                    "response": "ERROR",
-                    "model": "-1",
-                    "files": {},
-                    "tested_models": [],
-                    "text_classification": "-1",
-                    "title": "NO TITLE",
-                    "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
-                }
+                if (is_nsfw == None):
+                    is_nsfw = False
+
+                # If the user's image is NSFW and the use of NSFW is not allowed, return an error
+                if (is_nsfw):
+                    return {
+                        "response": "ERROR",
+                        "model": "-1",
+                        "files": {},
+                        "tested_models": [],
+                        "text_classification": "-1",
+                        "title": "NO TITLE",
+                        "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                    }
 
             # If the image is SFW or the use of NSFW is allowed, estimate depth
             de_result = EstimateDepth(prompt)
@@ -324,24 +339,28 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
                 data["files"]["images"] = [de_result]
             
             data["response"] = "[de " + prompt + "]"
-            data["tested_models"].append("depth")
+            data["tested_models"].append("de")
         
         # Detect objects
         if (args.count("od") >= 1 and order_prompt.__contains__("od")):
             # Check if the user's image is NSFW
-            is_nsfw = IsImageNSFW(prompt)
+            if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
+                is_nsfw = FilterNSFWImage(prompt)
 
-            # If the user's image is NSFW and the use of NSFW is not allowed, return an error
-            if (is_nsfw and not cfg.current_data.allow_processing_if_nsfw):
-                return {
-                    "response": "ERROR",
-                    "model": "-1",
-                    "files": {},
-                    "tested_models": [],
-                    "text_classification": "-1",
-                    "title": "NO TITLE",
-                    "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
-                }
+                if (is_nsfw == None):
+                    is_nsfw = False
+
+                # If the user's image is NSFW and the use of NSFW is not allowed, return an error
+                if (is_nsfw):
+                    return {
+                        "response": "ERROR",
+                        "model": "-1",
+                        "files": {},
+                        "tested_models": [],
+                        "text_classification": "-1",
+                        "title": "NO TITLE",
+                        "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                    }
             
             # If the image is SFW or the use of NSFW is allowed, detect objects
             od = DetectObjects(prompt)
@@ -356,6 +375,34 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
 
             data["response"] = str(od["objects"])
             data["tested_models"].append("od")
+        
+        # Generate RVC response if the user requests it
+        if (args.count("rvc") >= 1 and order_prompt.__contains__("rvc")):
+            aud = DoRVC(prompt)
+
+            try:
+                # Try to append all the audios. If the list is not set, will return an error
+                data["files"]["audios"].append(aud)
+            except:
+                # Create the list if there is an error
+                data["files"]["audios"] = [aud]
+            
+            data["response"] = "[rvc " + str(prompt) + "]"
+            data["tested_models"].append("rvc")
+        
+        # Generate TTS response if the user requests it
+        if (args.count("tts") >= 1 and order_prompt.__contains__("tts")):
+            aud = DoTTS(prompt)
+
+            try:
+                # Try to append all the audios. If the list is not set, will return an error
+                data["files"]["audios"].append(aud)
+            except:
+                # Create the list if there is an error
+                data["files"]["audios"] = [aud]
+            
+            data["response"] = "[tts " + str(prompt) + "]"
+            data["tested_models"].append("tts")
         
         # Set the files to string and return the data
         return data
@@ -475,10 +522,10 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         conv.AddToConversation(conversation[0], conversation[1], prompt, response_conv)
 
     # If the use of Sequence Classification (Text Classification) is allowed, then classify the response
-    if (order_prompt.__contains__("sc")):
+    if (cfg.current_data.use_other_services_on_chatbot):
         try:
             # Try to classify the response
-            tcn = tc.DoPrompt(response)
+            tcn = ClassifyText(response)
         except Exception as ex:
             # If there is an error, set the classification to -1
             tcn = "-1"
@@ -554,9 +601,9 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             logs.AddToLog("(ERROR) Audio Generation from response failed: " + str(ex))
             
     # If the use of translators is allowed and the translator language is not empty...
-    if (order_prompt.__contains__("tr") and len(translator.strip()) > 0):
+    if (len(translator.strip()) > 0 and cfg.current_data.use_other_services_on_chatbot):
         # ...Translate the response to the translator language
-        response = tns.TranslateFrom2To1(response, translator)
+        response = Translate(translator, response)
             
     # If the use of Dynamic System Prompts is allowed...
     if (cfg.current_data.use_dynamic_system_args):
@@ -623,3 +670,59 @@ def DetectObjects(img: str) -> dict[str]:
         "objects": data["objects"],
         "image": image
     }
+
+def DoRVC(audio_data: str) -> str:
+    # Convert audio data to dict or json
+    try:
+        audio_data = json.loads(audio_data)
+    except:
+        audio_data = eval(audio_data)
+
+    # Get RVC audio response
+    data = rvc.MakeRVC(audio_data)
+    # Encode the audio into base64
+    audio = base64.b64encode(data).decode("utf-8")
+
+    # Return the data
+    return audio
+
+def Translate(translator: str, prompt: str) -> str:
+    if (cfg.current_data.prompt_order.count("tr") > 0):
+        if (translator.lower().strip() == "mul" or translator.lower().strip() == "multiple"):
+            # Translate using the multiple translator
+            return tns.TranslateFrom1To2(prompt)
+        
+        # Try to translate using the specified language
+        return tns.TranslateFrom2To1(prompt, translator)
+    
+    return prompt
+
+def ClassifyText(prompt: str) -> str:
+    # Classify text
+    if (cfg.current_data.prompt_order.count("sc") > 0):
+        return tc.DoPrompt(prompt)
+    
+    return "-1"
+
+def FilterNSFWText(prompt: str) -> bool:
+    # Filter NSFW text
+    return IsTextNSFW(prompt)
+
+def FilterNSFWImage(image: str) -> bool:
+    # Filter NSFW image
+    return IsImageNSFW(image)
+
+def DoTTS(prompt: str):
+    # Convert audio data to dict or json
+    try:
+        prompt = json.loads(prompt)
+    except:
+        prompt = eval(prompt)
+
+    # Get TTS audio response
+    data = tts.MakeTTS(prompt)
+    # Encode the audio into base64
+    audio = base64.b64encode(data).decode("utf-8")
+
+    # Return the data
+    return audio

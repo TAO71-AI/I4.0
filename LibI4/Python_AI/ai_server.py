@@ -18,7 +18,6 @@ max_users: int = 1000
 requires_api_key: bool = cfg.current_data.force_api_key
 queue: int = 0
 args: list[str] = []
-extra_system_messages: list[str] = []
 plugins: list[str] = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins)
 times: dict[str, list[float]] = {
     "text2img": [],
@@ -26,11 +25,17 @@ times: dict[str, list[float]] = {
     "chatbot": [],
     "translation": [],
     "text2audio": [],
-    "depth_estimation": [],
+    "de": [],
     "whisper": [],
-    "od": []
+    "od": [],
+    "rvc": [],
+    "tr": [],
+    "sc": [],
+    "nsfw_filter-text": [],
+    "nsfw_filter-image": [],
+    "tts": []
 }
-__version__: str = "v4.1.0"
+__version__: str = "v4.2.0"
 
 # Server
 def CheckFiles() -> None:
@@ -61,7 +66,6 @@ def UpdateServer() -> None:
 
                     if (date_diff.total_seconds() >= 86400):
                         api_key["tokens"] = api_key["default"]["tokens"]
-                        api_key["connections"] = api_key["default"]["connections"]
                         api_key["date"] = sb.GetCurrentDateDict()
             except Exception as ex:
                 __print__("Error on API Key '" + str(api_key["key"]) + "': " + str(ex))
@@ -191,9 +195,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         ai_args = cfg.current_data.ai_args
 
     cb.system_messages = cb.basics.GetDefault_I4_SystemMessages(plugins, __get_args__(ai_args))
-
-    if (not use_default_sys_prompts):
-        esm += __get_args__(ai_args)
+    esm += __get_args__(ai_args)
 
     # Execute command
     if (command.startswith("ai_response ")):
@@ -280,14 +282,14 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", cfg.current_data.prompt_order, "-ncb-depth", esm, translator)
+        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", cfg.current_data.prompt_order, "-ncb-de", esm, translator)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
-            __add_queue_time__("depth_estimation", end_timer - start_timer)
+            __add_queue_time__("de", end_timer - start_timer)
 
         os.remove("temp_img_" + str(tid) + ".png")
         return img
@@ -365,7 +367,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         
         return "Done! Conversation deleted!"
     elif (command.startswith("ai_img_to_text ")):
-        img = command[15:len(command)]
+        img = command[15:]
         img_bytes = b""
         
         if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
@@ -404,7 +406,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         os.remove("temp_img_" + str(tid) + ".png")
         return img
     elif (command.startswith("ai_whisper ")):
-        audio = command[11:len(command)]
+        audio = command[11:]
         audio_bytes = b""
         
         if (not os.path.exists("ReceivedFiles/" + audio + ".enc_file")):
@@ -431,17 +433,154 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         text = audio["text"]
         lang = audio["lang"]
 
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
         text = cb.MakePrompt(text, cfg.current_data.prompt_order, "-ncb-tr", esm, translator)
         audio = json.dumps({
             "text": text["response"],
             "lang": lang
         })
 
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("whisper", end_timer - start_timer)
+
         if (text["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
 
         os.remove("temp_audio_" + str(tid) + ".wav")
         return str(audio)
+    elif (command.startswith("ai_rvc ")):
+        audio = command[7:]
+        audio_bytes = b""
+
+        try:
+            audio = json.loads(audio)
+        except:
+            audio = eval(audio)
+        
+        if (not os.path.exists("ReceivedFiles/" + audio["input"] + ".enc_file")):
+            return "The file id '" + audio["input"] + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + audio["input"] + "_file", "rb") as f:
+            audio_bytes = f.read()
+            f.close()
+        
+        tid = 0
+
+        while (os.path.exists("temp_audio_" + str(tid) + ".wav")):
+            tid += 1
+        
+        with open("temp_audio_" + str(tid) + ".wav", "wb") as f:
+            f.write(audio_bytes)
+            f.close()
+
+        audio_name = "temp_audio_" + str(tid) + ".wav"
+        audio["input"] = audio_name
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        aud_output = cb.MakePrompt(json.dumps(audio), cfg.current_data.prompt_order, "-ncb-rvc", [], "", False, ["", ""], False)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("rvc", end_timer - start_timer)
+
+        os.remove("temp_audio_" + str(tid) + ".wav")
+        return str(aud_output)
+    elif (command.startswith("translate ")):
+        prompt = command[10:]
+
+        if (len(translator.strip()) == 0):
+            translator = "mul"
+        
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        response = cb.Translate(translator, prompt)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("tr", end_timer - start_timer)
+
+        return response
+    elif (command.startswith("classify ")):
+        prompt = command[9:]
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        response = cb.ClassifyText(prompt)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("sc", end_timer - start_timer)
+
+        return response
+    elif (command.startswith("is_nsfw_text ")):
+        prompt = command[13:]
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        response = str(cb.FilterNSFWText(prompt)).lower()
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("nsfw_filter-text", end_timer - start_timer)
+
+        return response
+    elif (command.startswith("is_nsfw_image ")):
+        img = command[15:]
+        img_bytes = b""
+        
+        if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
+            return "The file id '" + img + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + img + "_file", "rb") as f:
+            img_bytes = f.read()
+            f.close()
+        
+        with open("ReceivedFiles/" + img + ".enc_file", "r") as f:
+            img = json.loads(f.read())
+            f.close()
+        
+        tid = 0
+
+        while os.path.exists("temp_img_" + str(tid) + ".png"):
+            tid += 1
+        
+        with open("temp_img_" + str(tid) + ".png", "wb") as f:
+            f.write(img_bytes)
+            f.close()
+        
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+        
+        img = cb.FilterNSFWImage("temp_img_" + str(tid) + ".png")
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("nsfw_filter-image", end_timer - start_timer)
+
+        os.remove("temp_img_" + str(tid) + ".png")
+        return str(img).lower()
+    elif (command.startswith("tts ")):
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+        
+        res = DoPrompt(command[4:], "-ncb-tts", [], "", True, conver, use_default_sys_prompts)
+
+        if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("tts", end_timer - start_timer)
+
+        return res
     elif (command.startswith("ban ") and admin):
         if (ip_ban.BanIP(command[4:len(command)])):
             __print__("IP banned!")
@@ -487,6 +626,9 @@ def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
         elif (service.lower().startswith("get_all_models")):
             # Get all models
             server_response = run_server_command("-u get_models", extra_data)
+        elif (service.lower().startswith("rvc_models")):
+            # Get all RVC models
+            server_response = str(list(cfg.current_data.rvc_models.keys()))
         else:
             raise Exception("Service doesn't exist or is not free.")
         
@@ -496,7 +638,7 @@ def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
         return "Error executing service. Make sure this service exists" + (" and you're using a valid API key." if (cfg.current_data.force_api_key) else ".")
 
 def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[str]) -> str:
-    if (requires_api_key and (key_data == None or key_data["tokens"] <= 0 or key_data["connections"] <= 0)):
+    if (requires_api_key and (key_data == None or key_data["tokens"] <= 0)):
         return __execute_service_without_key__(service, extra_data)
     
     __print__("Executing service with API key: " + service)
@@ -535,13 +677,43 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
         elif (service.startswith("service_6 ")):
             # Depth estimation
             
-            key_data["tokens"] -= 35
+            key_data["tokens"] -= 15
             server_response = run_server_command("-u ai_depth " + service[10:len(service)], extra_data)
         elif (service.startswith("service_7 ")):
             # Object detection
             
-            key_data["tokens"] -= 20
+            key_data["tokens"] -= 15
             server_response = run_server_command("-u ai_object_detection " + service[10:len(service)], extra_data)
+        elif (service.startswith("service_8 ")):
+            # RVC
+            
+            key_data["tokens"] -= 20
+            server_response = run_server_command("-u ai_rvc " + service[10:], extra_data)
+        elif (service.startswith("service_9 ")):
+            # Translate
+            
+            key_data["tokens"] -= 10
+            server_response = run_server_command("-u translate " + service[10:], extra_data)
+        elif (service.startswith("service_10 ")):
+            # Classify text
+            
+            key_data["tokens"] -= 5
+            server_response = run_server_command("-u classify " + service[11:], extra_data)
+        elif (service.startswith("service_11 ")):
+            # NSFW text filter
+            
+            key_data["tokens"] -= 2.5
+            server_response = run_server_command("-u is_nsfw_text " + service[11:], extra_data)
+        elif (service.startswith("service_12 ")):
+            # NSFW image filter
+            
+            key_data["tokens"] -= 2.5
+            server_response = run_server_command("-u is_nsfw_image " + service[11:], extra_data)
+        elif (service.startswith("service_13 ")):
+            # NSFW image filter
+            
+            key_data["tokens"] -= 5
+            server_response = run_server_command("-u tts " + service[11:], extra_data)
         elif (service.lower().startswith("clear_my_history") and cfg.current_data.save_conversations):
             # Clear chat history
             try:
@@ -549,18 +721,14 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
                 server_response = ""
             except Exception as ex:
                 __print__("Error deleting chat history: " + str(ex))
-
-            key_data["connections"] += 1
         elif (service.lower().startswith("get_my_conversation")):
             server_response = run_server_command("-u get_my_conversation", extra_data)
-            key_data["connections"] += 1
         else:
             raise Exception("Service doesn't exists.")
         
         logs.AddToLog("Server response for '" + service + "': '" + str(server_response) + "'.")
         logs.AddToLog("Saving key '" + key_data["key"] + "'...")
 
-        key_data["connections"] -= 1
         sb.SaveKey(key_data)
 
         logs.AddToLog("Key '" + key_data["key"] + "' saved successfully. New key data: " + str(key_data))
@@ -611,17 +779,22 @@ def on_receive(data: dict[str]) -> dict:
         
         try:
             extra_data["key"] = key_data
-
-            if (key_data["tokens"] > 0 and key_data["connections"] > 0):
+            
+            try:
                 extra_data["conversation"] = [key_data["key"], data["conversation"]]
+            except:
+                extra_data["conversation"] = ["null", "null"]
+
+            if (key_data["tokens"] > 0):
                 res = RunService(data["cmd"], key_data, extra_data)
             else:
-                extra_data["conversation"] = [key_data["key"], data["conversation"]]
                 res = RunService(data["cmd"], None, extra_data)
-                error = "ERROR ON API KEY: Not enough tokens or connections."
-        except:
+                error = "ERROR ON API KEY: Not enough tokens."
+        except Exception as ex:
             res = RunService(data["cmd"], None, extra_data)
-            error = "ERROR ON API KEY: Invalid key."
+
+            print("Error! " + str(ex))
+            logs.AddToLog("RunService error '" + str(ex) + "'.")
     elif (not requires_api_key):
         res = RunService(data["cmd"], None, extra_data)
     else:

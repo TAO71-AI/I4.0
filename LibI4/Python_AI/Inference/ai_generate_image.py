@@ -16,13 +16,11 @@ def LoadModel() -> None:
     if (pipeline != None):
         return
     
-    pipeline = AutoPipelineForText2Image.from_pretrained(cfg.current_data.image_generation_model)
-
-    move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("text2img")
-    device = "cuda" if (move_to_gpu) else "cpu"
-
     if (cfg.current_data.print_loading_message):
         print("Loading model 'text to image' on device '" + device + "'...")
+    
+    pipeline = AutoPipelineForText2Image.from_pretrained(cfg.current_data.image_generation_model)
+    device = cfg.GetGPUDevice("text2img")
 
     pipeline = pipeline.to(device)
 

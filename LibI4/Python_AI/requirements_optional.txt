@@ -3,7 +3,9 @@ safetensors
 runhouse
 sentencepiece
 sacremoses
-accelerate
-bitsandbytes
 timm
 einops
+invisible_watermark
+optimum[openvino]
+optimum[onnxruntime]
+ctranslate2

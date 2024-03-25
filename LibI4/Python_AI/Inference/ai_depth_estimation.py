@@ -17,14 +17,13 @@ def __load_model__(model_name: str, device: str):
 def LoadModel() -> None:
     global processor, model, device
 
-    if (not cfg.current_data.prompt_order.__contains__("depth")):
+    if (not cfg.current_data.prompt_order.__contains__("de")):
         raise Exception("Model is not in 'prompt_order'.")
 
     if (model != None and processor != None):
         return
     
-    move_to_gpu = torch.cuda.is_available() and cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("depth")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device = cfg.GetGPUDevice("de")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'depth estimation' on device '" + device + "'...")
@@ -44,9 +43,7 @@ def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
         print("Estimating depth...")
     
     inputs = processor(images = [image], return_tensors = "pt")
-
-    if (not cfg.current_data.use_tf_instead_of_pt):
-        inputs = inputs.to(device)
+    inputs = inputs.to(device)
 
     with torch.no_grad():
         outputs = model(**inputs)

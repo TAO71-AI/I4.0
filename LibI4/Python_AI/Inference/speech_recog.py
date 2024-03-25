@@ -1,7 +1,6 @@
 import speech_recognition as sr
 import whisper
 import os
-import torch
 import json
 import ai_config as cfg
 
@@ -16,7 +15,7 @@ def __load_model__(model: str, device: str) -> None:
 def LoadModel() -> None:
     global device
 
-    device = "cuda" if (cfg.current_data.use_gpu_if_available and cfg.current_data.move_to_gpu.__contains__("whisper") and torch.cuda.is_available()) else "cpu"
+    device = cfg.GetGPUDevice("whisper")
     __load_model__(cfg.current_data.whisper_model, device)
 
 def Recognize(data: sr.AudioData) -> str:

@@ -1,5 +1,6 @@
 import os
 import json
+import torch
 
 class ConfigData:
     gpt4all_model: str = "mistral-7b-instruct-v0.1.Q4_0.gguf"
@@ -19,10 +20,7 @@ class ConfigData:
     nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"
     depth_estimation_model: str = "Intel/dpt-beit-base-384"
     object_detection_model: str = "hustvl/yolos-tiny"
-    rvc_model_path: str = "" # WILL BE USED SOON!
-    rvc_index_path: str = "" # WILL BE USED SOON!
-    rvc_method: str = "rmvpe" # WILL BE USED SOON!
-    tf_epochs: int = 100
+    rvc_models: dict[str, tuple[str, str, str]] = {}
     force_api_key: bool = True
     low_cpu_or_memory: bool = False
     max_length: int = 250
@@ -50,18 +48,18 @@ class ConfigData:
     max_prompts: int = 1
     use_multi_model: bool = False
     multi_model_mode: str = "longest"
-    use_tf_instead_of_pt: bool = False
     print_loading_message: bool = True
     enable_predicted_queue_time: bool = True
-    enabled_plugins: str = "sing vtuber discord_bot voicevox twitch gaming image_generation pacopepe"
+    enabled_plugins: str = "sing vtuber discord_bot voicevox twitch gaming image_generation"
     use_only_latest_log: bool = True
     max_predicted_queue_time: int = 20
-    use_google_instead_of_whisper: bool = False
     allow_processing_if_nsfw: bool = False
     ban_if_nsfw: bool = True
     use_local_ip: bool = False
     auto_start_rec_files_server: bool = True
     seed: int = -1
+    gpu_device: str = "cuda"
+    use_other_services_on_chatbot: bool = False
 
 def Init() -> None:
     if (not os.path.exists("config.tcfg")):
@@ -106,7 +104,7 @@ def ReadConfig() -> ConfigData:
             elif (il == "translation_models"):
                 try:
                     models = json.loads(config_dict[i])
-                except Exception as ex:
+                except:
                     models = {
                         "spanish": "Helsinki-NLP/opus-mt-en-es"
                     }
@@ -136,17 +134,11 @@ def ReadConfig() -> ConfigData:
                 data.depth_estimation_model = config_dict[i]
             elif (il == "object_detection_model"):
                 data.object_detection_model = config_dict[i]
-            elif (il == "rvc_model_path"):
-                data.rvc_model_path = config_dict[i]
-            elif (il == "rvc_index_path"):
-                data.rvc_index_path = config_dict[i]
-            elif (il == "rvc_method"):
-                data.rvc_method = config_dict[i]
-            elif (il == "tf_epochs"):
+            elif (il == "rvc_models"):
                 try:
-                    data.tf_epochs = int(config_dict[i])
+                    data.rvc_models = json.loads(config_dict[i])
                 except:
-                    data.tf_epochs = 100
+                    data.rvc_models = {}
             elif (il == "force_api_key"):
                 data.force_api_key = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "low_cpu_or_memory"):
@@ -215,8 +207,6 @@ def ReadConfig() -> ConfigData:
 
                 if (data.multi_model_mode != "shortest" and data.multi_model_mode != "longest"):
                     data.multi_model_mode = "longest"
-            elif (il == "use_tf_instead_of_pt"):
-                data.use_tf_instead_of_pt = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "print_loading_message"):
                 data.print_loading_message = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "enable_predicted_queue_time"):
@@ -233,8 +223,6 @@ def ReadConfig() -> ConfigData:
                         data.max_predicted_queue_time = 20
                 except:
                     data.max_predicted_queue_time = 20
-            elif (il == "use_google_instead_of_whisper"):
-                data.use_google_instead_of_whisper = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "allow_processing_if_nsfw"):
                 data.allow_processing_if_nsfw = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "ban_if_nsfw"):
@@ -248,6 +236,10 @@ def ReadConfig() -> ConfigData:
                     data.seed = int(config_dict[i])
                 except:
                     data.seed = -1
+            elif (il == "gpu_device"):
+                data.gpu_device = config_dict[i]
+            elif (il == "use_other_services_on_chatbot"):
+                data.use_other_services_on_chatbot = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
         
         f.close()
     
@@ -280,10 +272,7 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "nsfw_filter_image_model=" + cfg.nsfw_filter_image_model + "\n"
     text += "depth_estimation_model=" + cfg.depth_estimation_model + "\n"
     text += "object_detection_model=" + cfg.object_detection_model + "\n"
-    text += "rvc_model_path=" + cfg.rvc_model_path + "\n"
-    text += "rvc_index_path=" + cfg.rvc_index_path + "\n"
-    text += "rvc_method=" + cfg.rvc_method + "\n"
-    text += "tf_epochs=" + str(cfg.tf_epochs) + "\n"
+    text += "rvc_models=" + json.dumps(cfg.rvc_models) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "low_cpu_or_memory=" + ("true" if cfg.low_cpu_or_memory == True else "false") + "\n"
     text += "max_length=" + str(cfg.max_length) + "\n"
@@ -304,21 +293,42 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "max_prompts=" + str(cfg.max_prompts) + "\n"
     text += "use_multi_model=" + ("true" if cfg.use_multi_model == True else "false") + "\n"
     text += "multi_model_mode=" + cfg.multi_model_mode + "\n"
-    text += "use_tf_instead_of_pt=" + ("true" if cfg.use_tf_instead_of_pt == True else "false") + "\n"
     text += "print_loading_message=" + ("true" if cfg.print_loading_message == True else "false") + "\n"
     text += "enable_predicted_queue_time=" + ("true" if cfg.enable_predicted_queue_time == True else "false") + "\n"
     text += "enabled_plugins=" + cfg.enabled_plugins + "\n"
     text += "use_only_latest_log=" + ("true" if cfg.use_only_latest_log == True else "false") + "\n"
     text += "max_predicted_queue_time=" + str(cfg.max_predicted_queue_time) + "\n"
-    text += "use_google_instead_of_whisper=" + ("true" if cfg.use_google_instead_of_whisper == True else "false") + "\n"
     text += "allow_processing_if_nsfw=" + ("true" if cfg.allow_processing_if_nsfw == True else "false") + "\n"
     text += "ban_if_nsfw=" + ("true" if cfg.ban_if_nsfw == True else "false") + "\n"
     text += "use_local_ip=" + ("true" if cfg.use_local_ip == True else "false") + "\n"
     text += "auto_start_rec_files_server=" + ("true" if cfg.auto_start_rec_files_server == True else "false") + "\n"
     text += "seed=" + str(cfg.seed) + "\n"
+    text += "gpu_device=" + cfg.gpu_device + "\n"
+    text += "use_other_services_on_chatbot=" + ("true" if cfg.use_other_services_on_chatbot == True else "false") + "\n"
 
     with open("config.tcfg", "w") as f:
-        f.write(text)
+        f.write(text.strip())
         f.close()
+
+def GetGPUDevice(Task: str) -> str:
+    move_to_gpu = False
+
+    if (current_data.gpu_device.strip().lower() == "cuda"):
+        move_to_gpu = torch.cuda.is_available()
+    elif (current_data.gpu_device.strip().lower() == "mps"):
+        move_to_gpu = torch.backends.mps.is_available()
+    elif (current_data.gpu_device.strip().lower() == "vulkan"):
+        move_to_gpu = torch.is_vulkan_available()
+    elif (current_data.gpu_device.strip().lower() == "openmp"):
+        move_to_gpu = torch.backends.openmp.is_available()
+    elif (current_data.gpu_device.strip().lower() == "cudnn"):
+        move_to_gpu = torch.backends.cudnn.is_available()
+    else:
+        raise Exception("Could not parse GPU device.")
+
+    move_to_gpu = move_to_gpu and current_data.use_gpu_if_available and current_data.move_to_gpu.__contains__(Task)
+    device = current_data.gpu_device if (move_to_gpu) else "cpu"
+
+    return device
 
 current_data = ReadConfig()

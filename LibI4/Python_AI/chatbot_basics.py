@@ -4,7 +4,7 @@ class Plugins:
     def All() -> list[str]:
         return [
             "sing", "vtuber", "discord bot", "twitch",
-            "gaming", "image_generation", "pacep", "audio_generation"
+            "gaming", "image_generation", "audio_generation"
         ]
     
     def FromStr(Plugins: str) -> list[str]:
@@ -61,8 +61,6 @@ def GetDefault_I4_SystemMessages(available_plugins: list[str] = [], extra_messag
             msgs.append("To paint a picture or generate an image you need to say [agi 'PROMPT'] where you replace 'PROMPT' with the image description.")
         elif (plugin == "audio_generation" and cfg.current_data.prompt_order.__contains__("text2audio")):
             msgs.append("To generate an audio you need to say [aga 'PROMPT'] where you replace 'PROMPT' with the audio description.")
-        elif (plugin == "pacep"):
-            msgs.append("You have an AI assistant called 'PaCep', you can call him by saying '[PACEP]'.")
     
     msgs2 = []
     

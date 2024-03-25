@@ -1,31 +1,33 @@
-from transformers import pipeline, Pipeline
-import torch
+from transformers import AutoModelForCausalLM, AutoTokenizer
 import ai_config as cfg
 import ai_conversation as conv
 
-model: Pipeline = None
+model: AutoModelForCausalLM = None
+tokenizer: AutoTokenizer = None
+
 system_messages: list[str] = []
 device: str = "cpu"
 
-def __load_model__(model_name: str, device: str):
-    return pipeline(task = "text-generation", model = model_name, device = device)
+def __load_model__(model_name: str, device: str) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
+    m = AutoModelForCausalLM.from_pretrained(model_name).to(device)
+    t = AutoTokenizer.from_pretrained(model_name)
+
+    return (m, t)
 
 def LoadModel() -> None:
-    global model, device
+    global model, tokenizer, device
 
     if (not cfg.current_data.prompt_order.__contains__("hf")):
         raise Exception("Model is not in 'prompt_order'.")
 
-    if (model != None):
+    if (model != None and tokenizer != None):
         return
     
     if (cfg.current_data.print_loading_message):
         print("Loading model 'chatbot (hf)' on device '" + device + "'...")
     
-    move_to_gpu = torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("hf") and cfg.current_data.use_gpu_if_available
-    device = "cuda" if (move_to_gpu) else "cpu"
-
-    model = __load_model__(cfg.current_data.hf_model, device)
+    device = cfg.GetGPUDevice("hf")
+    model, tokenizer = __load_model__(cfg.current_data.hf_model, device)
 
 def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: list[str] = ["", ""]) -> str:
     LoadModel()
@@ -58,9 +60,11 @@ def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: li
     if (cfg.current_data.print_prompt):
         print("### SYSTEM:\n" + sm + "\n\n### CONVERSATION:\n" + conver + "\n\n### USER: " + prompt + "\n### RESPONSE:")
 
-    prompt_data = model.tokenizer.apply_chat_template(prompts, tokenize = False, add_generation_prompt = True)
-    outputs = model(prompt_data, max_new_tokens = cfg.current_data.max_length, do_sample = True, temperature = cfg.current_data.temp)
-    outputs = outputs[0]["generated_text"]
+    prompt_data = tokenizer.apply_chat_template(prompts, return_tensors = "pt")
+    prompt_data = prompt_data.to(device)
+
+    outputs = model.generate(prompt_data, max_new_tokens = cfg.current_data.max_length, do_sample = True, temperature = cfg.current_data.temp)
+    outputs = tokenizer.batch_decode(outputs)[0]
     response = outputs.replace(prompt_data, "")
 
     if (cfg.current_data.print_prompt):

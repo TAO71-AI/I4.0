@@ -1,6 +1,5 @@
 from transformers import pipeline, Pipeline
 import PIL.Image
-import torch
 import ai_config as cfg
 
 pipe: Pipeline = None
@@ -18,8 +17,7 @@ def LoadModel() -> None:
     if (pipe != None):
         return
     
-    move_to_gpu = cfg.current_data.use_gpu_if_available and torch.cuda.is_available() and cfg.current_data.move_to_gpu.__contains__("img2text")
-    device = "cuda" if (move_to_gpu) else "cpu"
+    device = cfg.GetGPUDevice("img2text")
 
     if (cfg.current_data.print_loading_message):
         print("Loading model 'image to text' on device '" + device + "'...")
