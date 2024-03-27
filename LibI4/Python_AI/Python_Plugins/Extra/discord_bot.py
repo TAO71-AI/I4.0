@@ -426,7 +426,7 @@ async def on_message(message) -> None:
 
                 await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
 
-                res = Translate(translator, p)
+                res = await Translate(translator, p)
                 res = mention + " " + res
             elif (t == "trm"):
                 queue_users, queue_time = await __get_queue__("tr")
@@ -436,7 +436,7 @@ async def on_message(message) -> None:
 
                 await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
 
-                res = Translate("mul", p)
+                res = await Translate("mul", p)
                 res = mention + " " + res
             else:
                 raise Exception("Please see the I4.0 help using the command `!i4 help`, you got the syntax wrong.")
