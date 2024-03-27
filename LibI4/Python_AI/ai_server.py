@@ -334,9 +334,9 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     elif (command.startswith("echo ") and admin):
         return command[5:len(command)]
     elif (command == "createkey" and admin and requires_api_key):
-        return sb.GenerateKey(-1, -1, False)["key"]
+        return sb.GenerateKey(-1, False)["key"]
     elif (command == "createkey_d" and admin and requires_api_key):
-        return sb.GenerateKey(-1, -1, True)["key"]
+        return sb.GenerateKey(-1, True)["key"]
     elif (command == "getallkeys" and admin and requires_api_key):
         return str(sb.GetAllKeys())
     elif (command.startswith("get_queue")):

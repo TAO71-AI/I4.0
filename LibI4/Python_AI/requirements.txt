@@ -3,8 +3,8 @@ torch
 torchtext
 torchvision
 torchaudio
-transformers>=4.38.2
-diffusers>=0.26.2
+transformers>=4.39.1
+diffusers>=0.27.2
 datasets>=2.18.0
 pymysql>=1.1.0
 
@@ -17,7 +17,7 @@ soundfile
 scipy
 evaluate
 opencv-python
-optimum
+optimum>=1.18.0
 Pillow
 pandas
 pathlib
