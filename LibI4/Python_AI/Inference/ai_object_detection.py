@@ -13,9 +13,6 @@ device: str = "cpu"
 def __get_random_color__() -> tuple[int, int, int]:
     return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
-def __load_model__(model_name: str, device: str):
-    return AutoModelForObjectDetection.from_pretrained(model_name).to(device)
-
 def LoadModel() -> None:
     global processor, model, device
 
@@ -24,14 +21,18 @@ def LoadModel() -> None:
 
     if (processor != None and model != None):
         return
-    
-    device = cfg.GetGPUDevice("od")
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'object detection' on device '" + device + "'...")
+        print("Loading model 'object detection'...")
 
-    processor = AutoImageProcessor.from_pretrained(cfg.current_data.object_detection_model)
-    model = __load_model__(cfg.current_data.object_detection_model, device)
+    data = cfg.LoadModel("od", cfg.current_data.object_detection_model, AutoModelForObjectDetection, AutoImageProcessor)
+
+    model = data[0]
+    processor = data[1]
+    device = data[2]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device + "'.")
 
 def MakePrompt(img: str) -> dict[str]:
     LoadModel()

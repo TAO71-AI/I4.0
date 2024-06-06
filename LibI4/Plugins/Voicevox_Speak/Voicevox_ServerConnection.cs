@@ -17,9 +17,7 @@ namespace TAO.I4.Plugins.Voicevox
             // Third-party server, recommended for singing
             (TConnectionType.Http, "post:https://deprecatedapis.tts.quest/v2/voicevox/audio/"),
             // Third-party server 2, recommended for singing
-            (TConnectionType.Http, "post:https://api.su-shiki.com/v2/voicevox/audio/"),
-            // TAO Server, recommended for talking
-            (TConnectionType.Socket, "147.78.87.113:8072"),
+            (TConnectionType.Http, "post:https://api.su-shiki.com/v2/voicevox/audio/")
         };
         public static int DefaultServer = 0;
         public static Action OnConnectAction = null;

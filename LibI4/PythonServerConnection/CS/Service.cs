@@ -16,7 +16,11 @@ namespace TAO.I4.PythonManager
         Translator = 9,
         TextClassification = 10,
         NSFWFilterText = 11,
-        NSFWFilterImage = 12
+        NSFWFilterImage = 12,
+        TTS = 13,
+        UVR = 14,
+        ImageToImage = 15,
+        None = -1
     }
 
     public static class ServiceManager
@@ -51,6 +55,12 @@ namespace TAO.I4.PythonManager
                     return Service.NSFWFilterText;
                 case "nsfw_filter-image":
                     return Service.NSFWFilterImage;
+                case "tts":
+                    return Service.TTS;
+                case "uvr":
+                    return Service.UVR;
+                case "img2img":
+                    return Service.ImageToImage;
             }
 
             throw new Exception("Could not parse service.");
@@ -84,6 +94,12 @@ namespace TAO.I4.PythonManager
                     return "nsfw_filter-text";
                 case Service.NSFWFilterImage:
                     return "nsfw_filter-image";
+                case Service.TTS:
+                    return "tts";
+                case Service.UVR:
+                    return "uvr";
+                case Service.ImageToImage:
+                    return "img2img";
             }
 
             throw new Exception("Could not parse service.");

@@ -44,27 +44,49 @@ def __load_model__(ModelPath: str, ModelName: str) -> None:
     os.environ["index_root"] = "rvc_assets"
     os.environ["rmvpe_root"] = "rvc_assets"
 
-    device = cfg.GetGPUDevice("rvc")
-    vc = VC()
-
     if (cfg.current_data.print_loading_message):
-        print("Loading RVC model '" + ModelName + "' on '" + device + "'...")
+        print("Loading RVC model '" + ModelName + "'...")
 
-    vc.version = "v2"
+    device = cfg.GetAvailableGPUDeviceForTask("rvc", 0)
+
+    if (device.count(":") > 0):
+        device = device.split(":")[0].strip()
     
+    if (device.count("-") > 0):
+        device = device.split("-")[0].strip()
+
+    vc = VC()
+    vc.version = "v2"
+
     if (device == "cuda"):
         vc.config.use_cuda()
     elif (device == "mps"):
         vc.config.use_mps()
     else:
+        if (device != "cpu"):
+            print("Device not supported for RVC. Using CPU.")
+            device = "cpu"
+        
         vc.config.use_cpu()
 
-    vc.get_vc("rvc_assets/" + ModelPath)
+    vc.get_vc(os.getcwd() + "/rvc_assets/" + ModelPath)
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device + "'.")
 
 def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: int, f0_up_key: int) -> bytes:
     LoadModel(ModelName)
 
-    tgt_sr, audio_opt, _, _ = vc.vc_inference(1, Path(AudioPath), f0_up_key = f0_up_key, protect = Protect, filter_radius = FilterRadius, f0_method = cfg.current_data.rvc_models[ModelName][2], hubert_path = "hubert_base.pt", index_file = Path(cfg.current_data.rvc_models[ModelName][1]))
+    if (not os.path.exists(AudioPath)):
+        raise Exception("Audio file doesn't exists.")
+
+    try:
+        tgt_sr, audio_opt, _, _ = vc.vc_inference(1, Path(AudioPath), f0_up_key = f0_up_key, protect = Protect, filter_radius = FilterRadius, f0_method = cfg.current_data.rvc_models[ModelName][2], hubert_path = os.getcwd() + "/rvc_assets/hubert_base.pt", index_file = cfg.current_data.rvc_models[ModelName][1])
+
+        print(str(tgt_sr == None) + " " + str(audio_opt == None))
+    except Exception as ex:
+        print("\n\n" + str(ex) + "\n\n")
+    
     output_file_name = "tmp_rvc_"
     output_file_id = 0
     output_file_path = output_file_name + str(output_file_id) + ".wav"

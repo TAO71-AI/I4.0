@@ -1,26 +1,49 @@
 import speech_recognition as sr
 import whisper
 import os
-import json
 import ai_config as cfg
 
 recognizer: sr.Recognizer = sr.Recognizer()
 device: str = "cpu"
-whisper_model: whisper.Whisper = None
-
-def __load_model__(model: str, device: str) -> None:
-    global whisper_model
-    whisper_model = whisper.load_model(model, device = device)
+whisperM: whisper.Whisper = None
 
 def LoadModel() -> None:
-    global device
+    global device, whisperM
 
-    device = cfg.GetGPUDevice("whisper")
-    __load_model__(cfg.current_data.whisper_model, device)
+    if (len(cfg.devices) == 0):
+        cfg.__get_gpu_devices__()
+    
+    if (whisperM != None):
+        return
+    
+    if (cfg.current_data.print_loading_message):
+        print("Loading model 'whisper'...")
 
-def Recognize(data: sr.AudioData) -> str:
+    for i in range(len(cfg.devices)):
+        dev = cfg.GetAvailableGPUDeviceForTask("whisper", i)
+        
+        try:
+            whisperM = whisper.load_model(cfg.current_data.whisper_model, dev, None, False)
+            device = dev
+
+            if (cfg.current_data.print_loading_message):
+                print("   Loaded model on device '" + device + "'.")
+
+            return
+        except:
+            pass
+    
+    raise Exception("Could not create Whisper.")
+
+def Recognize(data: sr.AudioData) -> dict[str, str]:
     if (not cfg.current_data.prompt_order.__contains__("whisper")):
         raise Exception("Model is not loaded in 'prompt_order'.")
+    
+    result = {
+        "text": "",
+        "lang": "",
+        "error": ""
+    }
 
     try:
         audio_name = "tmp_whisper_audio_0.wav"
@@ -34,24 +57,37 @@ def Recognize(data: sr.AudioData) -> str:
             f.write(data.get_wav_data())
             f.close()
         
-        result = whisper_model.transcribe(audio_name, temperature = cfg.current_data.temp)
+        result = whisperM.transcribe(audio_name, temperature = cfg.current_data.temp)
         result = {
             "text": result["text"],
-            "lang": result["language"]
+            "lang": result["language"],
+            "error": ""
         }
-        result = json.dumps(result)
 
         if (cfg.current_data.print_prompt):
             print("RESULT FROM WHISPER: " + str(result))
 
         os.remove(audio_name)
-        return result
     except sr.UnknownValueError:
-        return "Audio could not be recognized."
+        result = {
+            "text": "",
+            "lang": "",
+            "error": "Could not recognize audio."
+        }
     except sr.RequestError as ex:
-        return "Error requesting: " + str(ex)
+        result = {
+            "text": "",
+            "lang": "",
+            "error": "Error requesting: " + str(ex)
+        }
     except Exception as ex:
-        return "Unknown exception: " + str(ex)
+        result = {
+            "text": "",
+            "lang": "",
+            "error": "Unknown exception: " + str(ex)
+        }
+    
+    return result
 
 def GetMicrophoneAudioData(timeout = None, phase_time_limit = None) -> sr.AudioData:
     with sr.Microphone() as source:

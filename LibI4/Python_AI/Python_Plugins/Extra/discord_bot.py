@@ -116,9 +116,17 @@ async def connect_to_server_and_send(send_data: str | bytes, is_file: bool = Fal
                 try:
                     await websocket.send(send_data)
                     response = await websocket.recv()
-                    response = str(response)
+
+                    if (type(response) == bytes):
+                        response = str(response.decode("utf-8"))
+                    elif (type(response) != str):
+                        print("Response != bytes && response != str.")
+                        response = str(response)
 
                     return response
+                except websockets.ConnectionClosed as ex:
+                    print("Connection closed!")
+                    continue
                 except Exception as ex:
                     print("Error sending: " + str(ex))
                     traceback.print_exc()
@@ -261,30 +269,35 @@ async def __execute_service__(data: dict[str, str]) -> str | dict[str]:
 
     p = json.dumps(data)
     res = await connect_to_server_and_send(p)
+
+    print("RESPONSE: " + str(res))
                 
     try:
         res = json.loads(res)
                     
-        try:
-            res = eval(res["response"])
-        except:
-            res = json.loads(res["response"])
+        if (type(res["response"]) != dict and type(res["response"]) != dict[str]):
+            res["response"] = str(res["response"])
+
+            try:
+                res = eval(res["response"])
+            except:
+                res = json.loads(res["response"])
     except Exception as ex:
         try:
             res = str(res["response"])
         except:
-            res = "Unknown error."
+            res = str(res)
             print("ERROR: " + str(ex))
     
     return res
 
 async def __get_queue__(service: str) -> tuple[int, float]:
     queue = json.loads(await connect_to_server_and_send(json.dumps({
-        "cmd": "get_queue"
+        "cmd": "get_queue " + service
     })))["response"]
     queue = json.loads(queue.replace("\'", "\""))
     queue_users = queue["queue"]
-    queue_time = queue["time"][service]
+    queue_time = queue["time"]
 
     return (queue_users, queue_time)
 
@@ -357,20 +370,25 @@ async def on_message(message) -> None:
                 p = p.strip()
 
                 try:
-                    p = await Translate("mul", p)
+                    p = await Translate("auto", p)
                 except:
-                    pass
+                    print("Error translating (1)!")
 
                 res = await __execute_service__({
                     "cmd": "service_0 " + p,
                     "conversation": conversation + user
                 })
-                res = str(res["response"])
+                
+                try:
+                    res = str(res["response"])
+                except:
+                    res = str(res)
+                    print("An error has occurred!")
 
                 try:
                     res = await Translate(translator, res)
                 except:
-                    pass
+                    print("Error translating (2)!")
 
                 res = mention + " " + res
             elif (t == "cc"):
@@ -436,7 +454,7 @@ async def on_message(message) -> None:
 
                 await send_message(message.channel, "The current server queue is of '" + str(queue_users) + "' users.\nPredicted time: " + str(queue_time) + " seconds.")
 
-                res = await Translate("mul", p)
+                res = await Translate("auto", p)
                 res = mention + " " + res
             else:
                 raise Exception("Please see the I4.0 help using the command `!i4 help`, you got the syntax wrong.")

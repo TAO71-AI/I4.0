@@ -22,14 +22,18 @@ def LoadModel() -> None:
 
     if (model != None and processor != None):
         return
-    
-    device = cfg.GetGPUDevice("de")
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'depth estimation' on device '" + device + "'...")
+        print("Loading model 'depth estimation'...")
     
-    processor = AutoImageProcessor.from_pretrained(cfg.current_data.depth_estimation_model)
-    model = __load_model__(cfg.current_data.depth_estimation_model, device)
+    data = cfg.LoadModel("de", cfg.current_data.depth_estimation_model, AutoModelForDepthEstimation, AutoImageProcessor)
+
+    model = data[0]
+    processor = data[1]
+    device = data[2]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device + "'.")
 
 def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
     LoadModel()
@@ -50,7 +54,7 @@ def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
         predicted_depth = outputs.predicted_depth
 
     prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = image.size[::-1], mode = "bicubic", align_corners = False)
-    output = prediction.squeeze().to(device).numpy()
+    output = prediction.squeeze().cpu().numpy()
     output = (output * 255 / np.max(output)).astype("uint8")
     output = PIL.Image.fromarray(output)
 

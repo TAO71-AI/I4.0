@@ -5,10 +5,6 @@ import ai_config as cfg
 
 model_pipeline: Pipeline = None
 
-def __load_model__(model_name: str, device: str):
-    model = pipeline("text-to-audio", model_name, device = device)
-    return model
-
 def LoadModel() -> None:
     global model_pipeline
 
@@ -17,13 +13,17 @@ def LoadModel() -> None:
 
     if (model_pipeline != None):
         return
-    
-    device = cfg.GetGPUDevice("text2audio")
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'text to audio' on device '" + device + "'...")
+        print("Loading model 'text to audio'...")
     
-    model_pipeline = __load_model__(cfg.current_data.text_to_audio_model, device)
+    data = cfg.LoadPipeline("text-to-audio", "text2audio", cfg.current_data.text_to_audio_model)
+    
+    model_pipeline = data[0]
+    device = data[1]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device + "'.")
 
 def GenerateAudio(prompt: str) -> bytes:
     LoadModel()

@@ -15,7 +15,7 @@ namespace TAO.I4.PythonManager
         public static List<string> Servers = new List<string>()
         {
             "127.0.0.1", // Localhost
-            "tao71-software.ddns.net", //TAO71 Server
+            "tao71.sytes.net", //TAO71 Server
         };
         private static Dictionary<int, Service[]> ServersTasks = new Dictionary<int, Service[]>();
         public static int DefaultServer = 0;
@@ -102,18 +102,23 @@ namespace TAO.I4.PythonManager
         public static (int, byte[]) FindBestServerToExecuteFromService(Service Service, string Message, string[] ExtraSystemMessages = null, string Translator = "", bool UseDefaultSysPrompts = true, string AIArgs = "", string Conversation = "")
         {
             int server = FindBestServerToExecuteCommandWithService_Base(Service);
-            return (server, ExecuteService(Message, Service, ExtraSystemMessages, Translator, UseDefaultSysPrompts, AIArgs, Conversation));
+            (int, byte[]) data = (server, ExecuteService(Message, Service, ExtraSystemMessages, Translator, UseDefaultSysPrompts, AIArgs, Conversation));
+
+            return data;
         }
 
         public static (int, string) FindBestServerToExecuteCommand(Service Service, string Command, string Conversation = "")
         {
             int server = FindBestServerToExecuteCommandWithService_Base(Service);
-            return (server, ExecuteCommandOnServer(Command, Conversation));
+            (int, string) data = (server, ExecuteCommandOnServer(Command, Conversation));
+
+            return data;
         }
 
         public static int FindBestServerToExecuteCommandWithService_Base(Service Service)
         {
             int server = -1;
+            DisconnectFromServer();
 
             if (Service == Service.CustomCommand)
             {
@@ -164,6 +169,8 @@ namespace TAO.I4.PythonManager
             DisconnectFromServer();
 
             bool r = false;
+
+            ClientSocket = null;
             ClientSocket = new ClientWebSocket();
             ClientSocket.ConnectAsync(new Uri("ws://" + Server + ":8060"), CancellationToken.None);
 
@@ -235,6 +242,8 @@ namespace TAO.I4.PythonManager
         {
             if (ClientSocket != null)
             {
+                Thread.Sleep(100);
+
                 try
                 {
                     if (ClientSocket.State != WebSocketState.Closed)
@@ -602,6 +611,10 @@ namespace TAO.I4.PythonManager
                     errors.Add("(C#) Could not deserialize the response, returning full response as string. Error: " + ex.Message);
                     response.TextResponse = (string)jsonData["response"];
                 }
+            }
+            catch (NullReferenceException ex)
+            {
+                throw ex;
             }
             catch (Exception ex)
             {

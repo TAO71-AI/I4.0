@@ -1,4 +1,4 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, pipeline, Pipeline
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, Pipeline
 from PIL import Image
 import ai_config as cfg
 
@@ -8,17 +8,6 @@ tokenizer_text: AutoTokenizer = None
 device_text: str = "cpu"
 device_image: str = "cpu"
 
-def __load_model__(model_name: str, device: str, type: str):
-    if (type == "text"):
-        model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    elif (type == "image"):
-        return pipeline("image-classification", model = model_name, device = device)
-    else:
-        raise Exception("Filter model type is not 'text' or 'image'.")
-
-    model = model.to(device)
-    return model
-
 def LoadTextModel() -> None:
     global text_filter, tokenizer_text, device_text
 
@@ -27,14 +16,18 @@ def LoadTextModel() -> None:
 
     if (text_filter != None and tokenizer_text != None):
         return
-    
-    device_text = cfg.GetGPUDevice("nsfw_filter-text")
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'NSFW Filter (Text)' on device '" + device_text + "'...")
+        print("Loading model 'NSFW Filter (Text)'...")
     
-    tokenizer_text = AutoTokenizer.from_pretrained(cfg.current_data.nsfw_filter_text_model)
-    text_filter = __load_model__(cfg.current_data.nsfw_filter_text_model, device_text, "text")
+    data = cfg.LoadModel("nsfw_filter-text", cfg.current_data.nsfw_filter_text_model, AutoModelForSequenceClassification, AutoTokenizer)
+
+    text_filter = data[0]
+    tokenizer_text = data[1]
+    device_text = data[2]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device_text + "'.")
 
 def LoadImageModel() -> None:
     global image_filter, device_image
@@ -44,13 +37,17 @@ def LoadImageModel() -> None:
 
     if (image_filter != None):
         return
-    
-    device_image = cfg.GetGPUDevice("nsfw_filter-image")
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'NSFW Filter (Image)' on device '" + device_image + "'...")
+        print("Loading model 'NSFW Filter (Image)'...")
     
-    image_filter = __load_model__(cfg.current_data.nsfw_filter_image_model, device_image, "image")
+    data = cfg.LoadPipeline("image-classification", "nsfw_filter-image", cfg.current_data.nsfw_filter_image_model)
+
+    image_filter = data[0]
+    device_image = data[1]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device_image + "'.")
 
 def IsTextNSFW(prompt: str) -> bool:
     # NOTE: The value 0 means NSFW, the value 1 means SFW.

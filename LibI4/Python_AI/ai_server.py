@@ -11,12 +11,13 @@ import ai_config as cfg
 import ai_conversation as conv
 import ai_logs as logs
 import ip_banning as ip_ban
+import data_share as ds
 
 # Variables
 max_buffer_length: int = 4096
 max_users: int = 1000
 requires_api_key: bool = cfg.current_data.force_api_key
-queue: int = 0
+queue: dict[str, int] = {}
 args: list[str] = []
 plugins: list[str] = cb.basics.Plugins.FromStr(cfg.current_data.enabled_plugins)
 times: dict[str, list[float]] = {
@@ -33,17 +34,14 @@ times: dict[str, list[float]] = {
     "sc": [],
     "nsfw_filter-text": [],
     "nsfw_filter-image": [],
-    "tts": []
+    "tts": [],
+    "uvr": [],
+    "img2img": []
 }
-__version__: str = "v4.2.0"
+__version__: str = "v5.1.0"
 
 # Server
 def CheckFiles() -> None:
-    if (not os.path.exists("openai_api_key.txt")):
-        with open("openai_api_key.txt", "w+") as f:
-            f.write("")
-            f.close()
-    
     if (not os.path.exists("API/")):
         os.mkdir("API/")
     
@@ -97,46 +95,148 @@ def __get_args__(ai_args: str) -> list[str]:
     
     return args
 
-def __print__(data: str = "", p: bool = False) -> None:
-    if (p):
-        logs.AddToLog("PRINT: " + str(data))
+def __print__(data: str = "") -> None:
+    logs.AddToLog("PRINT: " + str(data))
+    print(str(data))
 
-        while queue > 0:
-            threading.Event().wait(0.1)
-        
-        print(data)
-        return
-
-    t = threading.Thread(target = __print__, args = (data, True))
-    t.start()
-
-def __prompt__(prompt: str, args: str, extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
+def __prompt__(service: str, prompt: str, args: str, extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
     global queue
-    queue += 1
 
-    while (queue > cfg.current_data.max_prompts):
-        threading.Event().wait(0.1)
+    if (list(queue.keys()).count(service) == 0):
+        queue[service] = 0
 
-    response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
-    queue -= 1
+    queue[service] += 1
+
+    while (__get_queue_users__(service) > cfg.current_data.max_prompts):
+        threading.Event().wait(1)
+    
+    if (service == "nsfw_filter-image"):
+        response = str(cb.FilterNSFWText(prompt)).lower()
+    elif (service == "nsfw_filter-text"):
+        response = cb.FilterNSFWText(prompt)
+    elif (service == "sc"):
+        response = cb.ClassifyText(prompt)
+    elif (service == "tr"):
+        prompt = json.loads(prompt)
+        response = cb.Translate(prompt["tr"], prompt["prompt"])
+    elif (service == "whisper"):
+        response = cb.RecognizeAudio(prompt)
+    elif (service == "img2text"):
+        response = cb.ImageToText(prompt)
+    elif (service == "od" or service == "de" or service == "rvc" or service == "uvr" or service == "img2img"):
+        response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, "-ncb-" + service, [], "", False, ["", ""], False)
+    else:
+        response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
+    
+    queue[service] -= 1
 
     return response
 
-def DoPrompt(prompt: str, args: str = "", extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
-    response = __prompt__(prompt, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
+def __get_queue_users__(service: str) -> int:
+    if (list(queue.keys()).count(service) == 0):
+        return 0
     
-    if (response["text_classification"] == "0 stars"):
-        cb.current_emotion = "angry"
-    elif (response["text_classification"] == "1 stars"):
-        cb.current_emotion = "sad"
-    elif (response["text_classification"] == "4 stars"):
-        cb.current_emotion = "happy"
-    else:
-        try:
-            cb.current_emotion = str(int(response["text_classification"]))
-            cb.current_emotion = "neutral"
-        except:
-            cb.current_emotion = response["text_classification"]
+    return queue[service]
+
+def __predict_queue_time__(service: str) -> float:
+    if (list(times.keys()).count(service) == 0):
+        return -1
+    
+    predictedTime = 0
+    
+    for t in times[service]:
+        predictedTime += t
+
+    return predictedTime / (len(times[service]) if (len(times[service]) > 0) else 1)
+
+def __send_share_data__(Data: str | bytes) -> list[tuple[bool, str, websockets.WebSocketClientProtocol]]:
+    ds.Servers = cfg.current_data.data_share_servers
+    
+    loop = asyncio.new_event_loop()
+    results = loop.run_until_complete(ds.SendToAllServers(Data))
+
+    return results
+
+def __share_data__(UserPrompt: str, UserFiles: dict[str, str | bytes], Response: str, ResponseFiles: dict[str, str | bytes]) -> None:
+    if (not cfg.current_data.allow_data_share):
+        return
+    
+    userFiles = []
+    responseFiles = []
+    
+    for ft in UserFiles:
+        for f in UserFiles[ft]:
+            t = "unknown"
+
+            if (ft == "images" or ft == "image"):
+                t = "image"
+            elif (ft == "audios" or ft == "audio"):
+                t = "audio"
+            elif (ft == "videos" or ft == "video"):
+                t = "video"
+            elif (ft == "documents" or ft == "document"):
+                t = "document"
+            
+            userFiles.append({"Type": t, "Data": f})
+    
+    for ft in ResponseFiles:
+        for f in ResponseFiles[ft]:
+            t = "unknown"
+
+            if (ft == "images" or ft == "image"):
+                t = "image"
+            elif (ft == "audios" or ft == "audio"):
+                t = "audio"
+            elif (ft == "videos" or ft == "video"):
+                t = "video"
+            elif (ft == "documents" or ft == "document"):
+                t = "document"
+            
+            responseFiles.append({"Type": t, "Data": f})
+
+    data = {
+        "UserText": UserPrompt,
+        "ResponseText": Response,
+        "UserFiles": userFiles,
+        "ResponseFiles": responseFiles
+    }
+    
+    try:
+        results = []
+        dataThread = threading.Thread(target = lambda: results.extend(__send_share_data__(json.dumps(data))))
+        dataThread.start()
+        dataThread.join()
+
+        for result in results:
+            logs.AddToLog("[DATA SHARE] Result for '" + ds.Servers[results.index(result)] + "': '" + result[1] + "'.")
+
+            if (result[0]):
+                __print__("[DATA SHARE] Sent without errors to the server '" + ds.Servers[results.index(result)] + "'.")
+            else:
+                __print__("[DATA SHARE] Error sending to the server '" + ds.Servers[results.index(result)] + "'.")
+    except Exception as ex:
+        logs.AddToLog("[DATA SHARE] Error sending to ALL servers. Error: " + str(ex))
+        __print__("[DATA SHARE] Error sending to ALL servers. Please check logs for more info.")
+
+def DoPrompt(service: str, prompt: str, args: str = "", extra_system_messages: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
+    response = __prompt__(service, prompt, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
+    
+    try:
+        if (response["text_classification"] == "0 stars"):
+            cb.current_emotion = "angry"
+        elif (response["text_classification"] == "1 stars"):
+            cb.current_emotion = "sad"
+        elif (response["text_classification"] == "4 stars"):
+            cb.current_emotion = "happy"
+        else:
+            try:
+                cb.current_emotion = str(int(response["text_classification"]))
+                cb.current_emotion = "neutral"
+            except:
+                cb.current_emotion = response["text_classification"]
+    except Exception as ex:
+        logs.AddToLog("Error detecting emotion: " + str(ex))
+        cb.current_emotion = "neutral"
 
     return response
 
@@ -204,10 +304,16 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = DoPrompt(command[13:], "", esm, translator, True, conver, use_default_sys_prompts)
+        res = DoPrompt("chatbot", command[13:], "", esm, translator, True, conver, use_default_sys_prompts)
 
         if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+        
+        try:
+            __share_data__(command[13:], {}, res["response"], res["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -218,14 +324,17 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        p = command[9:len(command)]
+        p = command[9:]
         np = ""
 
         if (p.__contains__("[NEGATIVE]")):
-            np = p[p.index("[NEGATIVE]") + 10:len(p)].strip()
-            p = p[0:p.index("[NEGATIVE]")].strip()
+            np = p[p.index("[NEGATIVE]") + 10:].strip()
+            p = p[:p.index("[NEGATIVE]")].strip()
+        elif (p.__contains__("(NEGATIVE)")):
+            np = p[p.index("(NEGATIVE)") + 10:].strip()
+            p = p[:p.index("(NEGATIVE)")].strip()
 
-        res = DoPrompt(json.dumps({
+        res = DoPrompt("text2img", json.dumps({
             "prompt": p,
             "negative_prompt": np
         }), "-ncb-img", esm, translator, True, conver, use_default_sys_prompts)
@@ -233,8 +342,11 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
 
-        if (len(res["errors"]) > 0):
-            __print__("Errors: " + (e + "\n" for e in res["errors"]))
+        try:
+            __share_data__(command[9:], {}, res["response"], res["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -245,10 +357,16 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = DoPrompt(command[9:], "-ncb-aud", esm, translator, True, conver, use_default_sys_prompts)
+        res = DoPrompt("text2audio", command[9:], "-ncb-aud", esm, translator, True, conver, use_default_sys_prompts)
 
         if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+
+        try:
+            __share_data__(command[9:], {}, res["response"], res["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -282,10 +400,16 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", cfg.current_data.prompt_order, "-ncb-de", esm, translator)
+        img = DoPrompt("de", "temp_img_" + str(tid) + ".png", "", [], "", False, ["", ""], False)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+        
+        try:
+            __share_data__("", {"images": ["temp_img_" + str(tid) + ".png"]}, "", img["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -320,10 +444,16 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        img = cb.MakePrompt("temp_img_" + str(tid) + ".png", cfg.current_data.prompt_order, "-ncb-od", esm, translator)
+        img = DoPrompt("od", "temp_img_" + str(tid) + ".png", "", [], "", False, ["", ""], False)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+        
+        try:
+            __share_data__("", {"images": ["temp_img_" + str(tid) + ".png"]}, "", img["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -339,24 +469,19 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         return sb.GenerateKey(-1, True)["key"]
     elif (command == "getallkeys" and admin and requires_api_key):
         return str(sb.GetAllKeys())
-    elif (command.startswith("get_queue")):
-        q = int(queue / cfg.current_data.max_prompts)
-        pt = {}
+    elif (command.startswith("get_queue ")):
+        queueType = command[10:]
+        
+        try:
+            queueUsers = __get_queue_users__(queueType)
+            queueTime = __predict_queue_time__(queueType)
+        except Exception as ex:
+            __print__("ERROR ON QUEUE: " + str(ex))
+            logs.AddToLog("ERROR ON QUEUE: " + str(ex))
 
-        for tkey in times:
-            t = 0
+            raise Exception("Error obtaining the queue.")
 
-            if (len(times[tkey]) > 0):
-                for tval in times[tkey]:
-                    t += tval
-                
-                t = t / len(times[tkey])
-            else:
-                t = -1
-            
-            pt[tkey] = t * (q + 1)
-
-        return str({"queue": q, "time": pt})
+        return str({"queue": queueUsers, "time": queueTime})
     elif (command.startswith("version")):
         return str(__version__)
     elif (command.startswith("clear_my_history")):
@@ -393,11 +518,16 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        img = cb.ImageToText("temp_img_" + str(tid) + ".png")
-        img = cb.MakePrompt(img, cfg.current_data.prompt_order, "-ncb-tr", esm, translator)
+        img = DoPrompt("img2text", "temp_img_" + str(tid) + ".png", "", [], "", False, ["", ""], False)
 
         if (img["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+        
+        try:
+            __share_data__("", {"images": ["temp_img_" + str(tid) + ".png"]}, img["response"], img["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -429,25 +559,25 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             f.write(audio_bytes)
             f.close()
 
-        audio = json.loads(cb.RecognizeAudio("temp_audio_" + str(tid) + ".wav"))
-        text = audio["text"]
-        lang = audio["lang"]
-
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        text = cb.MakePrompt(text, cfg.current_data.prompt_order, "-ncb-tr", esm, translator)
-        audio = json.dumps({
-            "text": text["response"],
-            "lang": lang
-        })
+        audio = DoPrompt("whisper", "temp_audio_" + str(tid) + ".wav", "", [], "", False, ["", ""], False)
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
             __add_queue_time__("whisper", end_timer - start_timer)
 
-        if (text["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
+        if (audio["error"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+        
+        audio = json.dumps(audio)
+
+        try:
+            __share_data__("", {"audios": ["temp_audio_" + str(tid) + ".wav"]}, audio, {})
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         os.remove("temp_audio_" + str(tid) + ".wav")
         return str(audio)
@@ -455,10 +585,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         audio = command[7:]
         audio_bytes = b""
 
-        try:
-            audio = json.loads(audio)
-        except:
-            audio = eval(audio)
+        audio = cfg.JSONDeserializer(audio)
         
         if (not os.path.exists("ReceivedFiles/" + audio["input"] + ".enc_file")):
             return "The file id '" + audio["input"] + "' doesn't exists!"
@@ -482,7 +609,13 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        aud_output = cb.MakePrompt(json.dumps(audio), cfg.current_data.prompt_order, "-ncb-rvc", [], "", False, ["", ""], False)
+        aud_output = DoPrompt("rvc", json.dumps(audio), "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__("", {"audios": ["temp_audio_" + str(tid) + ".wav"]}, "", aud_output["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -499,7 +632,13 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        response = cb.Translate(translator, prompt)
+        response = DoPrompt("tr", json.dumps({"tr": translator, "prompt": prompt}), "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__(prompt, {}, response["response"], response["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -512,7 +651,13 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        response = cb.ClassifyText(prompt)
+        response = DoPrompt("sc", prompt, "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__(prompt, {}, response["response"], response["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -525,7 +670,13 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
 
-        response = str(cb.FilterNSFWText(prompt)).lower()
+        response = DoPrompt("nsfw_filter-text", prompt, "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__(prompt, {}, response["response"], response["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -559,7 +710,13 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        img = cb.FilterNSFWImage("temp_img_" + str(tid) + ".png")
+        img = DoPrompt("nsfw_filter-image", "temp_img_" + str(tid) + ".png", "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__("", {"images": ["temp_img_" + str(tid) + ".png"]}, img["response"], img["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
@@ -571,23 +728,114 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
         
-        res = DoPrompt(command[4:], "-ncb-tts", [], "", True, conver, use_default_sys_prompts)
+        res = DoPrompt("tts", command[4:], "-ncb-tts", [], "", True, conver, use_default_sys_prompts)
 
         if (res["errors"].count("NSFW") > 0 and cfg.current_data.ban_if_nsfw and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
+        
+        try:
+            __share_data__(command[4:], {}, res["response"], res["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
 
         if (cfg.current_data.enable_predicted_queue_time):
             end_timer = time.time()
             __add_queue_time__("tts", end_timer - start_timer)
 
         return res
+    elif (command.startswith("ai_uvr ")):
+        """audio = command[7:]
+        audio_bytes = b""
+
+        audio = cfg.JSONDeserializer(audio)
+        
+        if (not os.path.exists("ReceivedFiles/" + audio["input"] + ".enc_file")):
+            return "The file id '" + audio["input"] + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + audio["input"] + "_file", "rb") as f:
+            audio_bytes = f.read()
+            f.close()
+        
+        tid = 0
+
+        while (os.path.exists("temp_audio_" + str(tid) + ".wav")):
+            tid += 1
+        
+        with open("temp_audio_" + str(tid) + ".wav", "wb") as f:
+            f.write(audio_bytes)
+            f.close()
+
+        audio_name = "temp_audio_" + str(tid) + ".wav"
+        audio["input"] = audio_name
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        aud_output = DoPrompt("uvr", json.dumps(audio), "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__("", {"audios": ["temp_audio_" + str(tid) + ".wav"]}, "", aud_output["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("uvr", end_timer - start_timer)
+
+        os.remove("temp_audio_" + str(tid) + ".wav")
+        return str(aud_output)"""
+        return str("ERROR: Under development.")
+    elif (command.startswith("ai_img_to_img ")):
+        image = command[14:]
+        img_bytes = b""
+
+        image = cfg.JSONDeserializer(image)
+        
+        if (not os.path.exists("ReceivedFiles/" + image["image"] + ".enc_file")):
+            return "The file id '" + image["image"] + "' doesn't exists!"
+        
+        with open("ReceivedFiles/" + image["image"] + "_file", "rb") as f:
+            img_bytes = f.read()
+            f.close()
+        
+        tid = 0
+
+        while (os.path.exists("temp_img_" + str(tid) + ".png")):
+            tid += 1
+        
+        with open("temp_img_" + str(tid) + ".png", "wb") as f:
+            f.write(img_bytes)
+            f.close()
+
+        img_name = "temp_img_" + str(tid) + ".png"
+        image["image"] = img_name
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            start_timer = time.time()
+
+        img_output = DoPrompt("img2img", json.dumps(image), "", [], "", False, ["", ""], False)
+
+        try:
+            __share_data__("", {"images": ["temp_image_" + str(tid) + ".png"]}, "", img_output["files"])
+        except Exception as ex:
+            logs.AddToLog("Could not send data to data server: " + str(ex))
+            __print__("Could not send data to data server: " + str(ex))
+
+        if (cfg.current_data.enable_predicted_queue_time):
+            end_timer = time.time()
+            __add_queue_time__("img2img", end_timer - start_timer)
+
+        os.remove("temp_img_" + str(tid) + ".png")
+        return str(img_output)
     elif (command.startswith("ban ") and admin):
-        if (ip_ban.BanIP(command[4:len(command)])):
+        if (ip_ban.BanIP(command[4:])):
             __print__("IP banned!")
         else:
             __print__("This IP is already banned.")
     elif (command.startswith("unban ") and admin):
-        if (ip_ban.UnbanIP(command[6:len(command)])):
+        if (ip_ban.UnbanIP(command[6:])):
             __print__("IP unbanned!")
         else:
             __print__("This IP isn't banned.")
@@ -610,9 +858,10 @@ def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
     __print__("Executing service without API key: " + service)
 
     try:
-        if (service.lower().startswith("get_queue")):
+        if (service.lower().startswith("get_queue ")):
             # Get queue
-            server_response = run_server_command("-u get_queue", extra_data)
+            prompt = service[10:].strip()
+            server_response = run_server_command("-u get_queue " + prompt, extra_data)
         elif (service.lower().startswith("get_tos")):
             # Get Terms Of Service (TOS)
             server_response = "ERROR: Could not get TOS file."
@@ -710,10 +959,20 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             key_data["tokens"] -= 2.5
             server_response = run_server_command("-u is_nsfw_image " + service[11:], extra_data)
         elif (service.startswith("service_13 ")):
-            # NSFW image filter
+            # TTS
             
             key_data["tokens"] -= 5
             server_response = run_server_command("-u tts " + service[11:], extra_data)
+        elif (service.startswith("service_14 ")):
+            # UVR
+            
+            key_data["tokens"] -= 20
+            server_response = run_server_command("-u ai_uvr " + service[11:], extra_data)
+        elif (service.startswith("service_15 ")):
+            # Image To Image
+            
+            key_data["tokens"] -= 25
+            server_response = run_server_command("-u ai_img_to_img " + service[11:], extra_data)
         elif (service.lower().startswith("clear_my_history") and cfg.current_data.save_conversations):
             # Clear chat history
             try:
@@ -757,7 +1016,7 @@ def on_receive(data: dict[str]) -> dict:
         extra_data = dict(data["extra_data"])
     except:
         try:
-            extra_data = json.loads(data["extra_data"])
+            extra_data = cfg.JSONDeserializer(data["extra_data"])
         except:
             logs.AddToLog("Could not load received extra_data, using default.")
             extra_data = {
@@ -815,7 +1074,7 @@ async def handle_client_ws(websocket) -> None:
 
         try:
             data = await websocket.recv()
-            data = json.loads(data)
+            data = cfg.JSONDeserializer(data)
         except:
             data = {}
 

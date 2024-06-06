@@ -1,21 +1,34 @@
-MIT License
+TAO71 License v1.1.1 (TAO71 License 111)
 
-Copyright (c) 2023 TAO71-AI
+--- Copyright notice ---
+Copyright (c) 2024 TAO71-AI
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+THE MATERIAL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM OUT OF OR IN CONNECTION WITH THE MATERIAL OR THE USE OR OTHER DEALINGS IN THE MATERIAL.
+--- End of copyright notice ---
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+0. General conditions:
+All the distributions, modifications, etc. of the licensed material must apply this conditions:
+-You can modify, merge, publish, distribute, sublicense, sell and use copies of the material.
+-TAO71, material authors and collaborators are not responsible of what you do to/with this material.
+-You can't use the name (or username) of TAO71, material authors and collaborators to announce or promote anything.
+-Any version of the material that is not licensed under this license don't need to apply the conditions of this license.
+-The license of alredy published versions of the material MUST NOT be modified.
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+1. Software
+If the licensed material is software (programs, code, videogames, etc.), the following conditions will apply to the licensed material and machine-executable versions of the licensed material:
+-The above copyright notice can be included, but it's not required.
+
+2. Assets
+If the licensed material is an asset (images, audios, etc.), the following conditions will apply:
+-The above copyright notice MUST be included.
+
+3. AI models
+If the licensed material is an AI model (of any type or task), the following conditions will apply:
+-The AI model MUST be Open-Source.
+-Modifications or fine-tunes of the licensed AI models can be Open-Source, but it's not required unless it uses this license or another license that says it.
+-The above copyright notice MUST be included in modifications of the AI models.
+
+4. Datasets
+If the licensed material is a dataset, the following conditions will apply:
+-The above copyright notice MUST be included in modifications of the dataset.
+-AI models trained or fine-tuned with this dataset can include the above copyright notice, but it's not required.

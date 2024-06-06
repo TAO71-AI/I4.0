@@ -1,12 +1,9 @@
-from transformers import pipeline, Pipeline
+from transformers import Pipeline
 import PIL.Image
 import ai_config as cfg
 
 pipe: Pipeline = None
 device: str = "cpu"
-
-def __load_model__(model_name: str, device: str) -> Pipeline:
-    return pipeline("image-to-text", model = model_name, device = device)
 
 def LoadModel() -> None:
     global pipe, device
@@ -16,13 +13,17 @@ def LoadModel() -> None:
 
     if (pipe != None):
         return
-    
-    device = cfg.GetGPUDevice("img2text")
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'image to text' on device '" + device + "'...")
+        print("Loading model 'image to text' on device...")
 
-    pipe = __load_model__(cfg.current_data.img_to_text_model, device)
+    data = cfg.LoadPipeline("image-to-text", "img2text", cfg.current_data.img_to_text_model)
+
+    pipe = data[0]
+    device = data[1]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device + "'.")
 
 def MakePrompt(img: str) -> str:
     LoadModel()

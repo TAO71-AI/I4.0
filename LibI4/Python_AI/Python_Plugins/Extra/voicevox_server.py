@@ -1,3 +1,8 @@
+"""
+NOTE: This file is deprecated and will not be updated. It also may be removed in the future.
+If you want to use something similar to voicevox, please use I4.0's TTS and then use RVC with the voice you want.
+"""
+
 from voicevox import Client
 import asyncio
 import socket

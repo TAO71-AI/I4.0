@@ -1,65 +1,73 @@
+from transformers import Pipeline, pipeline, AutoModel, AutoTokenizer
+from diffusers import AutoPipelineForText2Image
 import os
 import json
 import torch
 
+devices: list[str] = []
+
 class ConfigData:
-    gpt4all_model: str = "mistral-7b-instruct-v0.1.Q4_0.gguf"
-    hf_model: str = "gpt2"
-    text_classification_model: str = "joeddav/distilbert-base-uncased-go-emotions-student"
-    translation_model_multiple: str = "Helsinki-NLP/opus-mt-mul-en"
-    translation_models: dict[str, str] = {
-        "spanish": "Helsinki-NLP/opus-mt-en-es"
+    gpt4all_model: str = "mistral-7b-instruct-v0.1.Q4_0.gguf"                                   # Sets the GPT4All model.
+    hf_model: str = "gpt2"                                                                      # Sets the HuggingFace (Text-Generation) model.
+    text_classification_model: str = "joeddav/distilbert-base-uncased-go-emotions-student"      # Sets the HuggingFace (Text-Classification) model.
+    translation_classification_model: str = "papluca/xlm-roberta-base-language-detection"       # Sets the HuggingFace (Text-Classification) model used for detecting the language of the prompt.
+    translation_models: dict[str, str] = {}                                                     # Sets the HuggingFace (Translation) models.
+    server_language: str = "en"                                                                 # Sets the default language to translate a prompt.
+    whisper_model: str = "tiny"                                                                 # Sets the default Whisper model.
+    image_generation_model: str = "SimianLuo/LCM_Dreamshaper_v7"                                # Sets the default HuggingFace (TextToImage) model.
+    image_generation_steps: int = 10                                                            # Sets the generation steps for an image on the TextToImage model.
+    img_to_text_model: str = "Salesforce/blip-image-captioning-base"                            # Sets the HuggingFace (ImageToText) model.
+    text_to_audio_model: str = "suno/bark-small"                                                # Sets the HuggingFace (TextToAudio) model.
+    nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"                                      # Sets the HuggingFace (Text-Classification) model used for NSFW detection on text.
+    nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"                             # Sets the HuggingFace (Image-Classification) model used for NSFW detection on image.
+    depth_estimation_model: str = "Intel/dpt-beit-base-384"                                     # Sets the HuggingFace (Depth-Estimation) model.
+    object_detection_model: str = "hustvl/yolos-tiny"                                           # Sets the HuggingFace (Object-Detection) model.
+    rvc_models: dict[str, tuple[str, str, str]] = {}                                            # Sets the RVC models (must be on your local stogare).
+    uvr_model: str = "9-HP2"                                                                    # Sets the UVR model (must be on your local storage).
+    image_to_image_model: str = "stabilityai/stable-diffusion-xl-refiner-1.0"                   # Sets the HuggingFace (ImageToImage) model.
+    i2i_steps: int = 10                                                                         # Sets the steaps for an image on the ImageToImage model.
+    force_api_key: bool = True                                                                  # Makes API keys required for using the AI models.
+    low_cpu_or_memory: bool = False                                                             # [DEPRECATED, soon will be deleted] Uses less resources of your machine on the `hf` chatbot.
+    max_length: int = 250                                                                       # Sets the max length that the chatbots (`g4a`, `hf`...) can generate.
+    use_chat_history: bool = True                                                               # Allows the chatbots to have memory.
+    use_dynamic_system_args: bool = True                                                        # Creates some extra system prompt for the chatbots (example: the current date, the state of humour...).
+    prompt_order: str = ""                                                                      # Sets the models that will be loaded.
+    move_to_gpu: str = "g4a hf text2img img2text text2audio rvc uvr"                            # Sets the models that will be loaded on your GPU(s) [must also be in `prompt_order` and `use_gpu_if_available` must be active].
+    use_gpu_if_available: bool = False                                                          # Allow the use of your GPU(s).
+    ai_args: str = ""                                                                           # Sets some default args for the chatbot (mostly to define the personality, like: +evil, +self-aware...). Can be changed by the user.
+    custom_system_messages: str = ""                                                            # Sets a custom system prompt from the server.
+    system_messages_in_first_person: bool = False                                               # [DEPRECATED, soon will be deleted] Replaces `you're`, `you`... with `I'm`, `I`...
+    use_default_system_messages: bool = True                                                    # Use pre-defined system prompt.
+    temp: float = 0.5                                                                           # Sets the temperature used for the models.
+    save_conversations: bool = True                                                             # Saves the conversations on the disk [`use_chat_history` must be active].
+    keys_db: dict[str, str] = {                                                                 # Allows the usage of a database for the API keys.
+        "use": "false",                                                                             # Sync API keys with database.
+        "server": "127.0.0.1",                                                                      # Database server IP.
+        "user": "root",                                                                             # Database user.
+        "password": "",                                                                             # Database password.
+        "database": "",                                                                             # Database name.
+        "table": "keys"                                                                             # Database table.
     }
-    whisper_model: str = "tiny"
-    openai_model: str = "gpt-3.5-turbo"
-    image_generation_model: str = "SimianLuo/LCM_Dreamshaper_v7"
-    image_generation_steps: int = 10
-    img_to_text_model: str = "Salesforce/blip-image-captioning-base"
-    text_to_audio_model: str = "suno/bark-small"
-    nsfw_filter_text_model: str = "feruskas/CADD-NSFW-SFW"
-    nsfw_filter_image_model: str = "Falconsai/nsfw_image_detection"
-    depth_estimation_model: str = "Intel/dpt-beit-base-384"
-    object_detection_model: str = "hustvl/yolos-tiny"
-    rvc_models: dict[str, tuple[str, str, str]] = {}
-    force_api_key: bool = True
-    low_cpu_or_memory: bool = False
-    max_length: int = 250
-    use_chat_history: bool = True
-    use_dynamic_system_args: bool = True
-    prompt_order: str = "tr sc g4a nsfw_filter-text"
-    move_to_gpu: str = "tr sc g4a hf text2img img2text text2audio nsfw_filter-text nsfw_filter-image whisper od"
-    use_gpu_if_available: bool = False
-    ai_args: str = ""
-    custom_system_messages: str = ""
-    system_messages_in_first_person: bool = False
-    use_default_system_messages: bool = True
-    temp: float = 0.5
-    save_conversations: bool = True
-    keys_db: dict[str, str] = {
-        "use": "false",
-        "server": "127.0.0.1",
-        "user": "root",
-        "password": "",
-        "database": "",
-        "table": "keys"
-    }
-    print_prompt: bool = False
-    allow_titles: bool = True
-    max_prompts: int = 1
-    use_multi_model: bool = False
-    multi_model_mode: str = "longest"
-    print_loading_message: bool = True
-    enable_predicted_queue_time: bool = True
-    enabled_plugins: str = "sing vtuber discord_bot voicevox twitch gaming image_generation"
-    use_only_latest_log: bool = True
-    max_predicted_queue_time: int = 20
-    allow_processing_if_nsfw: bool = False
-    ban_if_nsfw: bool = True
-    use_local_ip: bool = False
-    auto_start_rec_files_server: bool = True
-    seed: int = -1
-    gpu_device: str = "cuda"
-    use_other_services_on_chatbot: bool = False
+    print_prompt: bool = False                                                                  # Prints the user's prompt on the screen (recommended only for personal use).
+    allow_titles: bool = True                                                                   # If the chatbot response starts with `[`, contains `]` and have something between this characters, sets that as the title of the conversation.
+    max_prompts: int = 1                                                                        # Sets the max prompts that can be processed at a time.
+    use_multi_model: bool = False                                                               # Gets a response from all the chatbots loaded, using the same prompt, system prompts and conversation.
+    multi_model_mode: str = "longest"                                                           # [`use_multi_model` must be active] The final response that the server will return to the user.
+    print_loading_message: bool = True                                                          # Prints a message when any model is loading.
+    enable_predicted_queue_time: bool = True                                                    # Predict the time that the queue will take.
+    enabled_plugins: str = "sing vtuber discord_bot voicevox twitch gaming image_generation"    # I4.0 plugins that creates more system prompts.
+    use_only_latest_log: bool = True                                                            # Only saves the latest log file.
+    max_predicted_queue_time: int = 20                                                          # The max queue times saved that will be used for queue prediction.
+    allow_processing_if_nsfw: bool = False                                                      # Allows the processing of a prompt even if it's detected as NSFW.
+    ban_if_nsfw: bool = True                                                                    # Bans the IP address if a NSFW prompt is detected from that IP address.
+    use_local_ip: bool = False                                                                  # Disables the public IP address use for the server (only accepts conenctions from `127.0.0.1`, recommended for personal use).
+    auto_start_rec_files_server: bool = True                                                    # Starts the receive files server when the I4.0's server is started.
+    seed: int = -1                                                                              # Sets the seed used for some AI models (-1 = randomize).
+    gpu_device: str = "cuda"                                                                    # Sets the GPU(s) device(s) that can be used.
+    use_other_services_on_chatbot: bool = False                                                 # Uses other services (like translation) before or after using the chatbot (If this is not active, NSFW detection will also be used if it is in `prompt_order` and `allow_processing_if_nsfw` is not active or `ban_if_nsfw` is active).
+    allow_data_share: bool = True                                                               # Allows data sharing to TAO71's servers to make a better dataset for I4.0 and train AI models on that dataset (shares the user's prompt [files included], service used and the server's response and it's 100% anonymous).
+    data_share_servers: list[str] = ["tao71.sytes.net"]                                         # List of servers to share the data.
+    data_share_timeout: float = 2.5                                                             # Seconds to wait per server response on data share.
 
 def Init() -> None:
     if (not os.path.exists("config.tcfg")):
@@ -99,22 +107,20 @@ def ReadConfig() -> ConfigData:
                 data.hf_model = config_dict[i]
             elif (il == "text_classification_model"):
                 data.text_classification_model = config_dict[i]
-            elif (il == "translation_model_mult"):
-                data.translation_model_multiple = config_dict[i]
+            elif (il == "translation_classification_model"):
+                data.translation_classification_model = config_dict[i]
             elif (il == "translation_models"):
                 try:
-                    models = json.loads(config_dict[i])
+                    data.translation_models = json.loads(config_dict[i])
                 except:
-                    models = {
-                        "spanish": "Helsinki-NLP/opus-mt-en-es"
+                    data.translation_models = {
+                        "en-es": "Helsinki-NLP/opus-mt-en-es",
+                        "es-en": "Helsinki-NLP/opus-mt-es-en"
                     }
-                
-                for lang in models:
-                    data.translation_models[lang.lower()] = models[lang]
+            elif (il == "server_language"):
+                data.server_language = config_dict[i]
             elif (il == "whisper_model"):
                 data.whisper_model = config_dict[i]
-            elif (il == "openai_model"):
-                data.openai_model = config_dict[i]
             elif (il == "image_generation_model"):
                 data.image_generation_model = config_dict[i]
             elif (il == "image_generation_steps"):
@@ -139,6 +145,15 @@ def ReadConfig() -> ConfigData:
                     data.rvc_models = json.loads(config_dict[i])
                 except:
                     data.rvc_models = {}
+            elif (il == "uvr_model"):
+                data.uvr_model = config_dict[i]
+            elif (il == "image_to_image_model"):
+                data.image_to_image_model = config_dict[i]
+            elif (il == "i2i_steps"):
+                try:
+                    data.i2i_steps = int(config_dict[i])
+                except:
+                    data.i2i_steps = 10
             elif (il == "force_api_key"):
                 data.force_api_key = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "low_cpu_or_memory"):
@@ -168,7 +183,7 @@ def ReadConfig() -> ConfigData:
                 data.use_default_system_messages = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
             elif (il == "temp"):
                 try:
-                    data.temp = int(config_dict[i])
+                    data.temp = float(config_dict[i])
 
                     if (data.temp < 0):
                         data.temp = 0
@@ -240,6 +255,21 @@ def ReadConfig() -> ConfigData:
                 data.gpu_device = config_dict[i]
             elif (il == "use_other_services_on_chatbot"):
                 data.use_other_services_on_chatbot = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "allow_data_share"):
+                data.allow_data_share = (config_dict[i].lower() == "true" or config_dict[i].lower() == "yes")
+            elif (il == "data_share_servers"):
+                try:
+                    data.data_share_servers = json.loads(config_dict[i])
+                except:
+                    pass
+            elif (il == "data_share_timeout"):
+                try:
+                    data.data_share_timeout = float(config_dict[i])
+
+                    if (data.data_share_timeout < 0):
+                        data.data_share_timeout = 0
+                except:
+                    data.data_share_timeout = 2.5
         
         f.close()
     
@@ -260,10 +290,10 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "gpt4all_model=" + cfg.gpt4all_model + "\n"
     text += "hf_model=" + cfg.hf_model + "\n"
     text += "text_classification_model=" + cfg.text_classification_model + "\n"
-    text += "translation_model_mult=" + cfg.translation_model_multiple + "\n"
+    text += "translation_classification_model=" + cfg.translation_classification_model + "\n"
     text += "translation_models=" + json.dumps(cfg.translation_models) + "\n"
+    text += "server_language=" + cfg.server_language + "\n"
     text += "whisper_model=" + cfg.whisper_model + "\n"
-    text += "openai_model=" + cfg.openai_model + "\n"
     text += "image_generation_model=" + cfg.image_generation_model + "\n"
     text += "image_generation_steps=" + str(cfg.image_generation_steps) + "\n"
     text += "img_to_text_model=" + cfg.img_to_text_model + "\n"
@@ -273,6 +303,9 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "depth_estimation_model=" + cfg.depth_estimation_model + "\n"
     text += "object_detection_model=" + cfg.object_detection_model + "\n"
     text += "rvc_models=" + json.dumps(cfg.rvc_models) + "\n"
+    text += "uvr_model=" + cfg.uvr_model + "\n"
+    text += "image_to_image_model=" + cfg.image_to_image_model + "\n"
+    text += "i2i_steps=" + str(cfg.i2i_steps) + "\n"
     text += "force_api_key=" + ("true" if cfg.force_api_key == True else "false") + "\n"
     text += "low_cpu_or_memory=" + ("true" if cfg.low_cpu_or_memory == True else "false") + "\n"
     text += "max_length=" + str(cfg.max_length) + "\n"
@@ -305,30 +338,137 @@ def SaveConfig(cfg: ConfigData = None) -> None:
     text += "seed=" + str(cfg.seed) + "\n"
     text += "gpu_device=" + cfg.gpu_device + "\n"
     text += "use_other_services_on_chatbot=" + ("true" if cfg.use_other_services_on_chatbot == True else "false") + "\n"
+    text += "allow_data_share=" + ("true" if cfg.allow_data_share == True else "false") + "\n"
+    text += "data_share_servers=" + json.dumps(cfg.data_share_servers) + "\n"
+    text += "data_share_timeout=" + str(cfg.data_share_timeout) + "\n"
 
     with open("config.tcfg", "w") as f:
         f.write(text.strip())
         f.close()
 
-def GetGPUDevice(Task: str) -> str:
-    move_to_gpu = False
-
-    if (current_data.gpu_device.strip().lower() == "cuda"):
-        move_to_gpu = torch.cuda.is_available()
-    elif (current_data.gpu_device.strip().lower() == "mps"):
-        move_to_gpu = torch.backends.mps.is_available()
-    elif (current_data.gpu_device.strip().lower() == "vulkan"):
-        move_to_gpu = torch.is_vulkan_available()
-    elif (current_data.gpu_device.strip().lower() == "openmp"):
-        move_to_gpu = torch.backends.openmp.is_available()
-    elif (current_data.gpu_device.strip().lower() == "cudnn"):
-        move_to_gpu = torch.backends.cudnn.is_available()
+def __get_gpu_devices__() -> None:
+    devices.clear()
+    
+    if (current_data.gpu_device.count(";") > 0):
+        devs = current_data.gpu_device.split(";")
     else:
-        raise Exception("Could not parse GPU device.")
+        devs = [current_data.gpu_device]
 
-    move_to_gpu = move_to_gpu and current_data.use_gpu_if_available and current_data.move_to_gpu.__contains__(Task)
-    device = current_data.gpu_device if (move_to_gpu) else "cpu"
+    for dev in devs:
+        dev = dev.strip().lower()
+        
+        if (dev.count(":") > 0):
+            devc = dev.split(":")[0].strip()
+        else:
+            devc = dev
 
-    return device
+        move_to_gpu = False
+
+        if (devc == "cuda"):
+            move_to_gpu = torch.cuda.is_available()
+        elif (devc == "mps"):
+            move_to_gpu = torch.backends.mps.is_available()
+        elif (devc == "vulkan"):
+            move_to_gpu = torch.is_vulkan_available()
+        elif (devc == "openmp"):
+            move_to_gpu = torch.backends.openmp.is_available()
+        elif (devc == "cudnn"):
+            move_to_gpu = torch.backends.cudnn.is_available()
+        
+        if (move_to_gpu):
+            devices.append(dev)
+
+def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
+    if (len(devices) == 0):
+        __get_gpu_devices__()
+    
+    if (Index < 0):
+        Index = 0
+    elif (Index >= len(devices)):
+        Index = len(devices) - 1
+    
+    if (current_data.use_gpu_if_available and current_data.move_to_gpu.count(Task) > 0):
+        return devices[Index]
+
+    return "cpu"
+
+def LoadPipeline(PipeTask: str, Task: str, ModelName: str) -> tuple[Pipeline, str]:
+    errors = []
+
+    if (len(devices) == 0):
+        __get_gpu_devices__()
+
+    for i in range(len(devices)):
+        dev = GetAvailableGPUDeviceForTask(Task, i)
+
+        try:
+            pipe = pipeline(task = PipeTask, model = ModelName, device = dev)
+            return (pipe, dev)
+        except Exception as ex:
+            errors.append(str(ex))
+    
+    raise Exception("Error creating transformers pipeline. Errors: " + str(errors))
+
+def LoadDiffusersPipeline(Task: str, ModelName: str, CustomPipelineType: type = None) -> tuple[any, str]:
+    errors = []
+
+    if (CustomPipelineType == None):
+        CustomPipelineType = AutoPipelineForText2Image
+    
+    if (len(devices) == 0):
+        __get_gpu_devices__()
+
+    for i in range(len(devices)):
+        dev = GetAvailableGPUDeviceForTask(Task, i)
+
+        try:
+            if (Task == "img2img"):
+                pipe = CustomPipelineType.from_pretrained(ModelName, safety_checker = None, requires_safety_checker = False)
+            else:
+                pipe = CustomPipelineType.from_pretrained(ModelName)
+
+            pipe = pipe.to(dev)
+            return (pipe, dev)
+        except Exception as ex:
+            errors.append(str(ex))
+    
+    raise Exception("Error creating diffusers pipeline. Errors: " + str(errors))
+
+def LoadModel(Task: str, ModelName: str, ModelType: type = None, TokenizerType: type = None) -> tuple[any, any, str]:
+    errors = []
+
+    if (ModelType == None):
+        ModelType = AutoModel
+    
+    if (TokenizerType == None):
+        TokenizerType = AutoTokenizer
+    
+    if (len(devices) == 0):
+        __get_gpu_devices__()
+
+    for i in range(len(devices)):
+        dev = GetAvailableGPUDeviceForTask(Task, i)
+
+        try:
+            model = ModelType.from_pretrained(ModelName).to(dev)
+            tokenizer = TokenizerType.from_pretrained(ModelName)
+
+            return (model, tokenizer, dev)
+        except Exception as ex:
+            errors.append(str(ex))
+    
+    raise Exception("Error creating model. Errors: " + str(errors))
+
+def JSONDeserializer(SerilizedText: str) -> dict:
+    try:
+        return json.loads(SerilizedText)
+    except:
+        if (SerilizedText.startswith("{") and SerilizedText.endswith("}")):
+            try:
+                return eval(SerilizedText)
+            except:
+                pass
+        
+        return json.loads(SerilizedText.replace("\'", "\""))
 
 current_data = ReadConfig()

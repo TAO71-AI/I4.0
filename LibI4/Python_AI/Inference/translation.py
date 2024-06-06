@@ -1,20 +1,15 @@
-from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, Pipeline
 import emoji
 import ai_config as cfg
 
-translation_tokenizer_1: AutoTokenizer = None
-translation_model_1: AutoModelForSeq2SeqLM = None
-device: str = "cpu"
+translation_classifier_model: Pipeline = None
+device_classifier: str = "cpu"
 
-models: dict[str, (AutoModelForSeq2SeqLM, AutoTokenizer)] = {}
+models: dict[str, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str]] = {}
 models_loaded: bool = False
 
-def __load_model__(model_name: str, device: str):
-    model = AutoModelForSeq2SeqLM.from_pretrained(model_name).to(device)
-    return model
-
 def LoadModels() -> None:
-    global translation_model_1, translation_tokenizer_1, models, models_loaded, device
+    global translation_classifier_model, models, models_loaded, device_classifier
 
     if (not cfg.current_data.prompt_order.__contains__("tr")):
         raise Exception("Models are not in 'prompt_order'.")
@@ -22,47 +17,93 @@ def LoadModels() -> None:
     if (models_loaded):
         return
 
-    device = cfg.GetGPUDevice("tr")
+    if (cfg.current_data.print_loading_message):
+        print("Loading model 'translation (classifier)'...")
+
+    if (translation_classifier_model == None):
+        dataClassifier = cfg.LoadPipeline("text-classification", "tr", cfg.current_data.translation_classification_model)
+
+        translation_classifier_model = dataClassifier[0]
+        device_classifier = dataClassifier[1]
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'translation' on device '" + device + "'...")
-
-    if (translation_model_1 == None or translation_tokenizer_1 == None):
-        translation_model_1 = __load_model__(cfg.current_data.translation_model_multiple, device)
-        translation_tokenizer_1 = AutoTokenizer.from_pretrained(cfg.current_data.translation_model_multiple)
+        print("   Loaded model on device '" + device_classifier + "'.")
     
     for model in cfg.current_data.translation_models:
+        if (cfg.current_data.print_loading_message):
+            print("Loading model 'translation (" + str(list(cfg.current_data.translation_models.keys()).index(model)) + ")'...")
+        
         name = cfg.current_data.translation_models[model]
-        models[model] = (__load_model__(name, device), AutoTokenizer.from_pretrained(name))
+        data = cfg.LoadModel("tr", name, AutoModelForSeq2SeqLM, AutoTokenizer)
+
+        models[model] = data
+
+        if (cfg.current_data.print_loading_message):
+            print("   Loaded model on device '" + data[2] + "'.")
     
     models_loaded = True
 
-def Translate(prompt: str, tokenizer: AutoTokenizer, model: AutoModelForSeq2SeqLM) -> str:
+def GetAvailableLanguages() -> list[str]:
+    return list(models.keys())
+
+def __translate__(prompt: str, language: str, tokenizer: AutoTokenizer, model: AutoModelForSeq2SeqLM, device: str) -> str:
     LoadModels()
 
-    prompt = prompt.strip()
-    prompt_noemoji = ""
-    
-    for character in prompt:
-        if (emoji.is_emoji(character)):
-            continue
-            
-        prompt_noemoji += character
+    if (cfg.current_data.print_prompt):
+        print("Translating using '" + language + "'.")
 
-    inputs = tokenizer.encode(prompt_noemoji, return_tensors = "pt")
+    prompt = prompt.strip()
+    prompt = emoji.demojize(prompt, delimiters = (":", ":"))
+
+    inputs = tokenizer.encode(prompt, return_tensors = "pt")
     inputs = inputs.to(device)
 
     response = model.generate(inputs)
     decoded_response = tokenizer.batch_decode(response, skip_special_tokens = True)[0]
 
     decoded_response = str(decoded_response)
+    decoded_response = emoji.emojize(decoded_response, delimiters = (":", ":"))
+
     return decoded_response
 
-def TranslateFrom1To2(prompt: str) -> str:
-    return Translate(prompt, translation_tokenizer_1, translation_model_1)
+def Translate(prompt: str, language: str) -> str:
+    LoadModels()
+    availableLanguages = GetAvailableLanguages()
 
-def TranslateFrom2To1(prompt: str, lang: str) -> str:
-    try:
-        return Translate(prompt, models[lang.lower()][1], models[lang.lower()][0])
-    except:
+    if (availableLanguages.count(language) == 0):
         return prompt
+    
+    model = models[language][0]
+    tokenizer = models[language][1]
+    device = models[language][2]
+
+    return __translate__(prompt, language, tokenizer, model, device)
+
+def GetLanguage(prompt: str) -> str:
+    LoadModels()
+
+    prompt = prompt.strip()
+    promptNoEmoji = ""
+
+    for c in prompt:
+        if (emoji.is_emoji(c)):
+            continue
+
+        promptNoEmoji += c
+    
+    promptNoEmoji = promptNoEmoji.strip()
+
+    result = translation_classifier_model(promptNoEmoji)
+    result = result[0]["label"]
+    result = str(result).lower()
+
+    if (len(result) == 0):
+        return "UNKNOWN"
+
+    return result
+
+def TranslateToServerLanguage(prompt: str, language: str) -> str:
+    return Translate(prompt, language + "-" + cfg.current_data.server_language)
+
+def TranslateFromServerLanguage(prompt: str, language: str) -> str:
+    return Translate(prompt, cfg.current_data.server_language + "-" + language)

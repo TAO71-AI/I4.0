@@ -1,25 +1,26 @@
-from diffusers import AutoPipelineForText2Image
+from diffusers import AutoPipelineForImage2Image
+from PIL import Image, ImageOps
 import torch
 import os
 import json
 import ai_config as cfg
 
-pipeline: AutoPipelineForText2Image = None
+pipeline: AutoPipelineForImage2Image = None
 device: str = "cpu"
 
 def LoadModel() -> None:
     global pipeline, device
 
-    if (not cfg.current_data.prompt_order.__contains__("text2img")):
+    if (not cfg.current_data.prompt_order.__contains__("img2img")):
         raise Exception("Model is not in 'prompt_order'.")
     
     if (pipeline != None):
         return
     
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'text to image'...")
+        print("Loading model 'image to image'...")
     
-    data = cfg.LoadDiffusersPipeline("text2img", cfg.current_data.image_generation_model, AutoPipelineForText2Image)
+    data = cfg.LoadDiffusersPipeline("img2img", cfg.current_data.image_to_image_model, AutoPipelineForImage2Image)
 
     pipeline = data[0]
     device = data[1]
@@ -27,18 +28,18 @@ def LoadModel() -> None:
     if (cfg.current_data.print_loading_message):
         print("   Loaded model on device '" + device + "'.")
 
-def GenerateImages(prompt: str | dict[str, str]) -> list[bytes]:
-    if (type(prompt) == dict[str, str]):
-        return __generate_images__(prompt["prompt"], prompt["negative_prompt"])
+def Prompt(prompt: str | dict[str, str]) -> list[bytes]:
+    if (type(prompt) == dict[str, str] or type(prompt) == dict):
+        return __process__(prompt["prompt"], prompt["image"])
     
     try:
         p = dict(prompt.replace("\"", "\'"))
-        return __generate_images__(p["prompt"], p["negative_prompt"])
+        return __process__(p["prompt"], p["image"])
     except:
         p = json.loads(prompt)
-        return __generate_images__(p["prompt"], p["negative_prompt"])
+        return __process__(p["prompt"], p["image"])
 
-def __generate_images__(prompt: str, negative_prompt: str) -> list[bytes]:
+def __process__(prompt: str, image: str | Image.Image) -> list[bytes]:
     LoadModel()
 
     if (prompt.startswith("\"") or prompt.startswith("\'")):
@@ -47,11 +48,8 @@ def __generate_images__(prompt: str, negative_prompt: str) -> list[bytes]:
     if (prompt.endswith("\"") or prompt.endswith("\'")):
         prompt = prompt[:-1]
     
-    if (negative_prompt.startswith("\"") or negative_prompt.startswith("\'")):
-        negative_prompt = negative_prompt[1:]
-    
-    if (negative_prompt.endswith("\"") or negative_prompt.endswith("\'")):
-        negative_prompt = negative_prompt[:-1]
+    if (type(image) == str):
+        image = Image.open(image)
     
     if (cfg.current_data.seed >= 0):
         generator = torch.manual_seed(cfg.current_data.seed)
@@ -60,10 +58,12 @@ def __generate_images__(prompt: str, negative_prompt: str) -> list[bytes]:
     
     if (cfg.current_data.print_prompt):
         print("Prompt: " + prompt)
-        print("Negative prompt: " + negative_prompt)
         print("Using seed: " + str(generator.seed()))
+    
+    image = ImageOps.exif_transpose(image)
+    image = image.convert("RGB")
 
-    images_generated = pipeline(prompt, num_inference_steps = cfg.current_data.image_generation_steps, output_type = "pil", negative_prompt = negative_prompt, generator = generator).images
+    images_generated = pipeline(prompt, image = image, num_inference_steps = cfg.current_data.i2i_steps).images
     images = []
 
     for image in images_generated:

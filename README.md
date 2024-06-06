@@ -19,7 +19,7 @@ GPU (optional): Any GPU with NVIDIA CUDA for Hugging Face Transformers, Hugging 
 RAM: At least 8GB.
 
 ## License
-MIT
+TAO71 License 111
 
 ## Contributors/Helpers:
 [![AlcoftTAO](https://github.com/TAO71-AI/I4.0_Assets/blob/main/Contributors_Helpers/AlcoftTAO.jpeg?raw=true)](https://github.com/alcoftTAO)

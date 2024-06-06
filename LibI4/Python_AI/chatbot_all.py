@@ -12,6 +12,8 @@ import Inference.ai_object_detection as od
 import Inference.speech_recog as sr
 import Inference.rvc_inf as rvc
 import Inference.tts as tts
+#import Inference.ai_vocal_separator as uvr
+import Inference.image_to_image as img2img
 import chatbot_basics as basics
 import ai_config as cfg
 import ai_conversation as conv
@@ -65,9 +67,7 @@ def GetAllModels() -> dict[str]:
         elif (i == "sc"):
             mls[i] = cfg.current_data.text_classification_model
         elif (i == "tr"):
-            mls[i] = [cfg.current_data.translation_model_multiple] + list(cfg.current_data.translation_models.values())
-        elif (i == "int"):
-            mls[i] = cfg.current_data.internet_model
+            mls[i] = [cfg.current_data.translation_classification_model] + list(cfg.current_data.translation_models.values())
         elif (i == "text2img"):
             mls[i] = cfg.current_data.image_generation_model
         elif (i == "img2text"):
@@ -88,6 +88,15 @@ def GetAllModels() -> dict[str]:
             mls[i] = str(list(cfg.current_data.rvc_models.keys()))
         elif (i == "tts"):
             mls[i] = str(tts.GetVoices())
+        elif (i == "uvr"):
+            mls[i] = cfg.current_data.uvr_model
+        elif (i == "img2img"):
+            mls[i] = cfg.current_data.image_to_image_model
+
+        mls[i] = mls[i].replace("\\", "/")
+        
+        if (mls[i].count("/") > 0 and os.path.exists(mls[i])):
+            mls[i] = mls[i].split("/")[-1]
     
     return mls
 
@@ -98,10 +107,6 @@ def LoadAllModels() -> None:
     for i in models:
         if (i == "g4a"):
             cbg4a.LoadModel()
-        elif (i == "cgpt"):
-            if (not os.path.exists("openai_api_key.txt")):
-                with open("openai_api_key.txt", "w+") as oak:
-                    oak.close()
         elif (i == "hf"):
             cba.LoadModel()
         elif (i == "sc"):
@@ -126,6 +131,8 @@ def LoadAllModels() -> None:
             sr.LoadModel()
         elif (i == "tts"):
             tts.LoadTTS()
+        elif (i == "img2img"):
+            img2img.LoadModel()
 
 # Check if a text prompt is NSFW
 def IsTextNSFW(prompt: str) -> bool:
@@ -389,6 +396,37 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             
             data["response"] = "[rvc " + str(prompt) + "]"
             data["tested_models"].append("rvc")
+
+        # Generate RVC response if the user requests it
+        """if (args.count("uvr") >= 1 and order_prompt.__contains__("uvr")):
+            aud = DoUVR(prompt)
+
+            if (type(aud) == list):
+                data["files"]["audios"] = aud
+            else:
+                try:
+                    # Try to append all the audios. If the list is not set, will return an error
+                    data["files"]["audios"].append(aud)
+                except:
+                    # Create the list if there is an error
+                    data["files"]["audios"] = [aud]
+            
+            data["response"] = "[uvr " + str(prompt) + "]"
+            data["tested_models"].append("uvr")"""
+        
+        # Generate Image2Image response if the user requests it
+        if (args.count("img2img") >= 1 and order_prompt.__contains__("img2img")):
+            imgs = DoImg2Img(prompt)
+
+            try:
+                # Try to append all the images. If the list is not set, will return an error
+                data["files"]["images"] += imgs
+            except:
+                # Create the list if there is an error
+                data["files"]["images"] = imgs
+            
+            data["response"] = "[i2i " + str(prompt) + "]"
+            data["tested_models"].append("img2img")
         
         # Generate TTS response if the user requests it
         if (args.count("tts") >= 1 and order_prompt.__contains__("tts")):
@@ -542,18 +580,26 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             img_prompt = img_prompt[:img_prompt.index("]")]
 
             # Remove the double quotes from the image prompt, if it starts with it
-            if (img_prompt.startswith("\"")):
+            if (img_prompt.startswith("\"") or img_prompt.startswith("\'")):
                 img_prompt = img_prompt[1:]
             
             # Remove the double quotes from the image prompt, if it ends with it
-            if (img_prompt.endswith("\"")):
+            if (img_prompt.endswith("\"")) or img_prompt.endswith("\'"):
                 img_prompt = img_prompt[:-1]
 
             # Cut the response
             response = response.replace("[agi " + img_prompt + "]", "")
 
+            # Separate the prompt and the negative prompt
+            if (img_prompt.count("(NEGATIVE)") > 0):
+                g_np = img_prompt[img_prompt.index("(NEGATIVE)") + 10:].strip()
+                g_p = img_prompt[:img_prompt.index("(NEGATIVE)")].strip()
+            else:
+                g_np = ""
+                g_p = img_prompt
+
             # Set the img_prompt to a dict, then run the image generation command
-            img_prompt = json.dumps({"prompt": img_prompt, "negative_prompt": ""})
+            img_prompt = json.dumps({"prompt": g_p, "negative_prompt": g_np})
             imgs = MakePrompt(img_prompt, "".join(i for i in order_prompt), "-ncb-img", extra_system_msgs, translator, force_translator, conversation, use_default_sys_prompts)["files"]["images"]
 
             try:
@@ -655,7 +701,7 @@ def ImageToText(img: str) -> str:
     # Get and return the text from an image
     return itt.MakePrompt(img)
 
-def RecognizeAudio(audio: str) -> str:
+def RecognizeAudio(audio: str) -> dict[str, str]:
     # Recognize and return an audio
     return sr.Recognize(sr.FileToAudioData(audio))
 
@@ -672,11 +718,8 @@ def DetectObjects(img: str) -> dict[str]:
     }
 
 def DoRVC(audio_data: str) -> str:
-    # Convert audio data to dict or json
-    try:
-        audio_data = json.loads(audio_data)
-    except:
-        audio_data = eval(audio_data)
+    # Convert audio data to json
+    audio_data = cfg.JSONDeserializer(audio_data)
 
     # Get RVC audio response
     data = rvc.MakeRVC(audio_data)
@@ -688,12 +731,15 @@ def DoRVC(audio_data: str) -> str:
 
 def Translate(translator: str, prompt: str) -> str:
     if (cfg.current_data.prompt_order.count("tr") > 0):
-        if (translator.lower().strip() == "mul" or translator.lower().strip() == "multiple"):
-            # Translate using the multiple translator
-            return tns.TranslateFrom1To2(prompt)
+        # Get the prompt language
+        lang = tns.GetLanguage(prompt)
+
+        if (translator.lower().strip() == "auto"):
+            # Translate using the auto translator to the server's language
+            return tns.TranslateToServerLanguage(prompt, lang)
         
         # Try to translate using the specified language
-        return tns.TranslateFrom2To1(prompt, translator)
+        return tns.TranslateFromServerLanguage(prompt, translator)
     
     return prompt
 
@@ -713,11 +759,8 @@ def FilterNSFWImage(image: str) -> bool:
     return IsImageNSFW(image)
 
 def DoTTS(prompt: str):
-    # Convert audio data to dict or json
-    try:
-        prompt = json.loads(prompt)
-    except:
-        prompt = eval(prompt)
+    # Convert audio data to json
+    prompt = cfg.JSONDeserializer(prompt)
 
     # Get TTS audio response
     data = tts.MakeTTS(prompt)
@@ -726,3 +769,32 @@ def DoTTS(prompt: str):
 
     # Return the data
     return audio
+
+"""def DoUVR(audio_data: str) -> list[str]:
+    # Convert audio data to json
+    audio_data = cfg.JSONDeserializer(audio_data)
+
+    # Get UVR audio response
+    data = uvr.MakeUVR(audio_data)
+    
+    for aud in data:
+        # Encode the audio into base64
+        data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
+
+    # Return the data
+    return data"""
+
+def DoImg2Img(prompt: str) -> list[str]:
+    # Convert image data to json
+    img_data = cfg.JSONDeserializer(prompt)
+
+    # Get images
+    imgs_response = img2img.Prompt(img_data)
+    images = []
+
+    # Generate images
+    for img in imgs_response:
+        images.append(base64.b64encode(img).decode("utf-8"))
+    
+    # Return the generated images
+    return images

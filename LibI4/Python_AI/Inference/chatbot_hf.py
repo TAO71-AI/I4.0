@@ -1,18 +1,15 @@
+"""
+This chatbot is not deprecated, but we do not recommend to use it. Please use the GPT4All (g4a) chatbot, usually it gives better responses and it's more tested.
+"""
+
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import ai_config as cfg
 import ai_conversation as conv
 
 model: AutoModelForCausalLM = None
 tokenizer: AutoTokenizer = None
-
 system_messages: list[str] = []
 device: str = "cpu"
-
-def __load_model__(model_name: str, device: str) -> tuple[AutoModelForCausalLM, AutoTokenizer]:
-    m = AutoModelForCausalLM.from_pretrained(model_name).to(device)
-    t = AutoTokenizer.from_pretrained(model_name)
-
-    return (m, t)
 
 def LoadModel() -> None:
     global model, tokenizer, device
@@ -24,10 +21,16 @@ def LoadModel() -> None:
         return
     
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'chatbot (hf)' on device '" + device + "'...")
+        print("Loading model 'chatbot (hf)'...")
     
-    device = cfg.GetGPUDevice("hf")
-    model, tokenizer = __load_model__(cfg.current_data.hf_model, device)
+    data = cfg.LoadModel("hf", cfg.current_data.hf_model, AutoModelForCausalLM, AutoTokenizer)
+
+    model = data[0]
+    tokenizer = data[1]
+    device = data[2]
+
+    if (cfg.current_data.print_loading_message):
+        print("   Loaded model on device '" + device + "'.")
 
 def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: list[str] = ["", ""]) -> str:
     LoadModel()

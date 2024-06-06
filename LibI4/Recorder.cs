@@ -33,6 +33,8 @@ namespace TAO.I4
 
         private static (int, string) RunCommand(string Args = "")
         {
+            (int, string) lcmd = (-1, "");
+
             foreach (string cmd in Commands)
             {
                 ProcessStartInfo info = new ProcessStartInfo()
@@ -52,9 +54,18 @@ namespace TAO.I4
                     p.Start();
                     p.WaitForExit();
 
+                    string output = p.StandardOutput.ReadToEnd().TrimStart().TrimEnd();
+
+                    if (output.Length == 0)
+                    {
+                        output = p.StandardError.ReadToEnd().TrimStart().TrimEnd();
+                    }
+
+                    lcmd = (p.ExitCode, output);
+
                     if (p.ExitCode == 0)
                     {
-                        return (0, p.StandardOutput.ReadToEnd());
+                        break;
                     }
                 }
                 catch
@@ -63,13 +74,13 @@ namespace TAO.I4
                 }
             }
 
-            return (-1, "");
+            return lcmd;
         }
 
         public static void InstallDependencies()
         {
             RunCommand("-m ensurepip");
-            RunCommand("-m pip install --break-system-packages --upgrade SpeechRecognition soundcard soundfile Pillow screeninfo numpy");
+            RunCommand("-m pip install --break-system-packages --upgrade pyaudio SpeechRecognition soundcard soundfile Pillow screeninfo numpy");
         }
 
         public static byte[] GetMicData()
@@ -96,6 +107,10 @@ namespace TAO.I4
             if (data.Item1 == 0)
             {
                 dataB = File.ReadAllBytes(path + "tmp_whisper_audio.wav");
+            }
+            else
+            {
+                throw new Exception("Error! Process did not end at exit code 0: " + data.Item2);
             }
 
             return dataB;

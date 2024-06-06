@@ -26,9 +26,12 @@ def UpdateReceivedFiles() -> None:
         if (not file.endswith(".enc_file")):
             continue
 
-        with open("ReceivedFiles/" + file, "r") as f:
-            received_files.append(json.loads(f.read()))
-            f.close()
+        try:
+            with open("ReceivedFiles/" + file, "r") as f:
+                received_files.append(json.loads(f.read()))
+                f.close()
+        except:
+            print("Could not append file. Ignoring.")
 
 def UpdateServer() -> None:
     ip_ban.ReloadBannedIPs()
@@ -47,15 +50,16 @@ def UpdateServer() -> None:
             date_diff = cd - fd
 
             if (date_diff.total_seconds() >= max_sf_minutes * 60):
+                if (received_files.count(rf)):
+                    received_files.remove(rf)
+
                 os.remove("ReceivedFiles/" + rf["id"] + ".enc_file")
                 os.remove("ReceivedFiles/" + rf["id"] + "_file")
-
+        except:
+            if (received_files.count(rf) > 0):
                 received_files.remove(rf)
-        except Exception as ex:
-            print("Error checking files: " + str(ex))
-            received_files.remove(rf)
 
-async def ProcessClient(websocket) -> None:
+async def ProcessClient(websocket: websockets.WebSocketClientProtocol) -> None:
     if (ip_ban.IsIPBanned(str(websocket.remote_address[0]))):
         print("Banned IP, ignoring...")
         await websocket.close()
@@ -66,7 +70,7 @@ async def ProcessClient(websocket) -> None:
     recf = ""
     print("Receiving file from " + str(websocket.remote_address[0]) + "...")
 
-    while True:
+    while (True):
         recf = await websocket.recv()
 
         if (len(recf) == 0):
@@ -76,13 +80,13 @@ async def ProcessClient(websocket) -> None:
             if (not recf.endswith(b"<end>")):
                 data_bytes += recf
             else:
-                data_bytes += recf[:-len(b"<end>")]
+                data_bytes += recf[:-5]
                 break
         elif (type(recf) == str):
             if (not recf.endswith("<end>")):
                 data_bytes += recf.encode("utf-8")
             else:
-                data_bytes += recf[:-len("<end>")].encode("utf-8")
+                data_bytes += recf[:-5].encode("utf-8")
                 break
         else:
             raise Exception("Could not receive file from client because it was not a string or bytes.")
@@ -122,19 +126,19 @@ async def ProcessClient(websocket) -> None:
         server_response = str(id)
     except Exception as ex:
         server_response = "Could not save file."
-        print("ERROR: " + str(ex))
+        print("Error saving file: " + str(ex))
 
     await websocket.send(server_response)
     await websocket.close()
 
     UpdateServer()
 
-async def AcceptClient(websocket) -> None:
+async def AcceptClient(websocket: websockets.WebSocketClientProtocol) -> None:
     print("(Rec Files) Incomming connection from '" + str(websocket.remote_address[0]) + ":" + str(websocket.remote_address[1]) + "'.")
     await ProcessClient(websocket)
 
 def UpdateFunction() -> None:
-    while True:
+    while (True):
         UpdateServer()
         time.sleep(update_every_seconds)
 

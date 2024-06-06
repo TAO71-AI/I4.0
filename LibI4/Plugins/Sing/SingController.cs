@@ -11,6 +11,7 @@ namespace TAO.I4.Plugins.Sing
         public static Action<SongData> OnStartSingingAction = null;
         public static Action<SongData> OnEndSingingAction = null;
         public static string SongNameMessage = "Singing [$SONG].";
+        private static MusicPlayer Player = null;
 
         public static void PlaySong(SongData Song)
         {
@@ -34,9 +35,12 @@ namespace TAO.I4.Plugins.Sing
                 throw new Exception("Song index must be between 0 and " + (Songs.Count - 1).ToString());
             }
 
-            if (SongNameMessage.Trim().Length > 0)
+            string snm = SongNameMessage;
+            snm = snm.Replace("[$SONG]", Songs[SongIndex].Name).Replace("[$VERSION]", Songs[SongIndex].Version).Replace("[$AUTHOR]", Songs[SongIndex].Author);
+
+            if (snm.Trim().Length > 0)
             {
-                Console.WriteLine(SongNameMessage.Replace("[$SONG]", Songs[SongIndex].Name));
+                Console.WriteLine(snm);
             }
 
             if (OnStartSingingAction != null)
@@ -44,8 +48,8 @@ namespace TAO.I4.Plugins.Sing
                 OnStartSingingAction.Invoke(Songs[SongIndex]);
             }
 
-            MusicPlayer player = new MusicPlayer(Songs[SongIndex].SongPath);
-            player.PlayUntilEndMiliseconds(Songs[SongIndex].Duration);
+            Player = new MusicPlayer(Songs[SongIndex].SongPath);
+            Player.PlayUntilEndMiliseconds(Songs[SongIndex].Duration);
 
             if (OnEndSingingAction != null)
             {
@@ -98,25 +102,126 @@ namespace TAO.I4.Plugins.Sing
 
             foreach (FileInfo file in files)
             {
-                WaveFileReader wf = new WaveFileReader(file.FullName);
-                SongData data = new SongData()
-                {
-                    Name = file.Name.Substring(0, file.Name.LastIndexOf(".")),
-                    SongPath = file.FullName,
-                    Duration = (int)wf.TotalTime.TotalMilliseconds
-                };
+                SongData[] datas = SongData.GetAllSongsFromFile(file.FullName);
 
-                songs.Add(data);
+                foreach (SongData data in datas)
+                {
+                    if (songs.Contains(data))
+                    {
+                        continue;
+                    }
+
+                    songs.Add(data);
+                }
             }
 
             return songs.ToArray();
+        }
+
+        public static void StopSinging(int SongIndex, bool ExecuteAction = true)
+        {
+            Player.Stop();
+
+            if (OnEndSingingAction != null && ExecuteAction)
+            {
+                OnEndSingingAction.Invoke(Songs[SongIndex]);
+            }
         }
     }
 
     public class SongData
     {
-        public string Name = "";
+        public string Name = ""; // Optional
+        public string Author = ""; // Optional
         public string SongPath = "";
         public int Duration = 0;
+        public string Version = "Unknown"; // Optional
+
+        public static SongData[] GetAllSongsFromFile(string FilePath)
+        {
+            if (!File.Exists(FilePath))
+            {
+                throw new Exception("File doesn't exists.");
+            }
+
+            string text = File.ReadAllText(FilePath);
+            string[] songs = text.Split('~');
+            List<SongData> datas = new List<SongData>();
+
+            foreach (string s in songs)
+            {
+                List<string> lines = new List<string>();
+
+                foreach (string data in s.Split('\n'))
+                {
+                    if (data.TrimStart().TrimEnd().Length == 0)
+                    {
+                        continue;
+                    }
+
+                    lines.Add(data.TrimStart().TrimEnd());
+                }
+
+                if (lines.Count == 0)
+                {
+                    continue;
+                }
+
+                datas.Add(FromLines(lines.ToArray()));
+                lines.Clear();
+            }
+
+            return datas.ToArray();
+        }
+
+        public static SongData FromSongFile(string FilePath)
+        {
+            if (!File.Exists(FilePath))
+            {
+                throw new Exception("File doesn't exists.");
+            }
+
+            string[] lines = File.ReadAllLines(FilePath);
+            SongData data = FromLines(lines);
+
+            return data;
+        }
+
+        private static SongData FromLines(string[] Lines)
+        {
+            SongData data = new SongData();
+
+            foreach (string line in Lines)
+            {
+                string ll = line.ToLower();
+
+                if (ll.StartsWith("name="))
+                {
+                    data.Name = line.Substring(5);
+                }
+                else if (ll.StartsWith("author="))
+                {
+                    data.Author = line.Substring(7);
+                }
+                else if (ll.StartsWith("path="))
+                {
+                    data.SongPath = line.Substring(5);
+                }
+                else if (ll.StartsWith("version="))
+                {
+                    data.Version = line.Substring(8);
+                }
+            }
+
+            if (!File.Exists(data.SongPath))
+            {
+                throw new Exception("Song audio file doesn't exists.");
+            }
+
+            WaveFileReader reader = new WaveFileReader(data.SongPath);
+            data.Duration = (int)reader.TotalTime.TotalMilliseconds;
+
+            return data;
+        }
     }
 }
