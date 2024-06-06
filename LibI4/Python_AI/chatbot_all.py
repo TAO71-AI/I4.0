@@ -770,20 +770,20 @@ def DoTTS(prompt: str):
     # Return the data
     return audio
 
-"""def DoUVR(audio_data: str) -> list[str]:
-    # Convert audio data to json
-    audio_data = cfg.JSONDeserializer(audio_data)
-
-    # Get UVR audio response
-    data = uvr.MakeUVR(audio_data)
-    
-    for aud in data:
-        # Encode the audio into base64
-        data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
-
-    # Return the data
-    return data
-"""
+#def DoUVR(audio_data: str) -> list[str]:
+#    # Convert audio data to json
+#    audio_data = cfg.JSONDeserializer(audio_data)
+#
+#    # Get UVR audio response
+#    data = uvr.MakeUVR(audio_data)
+#    
+#    for aud in data:
+#        # Encode the audio into base64
+#        data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
+#
+#    # Return the data
+#    return data
+#
 
 def DoImg2Img(prompt: str) -> list[str]:
     # Convert image data to json
