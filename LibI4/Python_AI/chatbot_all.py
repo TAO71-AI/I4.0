@@ -782,7 +782,8 @@ def DoTTS(prompt: str):
         data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
 
     # Return the data
-    return data"""
+    return data
+"""
 
 def DoImg2Img(prompt: str) -> list[str]:
     # Convert image data to json
