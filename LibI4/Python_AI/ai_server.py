@@ -677,7 +677,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         return response
     elif (command.startswith("is_nsfw_image ")):
-        img = command[15:]
+        img = command[14:]
         img_bytes = b""
         
         if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
