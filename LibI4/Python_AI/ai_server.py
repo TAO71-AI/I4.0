@@ -114,16 +114,9 @@ def __prompt__(service: str, prompt: str, args: str, extra_system_messages: list
         response = str(cb.FilterNSFWText(prompt)).lower()
     elif (service == "nsfw_filter-text"):
         response = cb.FilterNSFWText(prompt)
-    elif (service == "sc"):
-        response = cb.ClassifyText(prompt)
-    elif (service == "tr"):
-        prompt = json.loads(prompt)
-        response = cb.Translate(prompt["tr"], prompt["prompt"])
     elif (service == "whisper"):
         response = cb.RecognizeAudio(prompt)
-    elif (service == "img2text"):
-        response = cb.ImageToText(prompt)
-    elif (service == "od" or service == "de" or service == "rvc" or service == "uvr" or service == "img2img"):
+    elif (service == "od" or service == "de" or service == "rvc" or service == "uvr" or service == "img2img" or service == "tr" or service == "sc" or service == "img2text"):
         response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, "-ncb-" + service, [], "", False, ["", ""], False)
     else:
         response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
@@ -897,42 +890,42 @@ def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[
             # Chatbot full-response
 
             key_data["tokens"] -= 30
-            server_response = run_server_command("-u ai_fresponse " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_fresponse " + service[10:], extra_data)
         elif (service.startswith("service_1 ")):
             # Custom server command
 
             key_data["tokens"] -= 50
-            server_response = run_server_command("-u " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u " + service[10:], extra_data)
         elif (service.startswith("service_2 ")):
             # Image generation
             
             key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_image " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_image " + service[10:], extra_data)
         elif (service.startswith("service_3 ")):
             # Image to Text
 
             key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_img_to_text " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_img_to_text " + service[10:], extra_data)
         elif (service.startswith("service_4 ")):
             # Whisper audio recognition
 
             key_data["tokens"] -= 20
-            server_response = run_server_command("-u ai_whisper " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_whisper " + service[10:], extra_data)
         elif (service.startswith("service_5 ")):
             # Audio generation
             
             key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_audio " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_audio " + service[10:], extra_data)
         elif (service.startswith("service_6 ")):
             # Depth estimation
             
             key_data["tokens"] -= 15
-            server_response = run_server_command("-u ai_depth " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_depth " + service[10:], extra_data)
         elif (service.startswith("service_7 ")):
             # Object detection
             
             key_data["tokens"] -= 15
-            server_response = run_server_command("-u ai_object_detection " + service[10:len(service)], extra_data)
+            server_response = run_server_command("-u ai_object_detection " + service[10:], extra_data)
         elif (service.startswith("service_8 ")):
             # RVC
             

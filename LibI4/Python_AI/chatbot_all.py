@@ -60,14 +60,12 @@ def GetAllModels() -> dict[str]:
     for i in models:
         if (i == "g4a"):
             mls[i] = cfg.current_data.gpt4all_model
-        elif (i == "cgpt"):
-            mls[i] = "ChatGPT"
         elif (i == "hf"):
             mls[i] = cfg.current_data.hf_model
         elif (i == "sc"):
             mls[i] = cfg.current_data.text_classification_model
         elif (i == "tr"):
-            mls[i] = [cfg.current_data.translation_classification_model] + list(cfg.current_data.translation_models.values())
+            mls[i] = str([cfg.current_data.translation_classification_model] + list(cfg.current_data.translation_models.values()))
         elif (i == "text2img"):
             mls[i] = cfg.current_data.image_generation_model
         elif (i == "img2text"):
@@ -218,10 +216,10 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
     
     # Translate if the use of translators are forced
     if (force_translator and cfg.current_data.use_other_services_on_chatbot):
-        prompt = Translate("mul", prompt)
+        prompt = Translate("auto", prompt)
     
     # Check if the prompt is NSFW
-    if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
+    if (not cfg.current_data.allow_processing_if_nsfw):
         # Check the prompt
         is_nsfw = FilterNSFWText(prompt)
 
@@ -263,7 +261,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Check the Image to Text if the user requests it
         if (args.count("img2text") >= 1 and order_prompt.__contains__("img2text")):
             # Check if the user's image is NSFW (if allowed)
-            if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
+            if (not cfg.current_data.allow_processing_if_nsfw):
                 # Check if the user's image is NSFW
                 is_nsfw = FilterNSFWImage(prompt)
 
@@ -317,7 +315,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Estimate depth if the user requests it
         if (args.count("de") >= 1 and order_prompt.__contains__("de")):
             # Check if the user's image is NSFW
-            if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
+            if (not cfg.current_data.allow_processing_if_nsfw):
                 is_nsfw = FilterNSFWImage(prompt)
 
                 if (is_nsfw == None):
@@ -351,7 +349,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Detect objects
         if (args.count("od") >= 1 and order_prompt.__contains__("od")):
             # Check if the user's image is NSFW
-            if (not cfg.current_data.allow_processing_if_nsfw or cfg.current_data.use_other_services_on_chatbot):
+            if (not cfg.current_data.allow_processing_if_nsfw):
                 is_nsfw = FilterNSFWImage(prompt)
 
                 if (is_nsfw == None):
@@ -416,6 +414,25 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         
         # Generate Image2Image response if the user requests it
         if (args.count("img2img") >= 1 and order_prompt.__contains__("img2img")):
+            # Check if the user's image is NSFW
+            if (not cfg.current_data.allow_processing_if_nsfw):
+                is_nsfw = FilterNSFWImage(prompt)
+
+                if (is_nsfw == None):
+                    is_nsfw = False
+
+                # If the user's image is NSFW and the use of NSFW is not allowed, return an error
+                if (is_nsfw):
+                    return {
+                        "response": "ERROR",
+                        "model": "-1",
+                        "files": {},
+                        "tested_models": [],
+                        "text_classification": "-1",
+                        "title": "NO TITLE",
+                        "errors": ["NSFW detected! NSFW is not allowed.", "NSFW"]
+                    }
+            
             imgs = DoImg2Img(prompt)
 
             try:
@@ -441,6 +458,22 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             
             data["response"] = "[tts " + str(prompt) + "]"
             data["tested_models"].append("tts")
+        
+        # Translate the prompt if the user requests it
+        if (args.count("tr") >= 1 and order_prompt.__contains__("tr")):
+            # Load JSON
+            res = json.loads(prompt)
+            res = Translate(res["tr"], res["prompt"])
+
+            data["response"] = res
+            data["tested_models"].append("tr")
+        
+        # Classify the prompt if the user requests it
+        if (args.count("sc") >= 1 and order_prompt.__contains__("sc")):
+            res = ClassifyText(prompt)
+
+            data["response"] = res
+            data["tested_models"].append("sc")
         
         # Set the files to string and return the data
         return data

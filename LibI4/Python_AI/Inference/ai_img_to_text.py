@@ -15,7 +15,7 @@ def LoadModel() -> None:
         return
 
     if (cfg.current_data.print_loading_message):
-        print("Loading model 'image to text' on device...")
+        print("Loading model 'image to text'...")
 
     data = cfg.LoadPipeline("image-to-text", "img2text", cfg.current_data.img_to_text_model)
 
