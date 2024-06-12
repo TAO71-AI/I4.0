@@ -111,7 +111,7 @@ def __prompt__(service: str, prompt: str, args: str, extra_system_messages: list
         threading.Event().wait(1)
     
     if (service == "nsfw_filter-image"):
-        response = str(cb.FilterNSFWText(prompt)).lower()
+        response = cb.FilterNSFWImage(prompt)
     elif (service == "nsfw_filter-text"):
         response = cb.FilterNSFWText(prompt)
     elif (service == "whisper"):
@@ -122,6 +122,17 @@ def __prompt__(service: str, prompt: str, args: str, extra_system_messages: list
         response = cb.MakePrompt(prompt, cfg.current_data.prompt_order, args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts)
     
     queue[service] -= 1
+
+    if (type(response) != dict):
+        response = {
+            "response": str(response),
+            "model": "",
+            "files": [],
+            "tested_models": [service],
+            "text_classification": "",
+            "title": "",
+            "errors": []
+        }
 
     return response
 
@@ -236,7 +247,7 @@ def DoPrompt(service: str, prompt: str, args: str = "", extra_system_messages: l
 def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
     # Check if its user or admin
     if (command_data.lower().startswith("-u ")):
-        command = command_data[3:len(command_data)]
+        command = command_data[3:]
         admin = False
 
         __print__("A user (-u) used the command: '" + command + "'.")
@@ -716,7 +727,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             __add_queue_time__("nsfw_filter-image", end_timer - start_timer)
 
         os.remove("temp_img_" + str(tid) + ".png")
-        return str(img).lower()
+        return img
     elif (command.startswith("tts ")):
         if (cfg.current_data.enable_predicted_queue_time):
             start_timer = time.time()
