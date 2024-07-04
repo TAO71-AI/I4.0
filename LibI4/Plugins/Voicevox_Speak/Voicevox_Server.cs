@@ -8,7 +8,7 @@ using System.Text;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 
-namespace TAO.I4.Plugins.Voicevox
+namespace TAO71.I4.Plugins.Voicevox
 {
     public static class VoicevoxServer
     {

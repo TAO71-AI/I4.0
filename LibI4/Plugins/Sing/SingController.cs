@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using NAudio.Wave;
 
-namespace TAO.I4.Plugins.Sing
+namespace TAO71.I4.Plugins.Sing
 {
     public static class SingController
     {

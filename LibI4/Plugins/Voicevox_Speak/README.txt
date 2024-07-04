@@ -1,1 +1,1 @@
-﻿This Voicevox plugin is deprecated and will no longer receive updates. Please use the TTS plugin.
+﻿This Voicevox plugin is deprecated and will no longer receive updates. Please use the TTS service.

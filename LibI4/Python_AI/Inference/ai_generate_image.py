@@ -10,21 +10,21 @@ device: str = "cpu"
 def LoadModel() -> None:
     global pipeline, device
 
-    if (not cfg.current_data.prompt_order.__contains__("text2img")):
+    if (not cfg.current_data["prompt_order"].__contains__("text2img")):
         raise Exception("Model is not in 'prompt_order'.")
     
     if (pipeline != None):
         return
     
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'text to image'...")
     
-    data = cfg.LoadDiffusersPipeline("text2img", cfg.current_data.image_generation_model, AutoPipelineForText2Image)
+    data = cfg.LoadDiffusersPipeline("text2img", cfg.current_data["image_generation_model"], AutoPipelineForText2Image)
 
     pipeline = data[0]
     device = data[1]
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device + "'.")
 
 def GenerateImages(prompt: str | dict[str, str]) -> list[bytes]:
@@ -53,17 +53,17 @@ def __generate_images__(prompt: str, negative_prompt: str) -> list[bytes]:
     if (negative_prompt.endswith("\"") or negative_prompt.endswith("\'")):
         negative_prompt = negative_prompt[:-1]
     
-    if (cfg.current_data.seed >= 0):
-        generator = torch.manual_seed(cfg.current_data.seed)
+    if (cfg.current_data["seed"] >= 0):
+        generator = torch.manual_seed(cfg.current_data["seed"])
     else:
         generator = torch.manual_seed(torch.seed())
     
-    if (cfg.current_data.print_prompt):
+    if (cfg.current_data["print_prompt"]):
         print("Prompt: " + prompt)
         print("Negative prompt: " + negative_prompt)
         print("Using seed: " + str(generator.seed()))
 
-    images_generated = pipeline(prompt, num_inference_steps = cfg.current_data.image_generation_steps, output_type = "pil", negative_prompt = negative_prompt, generator = generator).images
+    images_generated = pipeline(prompt, num_inference_steps = cfg.current_data["image_generation_steps"], output_type = "pil", negative_prompt = negative_prompt, generator = generator).images
     images = []
 
     for image in images_generated:

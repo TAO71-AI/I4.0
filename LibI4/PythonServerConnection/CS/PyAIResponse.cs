@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using System.Text;
 using Newtonsoft.Json;
 
-namespace TAO.I4.PythonManager
+namespace TAO71.I4.PythonManager
 {
     public static class PyAIResponse
     {
@@ -27,6 +27,7 @@ namespace TAO.I4.PythonManager
         public static Action<byte[]> OnReceiveDataAction = null;
         public static Action<string> OnReceiveWelcomeMessageAction = null;
         private static bool Connected = false;
+        public static InternetSearchOptions InternetOptions = InternetSearchOptions.QuestionAnswering;
 
         public static string ReadKeyFromFile()
         {
@@ -78,14 +79,13 @@ namespace TAO.I4.PythonManager
 
                     foreach (string task in tasks.Keys)
                     {
-                        string ttask = task;
-
-                        if (ttask == "g4a" || ttask == "hf")
+                        if (task == "g4a" || task == "hf")
                         {
-                            ttask = "chatbot";
+                            servs.Add(Service.Chatbot);
+                            continue;
                         }
 
-                        servs.Add(ServiceManager.FromString(ttask));
+                        servs.Add(ServiceManager.FromString(task));
                     }
 
                     services[server] = servs.ToArray();
@@ -290,7 +290,7 @@ namespace TAO.I4.PythonManager
             jsonData += "\"api_key\": \"" + ReadKeyFromFile() + "\", \"cmd\": \"" + sd + msg + "\", " +
                 "\"extra_data\": {\"system_msgs\": " + Extra.ArrayToJson(ExtraSystemMessages) + ", " +
                 "\"translator\": \"" + Translator + "\", \"use_default_sys_prompts\": \"" +
-                UseDefaultSysPrompts.ToString().ToLower() + "\", \"ai_args\": \"" + AIArgs + "\"}, " +
+                UseDefaultSysPrompts.ToString().ToLower() + "\", \"ai_args\": \"" + AIArgs + "\", \"internet_type\": \"" + InternetSearchManager.ToString(InternetOptions) + "\"}, " +
                 "\"conversation\": \"" + Conversation + "\"";
             jsonData += "}";
 

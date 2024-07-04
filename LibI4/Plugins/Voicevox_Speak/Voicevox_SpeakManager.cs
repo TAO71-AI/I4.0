@@ -4,7 +4,7 @@ using System.IO;
 using System.Media;
 using System.Threading;
 
-namespace TAO.I4.Plugins.Voicevox
+namespace TAO71.I4.Plugins.Voicevox
 {
     public static class Voicevox_SpeakManager
     {

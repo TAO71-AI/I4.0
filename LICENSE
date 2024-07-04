@@ -1,34 +1,38 @@
-TAO71 License v1.1.1 (TAO71 License 111)
+TAO71 License 111
 
 --- Copyright notice ---
+
 Copyright (c) 2024 TAO71-AI
 
-THE MATERIAL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM OUT OF OR IN CONNECTION WITH THE MATERIAL OR THE USE OR OTHER DEALINGS IN THE MATERIAL.
 --- End of copyright notice ---
+
+[Material means all the software, assets, AI models, datasets, etc. of the project or repository]
 
 0. General conditions:
 All the distributions, modifications, etc. of the licensed material must apply this conditions:
--You can modify, merge, publish, distribute, sublicense, sell and use copies of the material.
--TAO71, material authors and collaborators are not responsible of what you do to/with this material.
--You can't use the name (or username) of TAO71, material authors and collaborators to announce or promote anything.
--Any version of the material that is not licensed under this license don't need to apply the conditions of this license.
--The license of alredy published versions of the material MUST NOT be modified.
+- You can modify, merge, publish, distribute, sublicense, sell and use copies of the material.
+- TAO71, material authors and collaborators are not responsible of what you do to/with this material.
+- You can't use the name (or username) of TAO71, material authors and collaborators to announce or promote anything.
+- Any version of the material that is not licensed under this license don't need to apply the conditions of this license.
+- The license of alredy published versions of the material MUST NOT be modified.
 
 1. Software
-If the licensed material is software (programs, code, videogames, etc.), the following conditions will apply to the licensed material and machine-executable versions of the licensed material:
--The above copyright notice can be included, but it's not required.
+ALL the software (programs, code, videogames, etc.) included with/in this material, in machine-executable form or not, must apply this list of conditions:
+- The above copyright notice can be included, but it's not required.
 
 2. Assets
-If the licensed material is an asset (images, audios, etc.), the following conditions will apply:
--The above copyright notice MUST be included.
+ALL the assets (images, audios, documentation, etc.) included with/in this material must apply this list of conditions:
+- The above copyright notice MUST be included.
 
 3. AI models
-If the licensed material is an AI model (of any type or task), the following conditions will apply:
--The AI model MUST be Open-Source.
--Modifications or fine-tunes of the licensed AI models can be Open-Source, but it's not required unless it uses this license or another license that says it.
--The above copyright notice MUST be included in modifications of the AI models.
+ALL the AI models (of any type or task) included with/in this material must apply this list of conditions:
+- The AI model MUST be Open-Source.
+- Modifications or fine-tunes of the licensed AI models can be Open-Source, but it's not required unless it uses this license or another license that says it.
+- The above copyright notice MUST be included in modifications of the AI models.
 
 4. Datasets
 If the licensed material is a dataset, the following conditions will apply:
--The above copyright notice MUST be included in modifications of the dataset.
--AI models trained or fine-tuned with this dataset can include the above copyright notice, but it's not required.
+- The above copyright notice MUST be included in modifications of the dataset.
+- AI models trained or fine-tuned with this dataset can include the above copyright notice, but it's not required.
+
+THE MATERIAL IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM OUT OF OR IN CONNECTION WITH THE MATERIAL OR THE USE OR OTHER DEALINGS IN THE MATERIAL.

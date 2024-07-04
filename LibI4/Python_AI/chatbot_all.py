@@ -12,9 +12,10 @@ import Inference.ai_object_detection as od
 import Inference.speech_recog as sr
 import Inference.rvc_inf as rvc
 import Inference.tts as tts
-#import Inference.ai_vocal_separator as uvr
+import Inference.ai_vocal_separator as uvr
 import Inference.image_to_image as img2img
-import chatbot_basics as basics
+import Inference.ai_question_answering as qa
+import internet_connection as internet
 import ai_config as cfg
 import ai_conversation as conv
 import ai_logs as logs
@@ -43,14 +44,16 @@ nsfw_filter-image - Check if an image is NSFW.
 de - Depth Estimation.
 od - Object Detection.
 rvc - Uses RVC on an audio file.
+uvr - Uses UVR on an audio file.
 tts - Text to Speech.
+img2img - Image to Image.
+qa - Question Answering.
 """
 
 # Set some variables
 system_messages: list[str] = []
-use_chat_history_if_available: bool = cfg.current_data.use_chat_history
-order: str = cfg.current_data.prompt_order
-current_emotion: str = "neutral"
+use_chat_history_if_available: bool = cfg.current_data["use_chat_history"]
+order: str = cfg.current_data["prompt_order"]
 
 # Get the models' name
 def GetAllModels() -> dict[str]:
@@ -59,37 +62,39 @@ def GetAllModels() -> dict[str]:
 
     for i in models:
         if (i == "g4a"):
-            mls[i] = cfg.current_data.gpt4all_model
+            mls[i] = cfg.current_data["gpt4all_model"]
         elif (i == "hf"):
-            mls[i] = cfg.current_data.hf_model
+            mls[i] = cfg.current_data["hf_model"]
         elif (i == "sc"):
-            mls[i] = cfg.current_data.text_classification_model
+            mls[i] = cfg.current_data["text_classification_model"]
         elif (i == "tr"):
-            mls[i] = str([cfg.current_data.translation_classification_model] + list(cfg.current_data.translation_models.values()))
+            mls[i] = str([cfg.current_data["translation_classification_model"]] + list(cfg.current_data["translation_models"].values()))
         elif (i == "text2img"):
-            mls[i] = cfg.current_data.image_generation_model
+            mls[i] = cfg.current_data["image_generation_model"]
         elif (i == "img2text"):
-            mls[i] = cfg.current_data.img_to_text_model
+            mls[i] = cfg.current_data["img_to_text_model"]
         elif (i == "text2audio"):
-            mls[i] = cfg.current_data.text_to_audio_model
+            mls[i] = cfg.current_data["text_to_audio_model"]
         elif (i == "whisper"):
-            mls[i] = cfg.current_data.whisper_model
+            mls[i] = cfg.current_data["whisper_model"]
         elif (i == "nsfw_filter-text"):
-            mls[i] = cfg.current_data.nsfw_filter_text_model
+            mls[i] = cfg.current_data["nsfw_filter_text_model"]
         elif (i == "nsfw_filter-image"):
-            mls[i] = cfg.current_data.nsfw_filter_image_model
+            mls[i] = cfg.current_data["nsfw_filter_image_model"]
         elif (i == "de"):
-            mls[i] = cfg.current_data.depth_estimation_model
+            mls[i] = cfg.current_data["depth_estimation_model"]
         elif (i == "od"):
-            mls[i] = cfg.current_data.object_detection_model
+            mls[i] = cfg.current_data["object_detection_model"]
         elif (i == "rvc"):
-            mls[i] = str(list(cfg.current_data.rvc_models.keys()))
+            mls[i] = str(list(cfg.current_data["rvc_models"].keys()))
         elif (i == "tts"):
             mls[i] = str(tts.GetVoices())
         elif (i == "uvr"):
-            mls[i] = cfg.current_data.uvr_model
+            mls[i] = cfg.current_data["uvr_model"]
         elif (i == "img2img"):
-            mls[i] = cfg.current_data.image_to_image_model
+            mls[i] = cfg.current_data["image_to_image_model"]
+        elif (i == "qa"):
+            mls[i] = cfg.current_data["qa_model"]
 
         mls[i] = mls[i].replace("\\", "/")
         
@@ -131,11 +136,13 @@ def LoadAllModels() -> None:
             tts.LoadTTS()
         elif (i == "img2img"):
             img2img.LoadModel()
+        elif (i == "qa"):
+            qa.LoadModel()
 
 # Check if a text prompt is NSFW
 def IsTextNSFW(prompt: str) -> bool:
     # If the model is loaded, check NSFW
-    if (cfg.current_data.prompt_order.__contains__("nsfw_filter-text")):
+    if (cfg.current_data["prompt_order"].__contains__("nsfw_filter-text")):
         return filters.IsTextNSFW(prompt)
     
     # If not, return none
@@ -144,16 +151,16 @@ def IsTextNSFW(prompt: str) -> bool:
 # Check if an image prompt is NSFW
 def IsImageNSFW(image: str | Image.Image) -> bool:
     # If the model is loaded, check NSFW
-    if (cfg.current_data.prompt_order.__contains__("nsfw_filter-image")):
+    if (cfg.current_data["prompt_order"].__contains__("nsfw_filter-image")):
         return filters.IsImageNSFW(image)
     
     # If not, return none
     return None
 
 # Process the user prompt
-def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system_msgs: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True) -> dict:
+def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system_msgs: list[str] = [], translator: str = "", force_translator: bool = True, conversation: list[str] = ["", ""], use_default_sys_prompts: bool = True, internet_type: str = "qa") -> dict:
     # Import some global variables and load the models if not loaded
-    global order, current_emotion
+    global order
     LoadAllModels()
 
     # Set args
@@ -163,7 +170,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
     sm = []
 
     # Set System Prompts to default if allowed
-    if (cfg.current_data.use_default_system_messages):
+    if (cfg.current_data["use_default_system_messages"]):
         sm = system_messages if (use_default_sys_prompts) else []
 
     # Set extra or custom System Prompts
@@ -172,28 +179,20 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             sm.append(msg.strip())
 
     # Set dynamic System Prompts if allowed
-    if (cfg.current_data.use_dynamic_system_args):
+    if (cfg.current_data["use_dynamic_system_args"]):
         # Get the current date and create variables
         current_dt = datetime.datetime.now()
         dsm = []
 
         # Apply to System Prompts
-        dsm.append("Your current state of humor is '" + current_emotion + "'.")
-        dsm.append("The current date is "
-            + str(current_dt.day) + " of "
-            + calendar.month_name[current_dt.month] + " "
-            + str(current_dt.year)
-            + ", and the current time is "
-            + ("0" + str(current_dt.hour) if current_dt.hour < 10 else str(current_dt.hour)) + ":"
-            + ("0" + str(current_dt.minute) if current_dt.minute < 10 else str(current_dt.minute)) + ".")
+        dsm.append("The current date is " + str(current_dt.day) + " of " + calendar.month_name[current_dt.month] + " " + str(current_dt.year) + ", and the current time is " + ("0" + str(current_dt.hour) if (current_dt.hour < 10) else str(current_dt.hour)) + ":" + ("0" + str(current_dt.minute) if (current_dt.minute < 10) else str(current_dt.minute)) + ".")
+
+        if (current_dt.day == 16 and current_dt.month == 9):
+            dsm.append("Today it's your birthday.")
 
         for m in dsm:
             if (sm.count(m) == 0):
                 sm.append(m)
-    
-    # Set the System Prompts to first person if allowed
-    if (cfg.current_data.system_messages_in_first_person):
-        sm = basics.ToFirstPerson(sm)
     
     # Strip the System Prompts
     for sp in sm:
@@ -211,15 +210,15 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         order_prompt = order
 
         if (len(order) <= 0):
-            order_prompt = cfg.current_data.prompt_order
+            order_prompt = cfg.current_data["prompt_order"]
             order = order_prompt
     
     # Translate if the use of translators are forced
-    if (force_translator and cfg.current_data.use_other_services_on_chatbot):
+    if (force_translator and cfg.current_data["use_other_services_on_chatbot"]):
         prompt = Translate("auto", prompt)
     
     # Check if the prompt is NSFW
-    if (not cfg.current_data.allow_processing_if_nsfw):
+    if (not cfg.current_data["allow_processing_if_nsfw"]):
         # Check the prompt
         is_nsfw = FilterNSFWText(prompt)
 
@@ -252,7 +251,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         }
 
         # Translate if use the use of translators are allowed
-        if (len(translator.strip()) > 0 and cfg.current_data.use_other_services_on_chatbot):
+        if (len(translator.strip()) > 0 and cfg.current_data["use_other_services_on_chatbot"]):
             data["response"] = Translate(translator, prompt)
             data["tested_models"].append("tr")
         else:
@@ -261,7 +260,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Check the Image to Text if the user requests it
         if (args.count("img2text") >= 1 and order_prompt.__contains__("img2text")):
             # Check if the user's image is NSFW (if allowed)
-            if (not cfg.current_data.allow_processing_if_nsfw):
+            if (not cfg.current_data["allow_processing_if_nsfw"]):
                 # Check if the user's image is NSFW
                 is_nsfw = FilterNSFWImage(prompt)
 
@@ -269,7 +268,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
                     is_nsfw = False
 
                 # If the user's image is NSFW and the use of NSFW is not allowed, return an error
-                if (is_nsfw and not not cfg.current_data.allow_processing_if_nsfw):
+                if (is_nsfw and not cfg.current_data["allow_processing_if_nsfw"]):
                     return {
                         "response": "ERROR",
                         "model": "-1",
@@ -315,7 +314,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Estimate depth if the user requests it
         if (args.count("de") >= 1 and order_prompt.__contains__("de")):
             # Check if the user's image is NSFW
-            if (not cfg.current_data.allow_processing_if_nsfw):
+            if (not cfg.current_data["allow_processing_if_nsfw"]):
                 is_nsfw = FilterNSFWImage(prompt)
 
                 if (is_nsfw == None):
@@ -349,7 +348,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # Detect objects
         if (args.count("od") >= 1 and order_prompt.__contains__("od")):
             # Check if the user's image is NSFW
-            if (not cfg.current_data.allow_processing_if_nsfw):
+            if (not cfg.current_data["allow_processing_if_nsfw"]):
                 is_nsfw = FilterNSFWImage(prompt)
 
                 if (is_nsfw == None):
@@ -395,8 +394,8 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             data["response"] = "[rvc " + str(prompt) + "]"
             data["tested_models"].append("rvc")
 
-        # Generate RVC response if the user requests it
-        """if (args.count("uvr") >= 1 and order_prompt.__contains__("uvr")):
+        # Generate UVR response if the user requests it
+        if (args.count("uvr") >= 1 and order_prompt.__contains__("uvr")):
             aud = DoUVR(prompt)
 
             if (type(aud) == list):
@@ -410,12 +409,12 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
                     data["files"]["audios"] = [aud]
             
             data["response"] = "[uvr " + str(prompt) + "]"
-            data["tested_models"].append("uvr")"""
+            data["tested_models"].append("uvr")
         
         # Generate Image2Image response if the user requests it
         if (args.count("img2img") >= 1 and order_prompt.__contains__("img2img")):
             # Check if the user's image is NSFW
-            if (not cfg.current_data.allow_processing_if_nsfw):
+            if (not cfg.current_data["allow_processing_if_nsfw"]):
                 is_nsfw = FilterNSFWImage(prompt)
 
                 if (is_nsfw == None):
@@ -519,12 +518,12 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # If the response contains with this, trim the response
         if (response.__contains__("### USER")):
             logs.AddToLog("The response contains '### USER', trimming the response.")
-            response = response[0:response.index("### USER")]
+            response = response[:response.index("### USER")]
         
         # If the response contains with this, trim the response
         if (response.__contains__("### ASSISTANT")):
             logs.AddToLog("The response contains '### ASSISTANT', trimming the response.")
-            response = response[0:response.index("### ASSISTANT")]
+            response = response[:response.index("### ASSISTANT")]
         
         # If the response length is greater than 0 and isn't an error...
         if (len(response.strip()) > 0 and response.lower() != "error" and response.lower() != "error."):
@@ -532,7 +531,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             logs.AddToLog("Model '" + i + "' response to '" + prompt + "': '" + response + "'")
 
             # If the titles are allowed and there is a title
-            if (cfg.current_data.allow_titles and response.startswith("[") and response.__contains__("]")):
+            if (cfg.current_data["allow_titles"] and response.startswith("[") and response.__contains__("]")):
                 # Isolate the title from the response
                 title = response[1:response.index("]")]
                 response = response[response.index("]") + 1:].strip()
@@ -545,17 +544,17 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
                 title = "NO TITLE"
             
             # Append the response to the responses list if the use of multiple models is allowed, then use the next model
-            if (cfg.current_data.use_multi_model):
+            if (cfg.current_data["use_multi_model"]):
                 responses.append(response)
                 continue
     
     # If the use of multiple models is allowed...
-    if (cfg.current_data.use_multi_model):
+    if (cfg.current_data["use_multi_model"]):
         # ...Set an empty response
         response = ""
 
         # Get only 1 response from all the responses list
-        if (cfg.current_data.multi_model_mode == "shortest"):
+        if (cfg.current_data["multi_model_mode"] == "shortest"):
             # Get only the shortest response
             for r in responses:
                 if (len(response.strip()) == 0):
@@ -564,7 +563,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
 
                 if (len(r) < len(response)):
                     response = r
-        elif (cfg.current_data.multi_model_mode == "longest"):
+        elif (cfg.current_data["multi_model_mode"] == "longest"):
             # Get only the longest response
             for r in responses:
                 if (len(response.strip()) == 0):
@@ -575,11 +574,11 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
                     response = r
     
     # If save conversation is allowed...
-    if (cfg.current_data.save_conversations):
+    if (cfg.current_data["save_conversations"]):
         # If the use of titles is allowed and there is a title
-        if (cfg.current_data.allow_titles and response.startswith("[") and response.__contains__("]")):
+        if (cfg.current_data["allow_titles"] and response.startswith("[") and response.__contains__("]")):
             # Get only the response
-            response_conv = response[response.index("]") + 1:len(response)].strip()
+            response_conv = response[response.index("]") + 1:].strip()
         else:
             # If there isn't a title, then doesn't modify the response
             response_conv = response
@@ -593,7 +592,7 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         conv.AddToConversation(conversation[0], conversation[1], prompt, response_conv)
 
     # If the use of Sequence Classification (Text Classification) is allowed, then classify the response
-    if (cfg.current_data.use_other_services_on_chatbot):
+    if (cfg.current_data["use_other_services_on_chatbot"]):
         try:
             # Try to classify the response
             tcn = ClassifyText(response)
@@ -604,6 +603,135 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             # Append the error message to the errors list and logs
             errors.append("There was an error classifying the response: " + str(ex))
             logs.AddToLog("(ERROR) Response classification: " + str(ex))
+    
+    # If the model returned the Internet Search command...
+    if (response.__contains__("[int ")):
+        try:
+            # ...Try to separate the response from the prompt to search, then search the image
+            int_prompt = response[response.index("[int ") + 5:]
+            int_prompt = int_prompt[:int_prompt.index("]")]
+
+            # Remove the double quotes from the prompt, it it starts with it
+            if (int_prompt.startswith("\"") or int_prompt.startswith("\'")):
+                int_prompt_filtered = int_prompt[1:]
+            else:
+                int_prompt_filtered = int_prompt
+            
+            # Remove the double quotes from the prompt, it it ends with it
+            if (int_prompt.endswith("\"") or int_prompt.endswith("\'")):
+                int_prompt_filtered = int_prompt_filtered[:-1]
+            else:
+                int_prompt_filtered = int_prompt_filtered
+            
+            int_search_prompt = int_prompt_filtered[:int_prompt_filtered.index(" (REQUEST) ")]
+            int_question_prompt = int_prompt_filtered[int_prompt_filtered.index(" (REQUEST) ") + 11:]
+            
+            if (int_search_prompt.startswith("http://") or int_search_prompt.startswith("https://")):
+                # Read a website if the prompt starts with an URL
+                internet_results = internet.ReadTextFromWebsite(int_search_prompt)
+            else:
+                # Search on internet and read ALL the results if the prompt does not start from a URL
+                internet_results = internet.Search(int_search_prompt)
+                internet_results = "".join(internet.ReadTextFromWebsite(result) + "\n" for result in internet_results).strip()
+
+            # Cut the results
+            if (len(internet_results) > 500):
+                internet_results = internet_results[:500]
+
+            internet_response = ""
+
+            # Select the internet model to use
+            if (internet_type == "qa" and cfg.current_data["prompt_order"].count("qa") > 0):
+                # Use only a Question Answering model (if allowed)
+                internet_response = qa.ProcessPrompt(internet_results, int_question_prompt)
+                tested_models.append("qa")
+            elif (internet_type == "chatbot"):
+                # Use only a Chatbot model (if allowed)
+
+                if (cfg.current_data["prompt_order"].count("g4a") > 0):
+                    # Use GPT4All (the recommended option) if it's available
+                    sprompt = cbg4a.system_messages
+                    cbg4a.system_messages = internet_results.split("\n")
+
+                    internet_response = cbg4a.MakePrompt(int_question_prompt, False, ["", ""])
+                    cbg4a.system_messages = sprompt
+
+                    if (tested_models.count("g4a") == 0):
+                        tested_models.append("g4a")
+                elif (cfg.current_data["prompt_order"].count("hf") > 0):
+                    # Use a HuggingFace's Text Generation model if it's available
+                    sprompt = cba.system_messages
+                    cba.system_messages = internet_results.split("\n")
+
+                    internet_response = cba.MakePrompt(int_question_prompt, False, ["", ""])
+                    cba.system_messages = sprompt
+
+                    if (tested_models.count("hf") == 0):
+                        tested_models.append("hf")
+            elif (internet_type == "qa-chatbot" and cfg.current_data["prompt_order"].count("qa") > 0):
+                # Use a Question Answering model, then use a Chatbot model (if allowed)
+                # Get the response from the Question Answering model
+                internet_results = qa.ProcessPrompt(internet_results, int_question_prompt)
+                tested_models.append("qa")
+
+                # Get the response from the chatbot
+                if (cfg.current_data["prompt_order"].count("g4a") > 0):
+                    # Use GPT4All (the recommended option) if it's available
+                    sprompt = cbg4a.system_messages
+                    cbg4a.system_messages = internet_results.split("\n")
+
+                    internet_response = cbg4a.MakePrompt(int_question_prompt, False, ["", ""])
+                    cbg4a.system_messages = sprompt
+
+                    if (tested_models.count("g4a") == 0):
+                        tested_models.append("g4a")
+                elif (cfg.current_data["prompt_order"].count("hf") > 0):
+                    # Use a HuggingFace's Text Generation model if it's available
+                    sprompt = cba.system_messages
+                    cba.system_messages = internet_results.split("\n")
+
+                    internet_response = cba.MakePrompt(int_question_prompt, False, ["", ""])
+                    cba.system_messages = sprompt
+
+                    if (tested_models.count("hf") == 0):
+                        tested_models.append("hf")
+            elif (internet_type == "chatbot-qa" and cfg.current_data["prompt_order"].count("qa") > 0):
+                # Use a Chatbot model, then use a Question Answering model (if allowed)
+                # Get the response from the chatbot
+                if (cfg.current_data["prompt_order"].count("g4a") > 0):
+                    # Use GPT4All (the recommended option) if it's available
+                    sprompt = cbg4a.system_messages
+                    cbg4a.system_messages = internet_results.split("\n")
+
+                    internet_results = cbg4a.MakePrompt(int_question_prompt, False, ["", ""])
+                    cbg4a.system_messages = sprompt
+
+                    if (tested_models.count("g4a") == 0):
+                        tested_models.append("g4a")
+                elif (cfg.current_data["prompt_order"].count("hf") > 0):
+                    # Use a HuggingFace's Text Generation model if it's available
+                    sprompt = cba.system_messages
+                    cba.system_messages = internet_results.split("\n")
+
+                    internet_results = cba.MakePrompt(int_question_prompt, False, ["", ""])
+                    cba.system_messages = sprompt
+
+                    if (tested_models.count("hf") == 0):
+                        tested_models.append("hf")
+                
+                # Get the response from the Question Answering model
+                internet_response = qa.ProcessPrompt(internet_results, int_question_prompt)
+                tested_models.append("qa")
+            else:
+                # If the internet_type specified by the user is not recognized or if the model is not available, append it to the errors list
+                errors.append("Unrecognized internet_type or model not available.")
+            
+            # Replace the command with the internet response
+            response = response.replace("[int " + int_prompt + "]", internet_response)
+        except Exception as ex:
+            # If there is an error, append it to the errors list and logs
+            errors.append("Could not search on internet: " + str(ex))
+            logs.AddToLog("(ERROR) Internet Search from response failed: " + str(ex))
             
     # If the model returned the Image Generation command and the use of Image Generation is allowed...
     if (order_prompt.__contains__("text2img") and response.__contains__("[agi ")):
@@ -614,22 +742,26 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
 
             # Remove the double quotes from the image prompt, if it starts with it
             if (img_prompt.startswith("\"") or img_prompt.startswith("\'")):
-                img_prompt = img_prompt[1:]
+                img_prompt_filtered = img_prompt[1:]
+            else:
+                img_prompt_filtered = img_prompt
             
             # Remove the double quotes from the image prompt, if it ends with it
             if (img_prompt.endswith("\"")) or img_prompt.endswith("\'"):
-                img_prompt = img_prompt[:-1]
+                img_prompt_filtered = img_prompt_filtered[:-1]
+            else:
+                img_prompt_filtered = img_prompt_filtered
 
             # Cut the response
             response = response.replace("[agi " + img_prompt + "]", "")
 
             # Separate the prompt and the negative prompt
-            if (img_prompt.count("(NEGATIVE)") > 0):
-                g_np = img_prompt[img_prompt.index("(NEGATIVE)") + 10:].strip()
-                g_p = img_prompt[:img_prompt.index("(NEGATIVE)")].strip()
+            if (img_prompt_filtered.count("(NEGATIVE)") > 0):
+                g_np = img_prompt_filtered[img_prompt_filtered.index("(NEGATIVE)") + 10:].strip()
+                g_p = img_prompt_filtered[:img_prompt_filtered.index("(NEGATIVE)")].strip()
             else:
                 g_np = ""
-                g_p = img_prompt
+                g_p = img_prompt_filtered
 
             # Set the img_prompt to a dict, then run the image generation command
             img_prompt = json.dumps({"prompt": g_p, "negative_prompt": g_np})
@@ -658,14 +790,18 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
 
             # Remove the double quotes from the image prompt, if it starts with it
             if (aud_prompt.startswith("\"")):
-                aud_prompt = aud_prompt[1:]
+                aud_prompt_filtered = aud_prompt[1:]
+            else:
+                aud_prompt_filtered = aud_prompt
             
             # Remove the double quotes from the image prompt, if it ends with it
             if (aud_prompt.endswith("\"")):
-                aud_prompt = aud_prompt[:-1]
+                aud_prompt_filtered = aud_prompt_filtered[:-1]
+            else:
+                aud_prompt_filtered = aud_prompt_filtered
 
             response = response.replace("[aga " + aud_prompt + "]", "")
-            auds = MakePrompt(aud_prompt, order_prompt, "-ncb-aud", extra_system_msgs, translator, force_translator, conversation, use_default_sys_prompts)["files"]["audios"]
+            auds = MakePrompt(img_prompt_filtered, order_prompt, "-ncb-aud", extra_system_msgs, translator, force_translator, conversation, use_default_sys_prompts)["files"]["audios"]
 
             try:
                 files["audios"] += auds
@@ -680,12 +816,12 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
             logs.AddToLog("(ERROR) Audio Generation from response failed: " + str(ex))
             
     # If the use of translators is allowed and the translator language is not empty...
-    if (len(translator.strip()) > 0 and cfg.current_data.use_other_services_on_chatbot):
+    if (len(translator.strip()) > 0 and cfg.current_data["use_other_services_on_chatbot"]):
         # ...Translate the response to the translator language
         response = Translate(translator, response)
             
     # If the use of Dynamic System Prompts is allowed...
-    if (cfg.current_data.use_dynamic_system_args):
+    if (cfg.current_data["use_dynamic_system_args"]):
         # Remove from the System Prompts list
         for m in dsm:
             if (sm.count(m) > 0):
@@ -763,7 +899,7 @@ def DoRVC(audio_data: str) -> str:
     return audio
 
 def Translate(translator: str, prompt: str) -> str:
-    if (cfg.current_data.prompt_order.count("tr") > 0):
+    if (cfg.current_data["prompt_order"].count("tr") > 0):
         # Get the prompt language
         lang = tns.GetLanguage(prompt)
 
@@ -778,7 +914,7 @@ def Translate(translator: str, prompt: str) -> str:
 
 def ClassifyText(prompt: str) -> str:
     # Classify text
-    if (cfg.current_data.prompt_order.count("sc") > 0):
+    if (cfg.current_data["prompt_order"].count("sc") > 0):
         return tc.DoPrompt(prompt)
     
     return "-1"
@@ -803,20 +939,19 @@ def DoTTS(prompt: str):
     # Return the data
     return audio
 
-#def DoUVR(audio_data: str) -> list[str]:
-#    # Convert audio data to json
-#    audio_data = cfg.JSONDeserializer(audio_data)
-#
-#    # Get UVR audio response
-#    data = uvr.MakeUVR(audio_data)
-#    
-#    for aud in data:
-#        # Encode the audio into base64
-#        data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
-#
-#    # Return the data
-#    return data
-#
+def DoUVR(audio_data: str) -> list[str]:
+    # Convert audio data to json
+    audio_data = cfg.JSONDeserializer(audio_data)
+
+    # Get UVR audio response
+    data = uvr.MakeUVR(audio_data)
+    
+    for aud in data:
+        # Encode the audio into base64
+        data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
+
+    # Return the data
+    return data
 
 def DoImg2Img(prompt: str) -> list[str]:
     # Convert image data to json

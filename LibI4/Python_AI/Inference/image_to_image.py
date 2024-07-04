@@ -11,21 +11,21 @@ device: str = "cpu"
 def LoadModel() -> None:
     global pipeline, device
 
-    if (not cfg.current_data.prompt_order.__contains__("img2img")):
+    if (not cfg.current_data["prompt_order"].__contains__("img2img")):
         raise Exception("Model is not in 'prompt_order'.")
     
     if (pipeline != None):
         return
     
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'image to image'...")
     
-    data = cfg.LoadDiffusersPipeline("img2img", cfg.current_data.image_to_image_model, AutoPipelineForImage2Image)
+    data = cfg.LoadDiffusersPipeline("img2img", cfg.current_data["image_to_image_model"], AutoPipelineForImage2Image)
 
     pipeline = data[0]
     device = data[1]
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device + "'.")
 
 def Prompt(prompt: str | dict[str, str]) -> list[bytes]:
@@ -51,19 +51,19 @@ def __process__(prompt: str, image: str | Image.Image) -> list[bytes]:
     if (type(image) == str):
         image = Image.open(image)
     
-    if (cfg.current_data.seed >= 0):
-        generator = torch.manual_seed(cfg.current_data.seed)
+    if (cfg.current_data["seed"] >= 0):
+        generator = torch.manual_seed(cfg.current_data["seed"])
     else:
         generator = torch.manual_seed(torch.seed())
     
-    if (cfg.current_data.print_prompt):
+    if (cfg.current_data["print_prompt"]):
         print("Prompt: " + prompt)
         print("Using seed: " + str(generator.seed()))
     
     image = ImageOps.exif_transpose(image)
     image = image.convert("RGB")
 
-    images_generated = pipeline(prompt, image = image, num_inference_steps = cfg.current_data.i2i_steps).images
+    images_generated = pipeline(prompt, image = image, num_inference_steps = cfg.current_data["i2i_steps"]).images
     images = []
 
     for image in images_generated:

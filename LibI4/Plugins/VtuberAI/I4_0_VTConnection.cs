@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 
-namespace TAO.I4.Plugins.VTuber
+namespace TAO71.I4.Plugins.VTuber
 {
     public static class I4_0_VTConnection
     {

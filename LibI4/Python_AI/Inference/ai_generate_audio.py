@@ -8,21 +8,21 @@ model_pipeline: Pipeline = None
 def LoadModel() -> None:
     global model_pipeline
 
-    if (not cfg.current_data.prompt_order.__contains__("text2audio")):
+    if (not cfg.current_data["prompt_order"].__contains__("text2audio")):
         raise Exception("Model is not in 'prompt_order'.")
 
     if (model_pipeline != None):
         return
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'text to audio'...")
     
-    data = cfg.LoadPipeline("text-to-audio", "text2audio", cfg.current_data.text_to_audio_model)
+    data = cfg.LoadPipeline("text-to-audio", "text2audio", cfg.current_data["text_to_audio_model"])
     
     model_pipeline = data[0]
     device = data[1]
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device + "'.")
 
 def GenerateAudio(prompt: str) -> bytes:
@@ -34,7 +34,7 @@ def GenerateAudio(prompt: str) -> bytes:
     if (prompt.endswith("\"") or prompt.endswith("'")):
         prompt = prompt[0:len(prompt) - 2]
     
-    if (cfg.current_data.print_prompt):
+    if (cfg.current_data["print_prompt"]):
         print("AUDIO GENERATION: " + prompt)
 
     result = model_pipeline(prompt)

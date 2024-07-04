@@ -37,14 +37,28 @@ fi
 echo "Installing PyTorch... [3/$MAX_TASKS]"
 pip install --upgrade torch torchvision torchaudio $PYTORCH_WHL
 
+if [ $? != 0 ]; then
+    echo "PyTorch installation failed."
+    exit 1
+fi
+
 # 3. Install I4.0 requirements.
 echo "Installing I4.0 requirements... [4/$MAX_TASKS]"
 pip install -r requirements.txt
+
+if [ $? != 0 ]; then
+    echo "Requirements installation failed."
+    exit 1
+fi
 
 # 4. Install extra I4.0 requirements.
 if [ "$ALLOW_EXTRA_REQUIREMENTS" = true ]; then
     echo "Installing I4.0 extra requirements... [5/$MAX_TASKS]"
     pip install -r requirements_optional.txt
+
+    if [ $? != 0 ]; then
+        echo "Extra requirements installation failed."
+    fi
 fi
 
 # 5. Completed!

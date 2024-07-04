@@ -1,36 +1,32 @@
 # General requirements
-numpy>=1.26.4
+numpy
 torch>=2.0.0
 torchtext
 torchvision
 torchaudio
-transformers>=4.41.2
-diffusers>=0.28.0
-datasets>=2.18.0
-pymysql>=1.1.0
+transformers
+diffusers
 
+# Server requirements
 asyncio
 websockets
+pymysql>=1.1.0
 
+# Other requirements
 requests
-beautifulsoup4      # Comming soon for search on internet??
-google              # Comming soon for search on internet??
+beautifulsoup4
+google
 soundfile
 scipy
-evaluate
 opencv-python
-optimum>=1.18.0
 Pillow
-pandas
 setuptools
 safetensors
 sentencepiece
-git+https://github.com/Tps-F/fairseq.git@main
-
-accelerate
-bitsandbytes
-
 emoji
+google-tts
+git+https://github.com/Tps-F/fairseq.git@main
+bitsandbytes
 
 # Requirements for inference
 gpt4all>=2.7.0
@@ -38,3 +34,7 @@ SpeechRecognition>=3.10.4
 openai-whisper>=1.0.0
 git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
 pySpeakNG>=0.1.2
+styletts2
+
+# Requirements for training
+autotrain-advanced>=0.7.129

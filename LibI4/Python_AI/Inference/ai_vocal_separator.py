@@ -47,7 +47,7 @@ def __load_model__(ModelPath: str, Agg: int) -> None:
     if (uvr != None):
         uvr = None
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading UVR...")
 
     if (len(cfg.devices) == 0):
@@ -75,7 +75,7 @@ def __load_model__(ModelPath: str, Agg: int) -> None:
             
             uvr.model.to(uvr.config.device)
 
-            if (cfg.current_data.print_loading_message):
+            if (cfg.current_data["print_loading_message"]):
                 print("   Loaded model on device '" + device + "'.")
 
             return
@@ -146,10 +146,10 @@ def DownloadAssets() -> None:
         __download_asset__(assets[asset], "uvr_assets/" + asset)
 
 def LoadModel(Agg: int) -> None:
-    __move_file__(cfg.current_data.uvr_model, "uvr_assets/" + __get_file_name__(cfg.current_data.uvr_model))
-    cfg.current_data.uvr_model = __get_file_name__(cfg.current_data.uvr_model)
+    __move_file__(cfg.current_data["uvr_model"], "uvr_assets/" + __get_file_name__(cfg.current_data["uvr_model"]))
+    cfg.current_data["uvr_model"] = __get_file_name__(cfg.current_data["uvr_model"])
 
-    __load_model__(cfg.current_data.uvr_model, Agg)
+    __load_model__(cfg.current_data["uvr_model"], Agg)
 
 def MakeUVR(Data: dict[str]) -> list[bytes]:
     try:

@@ -17,22 +17,22 @@ def __load_model__(model_name: str, device: str):
 def LoadModel() -> None:
     global processor, model, device
 
-    if (not cfg.current_data.prompt_order.__contains__("de")):
+    if (not cfg.current_data["prompt_order"].__contains__("de")):
         raise Exception("Model is not in 'prompt_order'.")
 
     if (model != None and processor != None):
         return
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'depth estimation'...")
     
-    data = cfg.LoadModel("de", cfg.current_data.depth_estimation_model, AutoModelForDepthEstimation, AutoImageProcessor)
+    data = cfg.LoadModel("de", cfg.current_data["depth_estimation_model"], AutoModelForDepthEstimation, AutoImageProcessor)
 
     model = data[0]
     processor = data[1]
     device = data[2]
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device + "'.")
 
 def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
@@ -43,7 +43,7 @@ def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
     elif (type(image) != PIL.Image.Image):
         raise Exception("Image is not 'str' or 'PIL.Image.Image'.")
     
-    if (cfg.current_data.print_prompt):
+    if (cfg.current_data["print_prompt"]):
         print("Estimating depth...")
     
     inputs = processor(images = [image], return_tensors = "pt")

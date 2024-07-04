@@ -5,7 +5,7 @@ using TwitchLib.Client;
 using TwitchLib.Client.Events;
 using TwitchLib.Client.Models;
 
-namespace TAO.I4.Plugins.Twitch
+namespace TAO71.I4.Plugins.Twitch
 {
     public static class AI_Twitch
     {

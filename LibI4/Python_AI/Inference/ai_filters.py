@@ -11,42 +11,42 @@ device_image: str = "cpu"
 def LoadTextModel() -> None:
     global text_filter, tokenizer_text, device_text
 
-    if (not cfg.current_data.prompt_order.__contains__("nsfw_filter-text")):
+    if (not cfg.current_data["prompt_order"].__contains__("nsfw_filter-text")):
         raise Exception("Model is not in 'prompt_order'.")
 
     if (text_filter != None and tokenizer_text != None):
         return
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'NSFW Filter (Text)'...")
     
-    data = cfg.LoadModel("nsfw_filter-text", cfg.current_data.nsfw_filter_text_model, AutoModelForSequenceClassification, AutoTokenizer)
+    data = cfg.LoadModel("nsfw_filter-text", cfg.current_data["nsfw_filter_text_model"], AutoModelForSequenceClassification, AutoTokenizer)
 
     text_filter = data[0]
     tokenizer_text = data[1]
     device_text = data[2]
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device_text + "'.")
 
 def LoadImageModel() -> None:
     global image_filter, device_image
 
-    if (not cfg.current_data.prompt_order.__contains__("nsfw_filter-image")):
+    if (not cfg.current_data["prompt_order"].__contains__("nsfw_filter-image")):
         raise Exception("Model is not in 'prompt_order'.")
 
     if (image_filter != None):
         return
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'NSFW Filter (Image)'...")
     
-    data = cfg.LoadPipeline("image-classification", "nsfw_filter-image", cfg.current_data.nsfw_filter_image_model)
+    data = cfg.LoadPipeline("image-classification", "nsfw_filter-image", cfg.current_data["nsfw_filter_image_model"])
 
     image_filter = data[0]
     device_image = data[1]
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device_image + "'.")
 
 def IsTextNSFW(prompt: str) -> bool:

@@ -34,7 +34,7 @@ def AddToLog(Data: str, IncludeTime: bool = True, WriteLogToFile: bool = False, 
 def WriteToFile(WriteLatest: bool = True) -> None:
     CheckFilesAndDirs()
 
-    if (not cfg.current_data.use_only_latest_log):
+    if (not cfg.current_data["use_only_latest_log"]):
         with open("Logs/" + log_name + ".txt", "w+") as f:
             f.write(log_data)
             f.close()

@@ -181,7 +181,7 @@ if (UseServer):
         os.mkdir(SaveDataDirectory + "Files/")
 
     try:
-        ip = "127.0.0.1" if (cfg.current_data.use_local_ip) else "0.0.0.0"
+        ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
@@ -198,4 +198,4 @@ if (UseServer):
     except Exception as ex:
         logs.AddToLog("[DATA SHARE] ERROR: " + str(ex))
     
-    logs.WriteToFile(cfg.current_data.use_only_latest_log)
+    logs.WriteToFile(cfg.current_data["use_only_latest_log"])

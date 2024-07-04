@@ -44,7 +44,7 @@ def __load_model__(ModelPath: str, ModelName: str) -> None:
     os.environ["index_root"] = "rvc_assets"
     os.environ["rmvpe_root"] = "rvc_assets"
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading RVC model '" + ModelName + "'...")
 
     device = cfg.GetAvailableGPUDeviceForTask("rvc", 0)
@@ -71,7 +71,7 @@ def __load_model__(ModelPath: str, ModelName: str) -> None:
 
     vc.get_vc(os.getcwd() + "/rvc_assets/" + ModelPath)
 
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("   Loaded model on device '" + device + "'.")
 
 def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: int, f0_up_key: int) -> bytes:
@@ -81,7 +81,7 @@ def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: i
         raise Exception("Audio file doesn't exists.")
 
     try:
-        tgt_sr, audio_opt, _, _ = vc.vc_inference(1, Path(AudioPath), f0_up_key = f0_up_key, protect = Protect, filter_radius = FilterRadius, f0_method = cfg.current_data.rvc_models[ModelName][2], hubert_path = os.getcwd() + "/rvc_assets/hubert_base.pt", index_file = cfg.current_data.rvc_models[ModelName][1])
+        tgt_sr, audio_opt, _, _ = vc.vc_inference(1, Path(AudioPath), f0_up_key = f0_up_key, protect = Protect, filter_radius = FilterRadius, f0_method = cfg.current_data["rvc_models"][ModelName][2], hubert_path = os.getcwd() + "/rvc_assets/hubert_base.pt", index_file = cfg.current_data["rvc_models"][ModelName][1])
 
         print(str(tgt_sr == None) + " " + str(audio_opt == None))
     except Exception as ex:
@@ -117,16 +117,16 @@ def LoadModel(ModelName: str, AllowDownloads: bool = True) -> None:
     if (AllowDownloads):
         DownloadAssets()
     
-    if (list(cfg.current_data.rvc_models.keys()).count(ModelName) == 0):
+    if (list(cfg.current_data["rvc_models"].keys()).count(ModelName) == 0):
         raise Exception("Model '" + ModelName + "' not found.")
     
-    __move_file__(cfg.current_data.rvc_models[ModelName][0], "rvc_assets/" + __get_file_name__(cfg.current_data.rvc_models[ModelName][0]))
-    __move_file__(cfg.current_data.rvc_models[ModelName][1], "rvc_assets/" + __get_file_name__(cfg.current_data.rvc_models[ModelName][1]))
+    __move_file__(cfg.current_data["rvc_models"][ModelName][0], "rvc_assets/" + __get_file_name__(cfg.current_data["rvc_models"][ModelName][0]))
+    __move_file__(cfg.current_data["rvc_models"][ModelName][1], "rvc_assets/" + __get_file_name__(cfg.current_data["rvc_models"][ModelName][1]))
 
-    cfg.current_data.rvc_models[ModelName][0] = __get_file_name__(cfg.current_data.rvc_models[ModelName][0])
-    cfg.current_data.rvc_models[ModelName][1] = __get_file_name__(cfg.current_data.rvc_models[ModelName][1])
+    cfg.current_data["rvc_models"][ModelName][0] = __get_file_name__(cfg.current_data["rvc_models"][ModelName][0])
+    cfg.current_data["rvc_models"][ModelName][1] = __get_file_name__(cfg.current_data["rvc_models"][ModelName][1])
 
-    __load_model__(cfg.current_data.rvc_models[ModelName][0], ModelName)
+    __load_model__(cfg.current_data["rvc_models"][ModelName][0], ModelName)
 
 def MakeRVC(Data: dict[str]) -> bytes:
     try:

@@ -7,7 +7,7 @@ import pymysql.cursors as mysql_c
 import ai_config as cfg
 
 default_tokens: int = 5000
-use_mysql: bool = cfg.current_data.keys_db["use"] if (type(cfg.current_data.keys_db["user"]) == bool) else (str(cfg.current_data.keys_db["user"]).lower() == "true")
+use_mysql: bool = cfg.current_data["keys_db"]["use"] if (type(cfg.current_data["keys_db"]["user"]) == bool) else (str(cfg.current_data["keys_db"]["user"]).lower() == "true")
 mysql_connection = None
 mysql_cursor = None
 
@@ -18,7 +18,7 @@ def ReloadDB() -> None:
     global mysql_connection, mysql_cursor
 
     if (use_mysql):
-        mysql_connection = mysql.connect(host = cfg.current_data.keys_db["server"], user = cfg.current_data.keys_db["user"], password = cfg.current_data.keys_db["password"], database = cfg.current_data.keys_db["database"], cursorclass = mysql_c.DictCursor)
+        mysql_connection = mysql.connect(host = cfg.current_data["keys_db"]["server"], user = cfg.current_data["keys_db"]["user"], password = cfg.current_data["keys_db"]["password"], database = cfg.current_data["keys_db"]["database"], cursorclass = mysql_c.DictCursor)
         mysql_cursor = mysql_connection.cursor()
 
 def Init() -> None:
@@ -92,7 +92,7 @@ def SaveKey(key_data: dict) -> str:
 
     if (use_mysql):
         try:
-            mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+            mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
             mysql_connection.commit()
 
             return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
@@ -100,7 +100,7 @@ def SaveKey(key_data: dict) -> str:
             ReloadDB()
 
             try:
-                mysql_cursor.execute("UPDATE " + cfg.current_data.keys_db["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+                mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
                 mysql_connection.commit()
 
                 return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
@@ -122,7 +122,7 @@ def GetAllKeys() -> list[dict]:
     
     if (use_mysql):
         try:
-            mysql_cursor.execute("SELECT * FROM " + cfg.current_data.keys_db["table"])
+            mysql_cursor.execute("SELECT * FROM " + cfg.current_data["keys_db"]["table"])
             results = mysql_cursor.fetchall()
 
             for db_key in results:
@@ -144,7 +144,7 @@ def GetAllKeys() -> list[dict]:
             ReloadDB()
 
             try:
-                mysql_cursor.execute("SELECT * FROM " + cfg.current_data.keys_db["table"])
+                mysql_cursor.execute("SELECT * FROM " + cfg.current_data["keys_db"]["table"])
                 results = mysql_cursor.fetchall()
 
                 for db_key in results:

@@ -46,7 +46,7 @@ def SaveConversations() -> None:
 def SaveConversation(Name: str) -> None:
     Init()
 
-    if (not cfg.current_data.save_conversations):
+    if (not cfg.current_data["save_conversations"]):
         return
 
     with open("Conversations/" + Name + ".json", "w+") as f:
@@ -67,7 +67,7 @@ def AddToConversation(Name: str, Conv: str, User: str, Response: str) -> None:
     SaveConversation(Name)
 
 def UpdateConversations() -> None:
-    if (not cfg.current_data.save_conversations):
+    if (not cfg.current_data["save_conversations"]):
         return
     
     ReplaceTXTConversations()
@@ -94,7 +94,7 @@ def ReplaceTXTConversations() -> None:
 def UpdateConversation(Name: str) -> None:
     Init()
 
-    if (not cfg.current_data.save_conversations):
+    if (not cfg.current_data["save_conversations"]):
         return
 
     Name = __filter_name__(Name)

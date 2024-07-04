@@ -47,7 +47,7 @@ if (os.path.exists("temp/discord_trs.json")):
         translators = json.loads(f.read())
         f.close()
 
-async def connect_to_server_and_send(send_data: str | bytes, is_file: bool = False) -> str:
+async def connect_to_server_and_send(send_data: str | bytes, is_file: bool = False, attempt: int = 0) -> str:
     global websocket, fwebsocket
 
     if (type(send_data) == str):
@@ -126,7 +126,13 @@ async def connect_to_server_and_send(send_data: str | bytes, is_file: bool = Fal
                     return response
                 except websockets.ConnectionClosed as ex:
                     print("Connection closed!")
-                    continue
+                    websocket = None
+                    attempt += 1
+
+                    if (attempt < 3):
+                        return await connect_to_server_and_send(send_data, is_file, attempt)
+                    
+                    return "ERROR CONNECTING TO THE SERVER (Connection Closed, >3 attempts)."
                 except Exception as ex:
                     print("Error sending: " + str(ex))
                     traceback.print_exc()

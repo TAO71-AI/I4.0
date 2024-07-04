@@ -16,17 +16,17 @@ def LoadModel() -> None:
     if (whisperM != None):
         return
     
-    if (cfg.current_data.print_loading_message):
+    if (cfg.current_data["print_loading_message"]):
         print("Loading model 'whisper'...")
 
     for i in range(len(cfg.devices)):
         dev = cfg.GetAvailableGPUDeviceForTask("whisper", i)
         
         try:
-            whisperM = whisper.load_model(cfg.current_data.whisper_model, dev, None, False)
+            whisperM = whisper.load_model(cfg.current_data["whisper_model"], dev, None, False)
             device = dev
 
-            if (cfg.current_data.print_loading_message):
+            if (cfg.current_data["print_loading_message"]):
                 print("   Loaded model on device '" + device + "'.")
 
             return
@@ -36,7 +36,7 @@ def LoadModel() -> None:
     raise Exception("Could not create Whisper.")
 
 def Recognize(data: sr.AudioData) -> dict[str, str]:
-    if (not cfg.current_data.prompt_order.__contains__("whisper")):
+    if (not cfg.current_data["prompt_order"].__contains__("whisper")):
         raise Exception("Model is not loaded in 'prompt_order'.")
     
     result = {
@@ -57,14 +57,14 @@ def Recognize(data: sr.AudioData) -> dict[str, str]:
             f.write(data.get_wav_data())
             f.close()
         
-        result = whisperM.transcribe(audio_name, temperature = cfg.current_data.temp)
+        result = whisperM.transcribe(audio_name, temperature = cfg.current_data["temp"])
         result = {
             "text": result["text"],
             "lang": result["language"],
             "error": ""
         }
 
-        if (cfg.current_data.print_prompt):
+        if (cfg.current_data["print_prompt"]):
             print("RESULT FROM WHISPER: " + str(result))
 
         os.remove(audio_name)

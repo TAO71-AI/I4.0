@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace TAO.I4.PythonManager
+namespace TAO71.I4.PythonManager
 {
     public enum Service
     {
@@ -20,7 +20,16 @@ namespace TAO.I4.PythonManager
         TTS = 13,
         UVR = 14,
         ImageToImage = 15,
+        QuestionAnswering = 16,
         None = -1
+    }
+
+    public enum InternetSearchOptions
+    {
+        QuestionAnswering = 0,
+        Chatbot = 1,
+        QuestionAnswering_Chatbot = 2,
+        Chatbot_QuestionAnswering = 3
     }
 
     public static class ServiceManager
@@ -61,6 +70,8 @@ namespace TAO.I4.PythonManager
                     return Service.UVR;
                 case "img2img":
                     return Service.ImageToImage;
+                case "qa":
+                    return Service.QuestionAnswering;
             }
 
             throw new Exception("Could not parse service.");
@@ -100,6 +111,8 @@ namespace TAO.I4.PythonManager
                     return "uvr";
                 case Service.ImageToImage:
                     return "img2img";
+                case Service.QuestionAnswering:
+                    return "qa";
             }
 
             throw new Exception("Could not parse service.");
@@ -133,6 +146,77 @@ namespace TAO.I4.PythonManager
         }
 
         public static string AutoConvert(Service ServiceName)
+        {
+            return ToString(ServiceName);
+        }
+    }
+
+    public static class InternetSearchManager
+    {
+        public static InternetSearchOptions FromString(string TypeName)
+        {
+            TypeName = TypeName.ToLower();
+
+            switch (TypeName)
+            {
+                case "qa":
+                    return InternetSearchOptions.QuestionAnswering;
+                case "chatbot":
+                    return InternetSearchOptions.Chatbot;
+                case "qa-chatbot":
+                    return InternetSearchOptions.QuestionAnswering_Chatbot;
+                case "chatbot-qa":
+                    return InternetSearchOptions.Chatbot_QuestionAnswering;
+            }
+
+            throw new Exception("Could not parse internet search options.");
+        }
+
+        public static string ToString(InternetSearchOptions TypeName)
+        {
+            switch (TypeName)
+            {
+                case InternetSearchOptions.QuestionAnswering:
+                    return "qa";
+                case InternetSearchOptions.Chatbot:
+                    return "chatbot";
+                case InternetSearchOptions.QuestionAnswering_Chatbot:
+                    return "qa-chatbot";
+                case InternetSearchOptions.Chatbot_QuestionAnswering:
+                    return "chatbot-qa";
+            }
+
+            throw new Exception("Could not parse internet search options.");
+        }
+
+        public static InternetSearchOptions FromInt(int ServiceID)
+        {
+            try
+            {
+                return (InternetSearchOptions)ServiceID;
+            }
+            catch
+            {
+                throw new Exception("Could not fing internet search option with the ID '" + ServiceID.ToString() + "'.");
+            }
+        }
+
+        public static int ToInt(InternetSearchOptions ServiceName)
+        {
+            return (int)ServiceName;
+        }
+
+        public static InternetSearchOptions AutoConvert(string ServiceName)
+        {
+            return FromString(ServiceName);
+        }
+
+        public static InternetSearchOptions AutoConvert(int ServiceID)
+        {
+            return FromInt(ServiceID);
+        }
+
+        public static string AutoConvert(InternetSearchOptions ServiceName)
         {
             return ToString(ServiceName);
         }

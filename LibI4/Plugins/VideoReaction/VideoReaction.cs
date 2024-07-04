@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading;
-using TAO.I4.PythonManager;
+using TAO71.I4.PythonManager;
 
-namespace TAO.I4.Plugins.VideoReaction
+namespace TAO71.I4.Plugins.VideoReaction
 {
     public static class VideoReaction
     {

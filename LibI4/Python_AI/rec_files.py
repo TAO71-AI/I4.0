@@ -146,7 +146,7 @@ def WSServer() -> None:
     event_loop = asyncio.new_event_loop()
     asyncio.set_event_loop(event_loop)
     
-    ip = "127.0.0.1" if (cfg.current_data.use_local_ip) else "0.0.0.0"
+    ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
     server_ws = websockets.server.serve(AcceptClient, ip, 8061)
 
     event_loop.run_until_complete(server_ws)
