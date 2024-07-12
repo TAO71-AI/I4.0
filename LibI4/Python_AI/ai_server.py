@@ -95,18 +95,25 @@ def __prompt__(service: str, prompt: str, args: str, extra_system_messages: list
     while (__get_queue_users__(service) > cfg.current_data["max_prompts"]):
         threading.Event().wait(1)
     
-    if (service == "nsfw_filter-image"):
-        response = cb.FilterNSFWImage(prompt)
-    elif (service == "nsfw_filter-text"):
-        response = cb.FilterNSFWText(prompt)
-    elif (service == "whisper"):
-        response = cb.RecognizeAudio(prompt)
-    elif (service == "od" or service == "de" or service == "rvc" or service == "uvr" or service == "img2img" or service == "tr" or service == "sc" or service == "img2text"):
-        response = cb.MakePrompt(prompt, cfg.current_data["prompt_order"], "-ncb-" + service, [], "", False, ["", ""], False, internet_type)
-    else:
-        response = cb.MakePrompt(prompt, cfg.current_data["prompt_order"], args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts, internet_type)
+    try:
+        if (service == "nsfw_filter-image"):
+            response = cb.FilterNSFWImage(prompt)
+        elif (service == "nsfw_filter-text"):
+            response = cb.FilterNSFWText(prompt)
+        elif (service == "whisper"):
+            response = cb.RecognizeAudio(prompt)
+        elif (service == "od" or service == "de" or service == "rvc" or service == "uvr" or service == "img2img" or service == "tr" or service == "sc" or service == "img2text"):
+            response = cb.MakePrompt(prompt, cfg.current_data["prompt_order"], "-ncb-" + service, [], "", False, ["", ""], False, internet_type)
+        else:
+            response = cb.MakePrompt(prompt, cfg.current_data["prompt_order"], args, extra_system_messages, translator, force_translator, conversation, use_default_sys_prompts, internet_type)
+    except Exception as ex:
+        queue[service] -= 1
+        raise ex
     
     queue[service] -= 1
+
+    if (queue[service] < 0):
+        queue[service] = 0
 
     if (type(response) != dict):
         response = {
@@ -349,7 +356,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         return res
     elif (command.startswith("ai_depth ")):
-        img = command[9:len(command)]
+        img = command[9:]
         img_bytes = b""
         
         if (not os.path.exists("ReceivedFiles/" + img + ".enc_file")):
@@ -609,7 +616,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         response = DoPrompt("tr", json.dumps({"tr": translator, "prompt": prompt}), "", [], "", False, ["", ""], False, internet_type)
 
-        if (res["errors"].count("NSFW") > 0 and cfg.current_data["ban_if_nsfw"] and ip != "0.0.0.0" and ip != "127.0.0.1"):
+        if (response["errors"].count("NSFW") > 0 and cfg.current_data["ban_if_nsfw"] and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
 
         try:
@@ -631,7 +638,7 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         response = DoPrompt("sc", prompt, "", [], "", False, ["", ""], False, internet_type)
 
-        if (res["errors"].count("NSFW") > 0 and cfg.current_data["ban_if_nsfw"] and ip != "0.0.0.0" and ip != "127.0.0.1"):
+        if (response["errors"].count("NSFW") > 0 and cfg.current_data["ban_if_nsfw"] and ip != "0.0.0.0" and ip != "127.0.0.1"):
             ip_ban.BanIP(ip)
 
         try:
@@ -692,9 +699,6 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             start_timer = time.time()
         
         img = DoPrompt("nsfw_filter-image", "temp_img_" + str(tid) + ".png", "", [], "", False, ["", ""], False, internet_type)
-
-        if (res["errors"].count("NSFW") > 0 and cfg.current_data["ban_if_nsfw"] and ip != "0.0.0.0" and ip != "127.0.0.1"):
-            ip_ban.BanIP(ip)
 
         try:
             __share_data__("", {"images": ["temp_img_" + str(tid) + ".png"]}, img["response"], img["files"])
@@ -770,7 +774,6 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
 
         os.remove("temp_audio_" + str(tid) + ".wav")
         return str(aud_output)
-        return str("ERROR: Under development.")
     elif (command.startswith("ai_img_to_img ")):
         image = command[14:]
         img_bytes = b""
@@ -800,6 +803,9 @@ def run_server_command(command_data: str, extra_data: dict[str] = {}) -> str:
             start_timer = time.time()
 
         img_output = DoPrompt("img2img", json.dumps(image), "", [], "", False, ["", ""], False, internet_type)
+
+        if (img_output["errors"].count("NSFW") > 0 and cfg.current_data["ban_if_nsfw"] and ip != "0.0.0.0" and ip != "127.0.0.1"):
+            ip_ban.BanIP(ip)
 
         try:
             __share_data__("", {"images": ["temp_image_" + str(tid) + ".png"]}, "", img_output["files"])
@@ -871,118 +877,145 @@ def __execute_service_without_key__(service: str, extra_data: dict[str]) -> str:
         return "Error executing service. Make sure this service exists" + (" and you're using a valid API key." if (cfg.current_data["force_api_key"]) else ".")
 
 def __execute_service_with_key__(service: str, key_data: dict, extra_data: dict[str]) -> str:
-    if (requires_api_key and (key_data == None or key_data["tokens"] <= 0)):
+    cmd = ""
+    price = 0
+    has_exception = False
+
+    if (service.startswith("service_0 ")):
+        # Chatbot full-response
+
+        price = 30
+        cmd = "-u ai_fresponse " + service[10:]
+    elif (service.startswith("service_1 ")):
+        # Custom server command
+
+        price = 50
+        cmd = "-u " + service[10:]
+    elif (service.startswith("service_2 ")):
+        # Image generation
+
+        price = 30
+        cmd = "-u ai_image " + service[10:]
+    elif (service.startswith("service_3 ")):
+        # Image to Text
+
+        price = 20
+        cmd = "-u ai_img_to_text " + service[10:]
+    elif (service.startswith("service_4 ")):
+        # Whisper audio recognition
+
+        price = 25
+        cmd = "-u ai_whisper " + service[10:]
+    elif (service.startswith("service_5 ")):
+        # Audio generation
+            
+        price = 25
+        cmd = "-u ai_audio " + service[10:]
+    elif (service.startswith("service_6 ")):
+        # Depth estimation
+            
+        price = 15
+        cmd = "-u ai_depth " + service[10:]
+    elif (service.startswith("service_7 ")):
+        # Object detection
+            
+        price = 15
+        cmd = "-u ai_object_detection " + service[10:]
+    elif (service.startswith("service_8 ")):
+        # RVC
+            
+        price = 20
+        cmd = "-u ai_rvc " + service[10:]
+    elif (service.startswith("service_9 ")):
+        # Translate
+            
+        price = 10
+        cmd = "-u translate " + service[10:]
+    elif (service.startswith("service_10 ")):
+        # Classify text
+            
+        price = 5
+        cmd = "-u classify " + service[11:]
+    elif (service.startswith("service_11 ")):
+        # NSFW text filter
+            
+        price = 2.5
+        cmd = "-u is_nsfw_text " + service[11:]
+    elif (service.startswith("service_12 ")):
+        # NSFW image filter
+            
+        price = 52.5
+        cmd = "-u is_nsfw_image " + service[11:]
+    elif (service.startswith("service_13 ")):
+        # TTS
+            
+        price = 5
+        cmd = "-u tts " + service[11:]
+    elif (service.startswith("service_14 ")):
+        # UVR
+            
+        price = 20
+        cmd = "-u ai_uvr " + service[11:]
+    elif (service.startswith("service_15 ")):
+        # Image To Image
+            
+        price = 30
+        cmd = "-u ai_img_to_img " + service[11:]
+    elif (service.lower().startswith("clear_my_history") and cfg.current_data["save_conversations"]):
+        # Clear chat history
+
+        try:
+            price = 0
+            cmd = "-u clear_my_history"
+            server_response = ""
+        except Exception as ex:
+            __print__("Error deleting chat history: " + str(ex))
+    elif (service.lower().startswith("get_my_conversation")):
+        price = 0
+        cmd = "-u get_my_conversation"
+        
+    # Check if the key has enough tokens
+    if (requires_api_key and (key_data == None or key_data["tokens"] < price)):
         return __execute_service_without_key__(service, extra_data)
+    
+    # Check if the service exists
+    if (cmd == ""):
+        raise Exception("Service doesn't exists.")
     
     __print__("Executing service with API key: " + service)
 
     try:
-        if (service.startswith("service_0 ")):
-            # Chatbot full-response
-
-            key_data["tokens"] -= 30
-            server_response = run_server_command("-u ai_fresponse " + service[10:], extra_data)
-        elif (service.startswith("service_1 ")):
-            # Custom server command
-
-            key_data["tokens"] -= 50
-            server_response = run_server_command("-u " + service[10:], extra_data)
-        elif (service.startswith("service_2 ")):
-            # Image generation
-            
-            key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_image " + service[10:], extra_data)
-        elif (service.startswith("service_3 ")):
-            # Image to Text
-
-            key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_img_to_text " + service[10:], extra_data)
-        elif (service.startswith("service_4 ")):
-            # Whisper audio recognition
-
-            key_data["tokens"] -= 20
-            server_response = run_server_command("-u ai_whisper " + service[10:], extra_data)
-        elif (service.startswith("service_5 ")):
-            # Audio generation
-            
-            key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_audio " + service[10:], extra_data)
-        elif (service.startswith("service_6 ")):
-            # Depth estimation
-            
-            key_data["tokens"] -= 15
-            server_response = run_server_command("-u ai_depth " + service[10:], extra_data)
-        elif (service.startswith("service_7 ")):
-            # Object detection
-            
-            key_data["tokens"] -= 15
-            server_response = run_server_command("-u ai_object_detection " + service[10:], extra_data)
-        elif (service.startswith("service_8 ")):
-            # RVC
-            
-            key_data["tokens"] -= 20
-            server_response = run_server_command("-u ai_rvc " + service[10:], extra_data)
-        elif (service.startswith("service_9 ")):
-            # Translate
-            
-            key_data["tokens"] -= 10
-            server_response = run_server_command("-u translate " + service[10:], extra_data)
-        elif (service.startswith("service_10 ")):
-            # Classify text
-            
-            key_data["tokens"] -= 5
-            server_response = run_server_command("-u classify " + service[11:], extra_data)
-        elif (service.startswith("service_11 ")):
-            # NSFW text filter
-            
-            key_data["tokens"] -= 2.5
-            server_response = run_server_command("-u is_nsfw_text " + service[11:], extra_data)
-        elif (service.startswith("service_12 ")):
-            # NSFW image filter
-            
-            key_data["tokens"] -= 2.5
-            server_response = run_server_command("-u is_nsfw_image " + service[11:], extra_data)
-        elif (service.startswith("service_13 ")):
-            # TTS
-            
-            key_data["tokens"] -= 5
-            server_response = run_server_command("-u tts " + service[11:], extra_data)
-        elif (service.startswith("service_14 ")):
-            # UVR
-            
-            key_data["tokens"] -= 20
-            server_response = run_server_command("-u ai_uvr " + service[11:], extra_data)
-        elif (service.startswith("service_15 ")):
-            # Image To Image
-            
-            key_data["tokens"] -= 25
-            server_response = run_server_command("-u ai_img_to_img " + service[11:], extra_data)
-        elif (service.lower().startswith("clear_my_history") and cfg.current_data["save_conversations"]):
-            # Clear chat history
-            try:
-                run_server_command("-u clear_my_history", extra_data)
-                server_response = ""
-            except Exception as ex:
-                __print__("Error deleting chat history: " + str(ex))
-        elif (service.lower().startswith("get_my_conversation")):
-            server_response = run_server_command("-u get_my_conversation", extra_data)
-        else:
-            raise Exception("Service doesn't exists.")
+        # Get response
+        key_data["tokens"] -= price
+        server_response = run_server_command(cmd, extra_data)
         
         logs.AddToLog("Server response for '" + service + "': '" + str(server_response) + "'.")
-        logs.AddToLog("Saving key '" + key_data["key"] + "'...")
 
-        sb.SaveKey(key_data)
-
-        logs.AddToLog("Key '" + key_data["key"] + "' saved successfully. New key data: " + str(key_data))
-
-        # Update server
-        UpdateServer()
-
-        return str(server_response)
+        # Return the response
+        server_response = str(server_response)
     except Exception as ex:
+        if (str(ex).strip().lower() != "not enough tokens."):
+            key_data["tokens"] += price / 2
+
         logs.AddToLog("[ERROR: API SERVICE]: " + str(ex))
-        raise Exception("Error executing service: " + str(ex))
+
+        server_response = "Error executing service: " + str(ex)
+        has_exception = True
+    
+    # Update key
+    logs.AddToLog("Saving key '" + key_data["key"] + "'...")
+    sb.SaveKey(key_data)
+    logs.AddToLog("Key '" + key_data["key"] + "' saved successfully. New key data: " + str(key_data))
+
+    # Update server
+    UpdateServer()
+
+    # Return an exception
+    if (has_exception):
+        raise Exception(server_response)
+    
+    # Return the response
+    return server_response
 
 def RunService(data: str, key_data: dict = None, extra_data: dict[str] = {}) -> str:
     try:

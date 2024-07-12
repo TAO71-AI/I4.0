@@ -26,10 +26,10 @@ namespace TAO71.I4.PythonManager
 
     public enum InternetSearchOptions
     {
-        QuestionAnswering = 0,
-        Chatbot = 1,
-        QuestionAnswering_Chatbot = 2,
-        Chatbot_QuestionAnswering = 3
+        QuestionAnswering = 0,                  // Fast, but worst results.
+        Chatbot = 1,                            // Slow, but better results.
+        QuestionAnswering_Chatbot = 2,          // Very slow, uses the question answering, returning a "worse" response, but makes it better using the chatbot later.
+        Chatbot_QuestionAnswering = 3           // Very slow, uses the chatbot, returning a "better" response, and the question answering responses with the important info.
     }
 
     public static class ServiceManager

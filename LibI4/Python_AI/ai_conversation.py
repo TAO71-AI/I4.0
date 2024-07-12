@@ -55,13 +55,17 @@ def SaveConversation(Name: str) -> None:
 
     UpdateConversation(Name)
 
-def AddToConversation(Name: str, Conv: str, User: str, Response: str) -> None:
+def AddToConversation(Name: str, Conv: str, User: str, Response: str, Thinking: str) -> None:
     Name = __filter_name__(Name)
     Conv = __filter_name__(Conv)
 
     CreateConversation(Name, Conv)
 
     conversations[Name][Conv].append({"role": "user", "content": User})
+    
+    if (len(Thinking) > 0):
+        conversations[Name][Conv].append({"role": "thinking", "content": Thinking})
+
     conversations[Name][Conv].append({"role": "assistant", "content": Response})
 
     SaveConversation(Name)

@@ -460,9 +460,10 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         
         # Translate the prompt if the user requests it
         if (args.count("tr") >= 1 and order_prompt.__contains__("tr")):
-            # Load JSON
             res = json.loads(prompt)
             res = Translate(res["tr"], res["prompt"])
+
+            print(str(res))
 
             data["response"] = res
             data["tested_models"].append("tr")
@@ -586,10 +587,34 @@ def MakePrompt(prompt: str, order_prompt: str = "", args: str = "", extra_system
         # If the response if the conversation is empty, then set it to the response
         if (len(response_conv.strip()) == 0):
             response_conv = response
-                
-        # ...Remove the white spaces from the beginning and the end of the response, then add the response to the conversation
+        
+        # Remove starting and ending white spaces from the response
         response_conv = response_conv.strip()
-        conv.AddToConversation(conversation[0], conversation[1], prompt, response_conv)
+        response_thinking = ""
+        
+        # Set thinking
+        if (response_conv.count("[T: ") > 0 and response_conv.count("]") > 0):
+            response_thinking = response_conv[response_conv.index("[T: ") + 4:response_conv.index("]")]
+            response_conv = response_conv.replace("[T: " + response_thinking + "]", "").strip()
+            
+            if (response_thinking.strip() == "THINKING"):
+                response_thinking = ""
+            else:
+                response_thinking = response_thinking.strip()
+            
+            if (response_thinking.startswith("\'") or response_thinking.startswith("\"")):
+                response_thinking = response_thinking[1:].strip()
+            
+            if (response_thinking.endswith("\'") or response_thinking.endswith("\"")):
+                response_thinking = response_thinking[:-1].strip()
+            
+            if (len(response_conv) == 0):
+                response_conv = response_thinking
+            
+            response = response_conv
+        
+        # ...Remove the white spaces from the beginning and the end of the response, then add the response to the conversation
+        conv.AddToConversation(conversation[0], conversation[1], prompt, response_conv, response_thinking)
 
     # If the use of Sequence Classification (Text Classification) is allowed, then classify the response
     if (cfg.current_data["use_other_services_on_chatbot"]):

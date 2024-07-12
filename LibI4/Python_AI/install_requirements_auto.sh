@@ -35,6 +35,12 @@ fi
 
 # 2. Install PyTorch.
 echo "Installing PyTorch... [3/$MAX_TASKS]"
+
+pip install --upgrade pip
+pip install pip-tools
+pip-compile requirements.in
+pip-compile requirements_optional.in
+
 pip install --upgrade torch torchvision torchaudio $PYTORCH_WHL
 
 if [ $? != 0 ]; then

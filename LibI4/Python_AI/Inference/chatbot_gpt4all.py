@@ -1,6 +1,7 @@
 import gpt4all
 import ai_config as cfg
 import ai_conversation as conv
+import conversation_template as convTemp
 
 model_name: str = cfg.current_data["gpt4all_model"]
 system_messages: list[str] = []
@@ -37,18 +38,7 @@ def MakePrompt(prompt: str, use_chat_history: bool = True, conversation_name: li
     if (sm.endswith("\n")):
         sm = sm[:-1]
 
-    try:
-        conv_msg = conv.ConversationToStr(conversation_name[0], conversation_name[1])
-
-        if (use_chat_history and len(conv_msg.strip()) > 0):
-            if (not conv_msg.endswith("\n")):
-                conv_msg += "\n"
-
-            content += "### CONVERSATION:\n" + conv_msg + "\n"
-    except:
-        pass
-        
-    content += "### USER: " + prompt
+    content += convTemp.AutoGetConversation(prompt, "", conv.GetConversation(conversation_name[0], conversation_name[1]), use_chat_history)
 
     if (cfg.current_data["print_prompt"]):
         print(sm + "\n")

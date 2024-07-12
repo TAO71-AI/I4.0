@@ -1,5 +1,7 @@
 """
 This chatbot is not deprecated, but we do not recommend to use it. Please use the GPT4All (g4a) chatbot, usually it gives better responses and it's more tested.
+
+THIS CHATBOT IS NOW DEPRECATED, IT MIGHT BE REMOVED IN THE FUTURE AND IT WILL NOT BE UPDATED FROM NOW ON.
 """
 
 from transformers import AutoModelForCausalLM, AutoTokenizer

@@ -6,3 +6,4 @@ invisible_watermark
 optimum[openvino]
 optimum[onnxruntime]
 ctranslate2
+datasets==2.18.0

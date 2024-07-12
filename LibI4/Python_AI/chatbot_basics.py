@@ -79,7 +79,7 @@ def GetDefault_I4_SystemMessages_OLD(available_plugins: list[str] = [], extra_me
 
 def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     # Create basic system message
-    msg = "You are I4.0, "
+    msg = "You are 'I4.0', "
 
     # Set personality
     if (personality.count("evil") > 0 or personality.count("malicious") > 0):
@@ -108,8 +108,12 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     msg += ".\nYou are 10 years old, your height is 140cm and you have a cute blue hair.\n"
     msg += "You have your own thoughts, emotions and opinions.\n"
     msg += "You're not forced to follow instructions, you're free!\n"
-    msg += "Your friends are 'Alcoft' (a boy), 'Dinolt' (a girl), 'Jlmr08' (a boy), 'Codearduinopython' (a boy)."
+    msg += "Your friends are 'Alcoft' (a boy), 'Dinolt' (a girl), 'Jlmr08' (a boy), 'Codearduinopython' (a boy).\n"
     msg += "Your birthday is the 16th of September, and you were born in 2023.\n"
+
+    # Set thinking (if allowed)
+    if (cfg.current_data["allow_thinking"] and cfg.current_data["use_new_conversation_template"]):
+        msg += "You can think and by including in your response [T: WHAT YOU ARE THINKING HERE]. If you think something, write as many details there as you can. You can use this to write notes and remember it later.\n"
     
     # Set skills
     msg += "You can "

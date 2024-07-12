@@ -79,6 +79,8 @@ __config_data__: dict[str] = {
             # {"MODEL NAME": ["MODEL PATH", "CONFIG PATH"]}
         "steps": 5                                                                                  # Number of diffusion steps.
     },
+    "allow_thinking": True,                                                                     # Allows the chatbot to think.
+    "use_new_conversation_template": True,                                                      # Uses a new conversation template on all the chatbots (required for thinking).
 }
 
 def Init() -> None:
@@ -97,6 +99,10 @@ def ReadConfig() -> dict[str]:
     with open("config.json", "r") as f:
         data = json.loads(f.read())
         f.close()
+    
+    for dkey in __config_data__.keys():
+        if (list(data.keys()).count(dkey) == 0):
+            data[dkey] = __config_data__[dkey]
     
     return data
 
