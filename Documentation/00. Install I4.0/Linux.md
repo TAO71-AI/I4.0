@@ -1,5 +1,5 @@
 -----
-DOCUMENTATION VERSION: v6.0.0
+DOCUMENTATION VERSION: v6.5.0
 -----
 
 > [!WARNING]
@@ -11,7 +11,7 @@ DOCUMENTATION VERSION: v6.0.0
 > If you don't have Git installed, install it [here](https://git-scm.com/).
 
 To clone the repository, run this command:
-```sh
+```bash
 git clone https://github.com/TAO71-AI/I4.0.git
 ```
 
@@ -22,24 +22,35 @@ git clone https://github.com/TAO71-AI/I4.0.git
 > You need to also install PIP.
 
 To create a Python VENV, run this command:
-```sh
+```bash
 python -m venv .env
 ```
 
 ## Start the environment
 To start the environment, run this command:
-```sh
+```bash
 source .env/bin/activate
 ```
 
 # Install requirements
+## Main method or "manual" method
 To install the requirements, run this command:
-```sh
+```bash
 # Install requirements
 pip install --upgrade -r requirements.txt
 
 # Install optional requirements
 pip install --upgrade -r requirements_optional.txt
+```
+
+## Alternative method or "automatic" method
+To install the requirements automatically, run this command:
+```bash
+# Make the file executable
+chmod +x install_requirements_auto.sh
+
+# Start the file
+./install_requirements_auto.sh
 ```
 
 # I4.0 installed!

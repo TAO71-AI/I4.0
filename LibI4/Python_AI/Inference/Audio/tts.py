@@ -7,7 +7,7 @@ import os
 import ai_config as cfg
 
 tts_loaded: bool = False
-tts_google: GoogleTTS = None
+tts_google: GoogleTTS | None = None
 #tts_styletts2: StyleTTS2 = None
 
 def LoadTTS() -> None:
@@ -16,11 +16,8 @@ def LoadTTS() -> None:
     if (tts_loaded and tts_google != None):
         return
 
-    if (not cfg.current_data["prompt_order"].__contains__("tts")):
+    if (not cfg.current_data["models"].__contains__("tts")):
         raise Exception("Model is not in 'prompt_order'.")
-
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading TTS...")
     
     tts_google = GoogleTTS()
     tts_loaded = True
@@ -119,9 +116,6 @@ def __generate_tts__(prompt: str, voice: str, language: str, pitch: float, speed
 
     if (not exists):
         raise Exception("Voice and language combination does not exist.")
-    
-    if (cfg.current_data["print_prompt"]):
-        print("TTS: \"" + prompt + "\" (Voice: " + voice + "; Language: " + language + "; Pitch: " + str(pitch) + "; Speed: " + str(speed) + ").")
     
     audio_name = "ta.wav"
     audio_n = 0

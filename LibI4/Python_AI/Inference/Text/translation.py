@@ -2,7 +2,7 @@ from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, Pipeline
 import emoji
 import ai_config as cfg
 
-translation_classifier_model: Pipeline = None
+translation_classifier_model: Pipeline | None = None
 device_classifier: str = "cpu"
 
 models: dict[str, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str]] = {}
@@ -11,35 +11,25 @@ models_loaded: bool = False
 def LoadModels() -> None:
     global translation_classifier_model, models, models_loaded, device_classifier
 
-    if (not cfg.current_data["prompt_order"].__contains__("tr")):
-        raise Exception("Models are not in 'prompt_order'.")
+    if (cfg.current_data["models"].count("tr") == 0):
+        raise Exception("Models are not in 'models'.")
 
     if (models_loaded):
         return
-
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading model 'translation (classifier)'...")
 
     if (translation_classifier_model == None):
         dataClassifier = cfg.LoadPipeline("text-classification", "tr", cfg.current_data["translation_classification_model"])
 
         translation_classifier_model = dataClassifier[0]
         device_classifier = dataClassifier[1]
-
-    if (cfg.current_data["print_loading_message"]):
-        print("   Loaded model on device '" + device_classifier + "'.")
     
     for model in cfg.current_data["translation_models"]:
-        if (cfg.current_data["print_loading_message"]):
-            print("Loading model 'translation (" + str(list(cfg.current_data["translation_models"].keys()).index(model)) + ")'...")
+        print("   Loading model 'translation (" + str(list(cfg.current_data["translation_models"].keys()).index(model)) + ")'...")
         
         name = cfg.current_data["translation_models"][model]
         data = cfg.LoadModel("tr", name, AutoModelForSeq2SeqLM, AutoTokenizer)
 
         models[model] = data
-
-        if (cfg.current_data["print_loading_message"]):
-            print("   Loaded model on device '" + data[2] + "'.")
     
     models_loaded = True
 
@@ -49,22 +39,30 @@ def GetAvailableLanguages() -> list[str]:
 def __translate__(prompt: str, language: str, tokenizer: AutoTokenizer, model: AutoModelForSeq2SeqLM, device: str) -> str:
     LoadModels()
 
-    if (cfg.current_data["print_prompt"]):
-        print("Translating using '" + language + "'.")
-
     prompt = prompt.strip()
-    prompt = emoji.demojize(prompt, delimiters = (";;", ";;"))
+    prompt = emoji.demojize(prompt, delimiters = (";;", ";;"), language = "alias")
 
-    inputs = tokenizer.encode(prompt, return_tensors = "pt")
-    inputs = inputs.to(device)
+    prompt = prompt.split("\n")
+    response = ""
 
-    response = model.generate(inputs)
-    decoded_response = tokenizer.batch_decode(response, skip_special_tokens = True)[0]
+    if (len(prompt) == 1):
+        prompt = prompt[0].split("\\n")
 
-    decoded_response = str(decoded_response)
-    decoded_response = emoji.emojize(decoded_response, delimiters = (";;", ";;"))
+    for line in prompt:
+        if (len(line.strip()) == 0):
+            response += line
+            continue
 
-    return decoded_response
+        inputs = tokenizer.encode(line.strip(), return_tensors = "pt")
+        inputs = inputs.to(device)
+
+        mresponse = model.generate(inputs)
+        response += str(tokenizer.batch_decode(mresponse, skip_special_tokens = True)[0]) + "\n"
+
+    response = response.strip()
+    response = emoji.emojize(response, delimiters = (";;", ";;"), language = "alias")
+
+    return response
 
 def Translate(prompt: str, language: str) -> str:
     LoadModels()

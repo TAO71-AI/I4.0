@@ -1,6 +1,5 @@
 import os
 import json
-import ai_config as cfg
 
 conversations: dict[str, dict[str, list[dict[str, str]]]] = {}
 
@@ -46,34 +45,24 @@ def SaveConversations() -> None:
 def SaveConversation(Name: str) -> None:
     Init()
 
-    if (not cfg.current_data["save_conversations"]):
-        return
-
     with open("Conversations/" + Name + ".json", "w+") as f:
         f.write(json.dumps(conversations[Name]))
         f.close()
 
     UpdateConversation(Name)
 
-def AddToConversation(Name: str, Conv: str, User: str, Response: str, Thinking: str) -> None:
+def AddToConversation(Name: str, Conv: str, User: str, Response: str) -> None:
     Name = __filter_name__(Name)
     Conv = __filter_name__(Conv)
 
     CreateConversation(Name, Conv)
 
     conversations[Name][Conv].append({"role": "user", "content": User})
-    
-    if (len(Thinking) > 0):
-        conversations[Name][Conv].append({"role": "thinking", "content": Thinking})
-
     conversations[Name][Conv].append({"role": "assistant", "content": Response})
 
     SaveConversation(Name)
 
 def UpdateConversations() -> None:
-    if (not cfg.current_data["save_conversations"]):
-        return
-    
     ReplaceTXTConversations()
     
     for conv in os.listdir("Conversations/"):
@@ -84,7 +73,7 @@ def ReplaceTXTConversations() -> None:
         if (not conv.endswith(".txt")):
             continue
 
-        conv_name = conv[0:conv.rfind(".txt")]
+        conv_name = conv[:conv.rfind(".txt")]
 
         with open("Conversations/" + conv, "r") as txt_c:
             with open("Conversations/" + conv_name + ".json", "w+") as json_c:
@@ -97,9 +86,6 @@ def ReplaceTXTConversations() -> None:
 
 def UpdateConversation(Name: str) -> None:
     Init()
-
-    if (not cfg.current_data["save_conversations"]):
-        return
 
     Name = __filter_name__(Name)
 

@@ -175,7 +175,7 @@ def GetKey(key: str) -> dict:
         if (akey["key"] == key):
             return akey
     
-    return {"ERROR": "Invalid API key."}
+    raise Exception("Invalid key.")
 
 def DeleteKey(key: str) -> None:
     Init()

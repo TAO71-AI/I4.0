@@ -6,8 +6,8 @@ import numpy as np
 import os
 import ai_config as cfg
 
-processor: AutoImageProcessor = None
-model: AutoModelForDepthEstimation = None
+processor: AutoImageProcessor | None = None
+model: AutoModelForDepthEstimation | None = None
 device: str = "cpu"
 
 def __load_model__(model_name: str, device: str):
@@ -17,23 +17,17 @@ def __load_model__(model_name: str, device: str):
 def LoadModel() -> None:
     global processor, model, device
 
-    if (not cfg.current_data["prompt_order"].__contains__("de")):
-        raise Exception("Model is not in 'prompt_order'.")
+    if (cfg.current_data["models"].count("de") == 0):
+        raise Exception("Model is not in 'models'.")
 
     if (model != None and processor != None):
         return
-
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading model 'depth estimation'...")
     
     data = cfg.LoadModel("de", cfg.current_data["depth_estimation_model"], AutoModelForDepthEstimation, AutoImageProcessor)
 
     model = data[0]
     processor = data[1]
     device = data[2]
-
-    if (cfg.current_data["print_loading_message"]):
-        print("   Loaded model on device '" + device + "'.")
 
 def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
     LoadModel()
@@ -42,9 +36,6 @@ def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
         image = PIL.Image.open(image)
     elif (type(image) != PIL.Image.Image):
         raise Exception("Image is not 'str' or 'PIL.Image.Image'.")
-    
-    if (cfg.current_data["print_prompt"]):
-        print("Estimating depth...")
     
     inputs = processor(images = [image], return_tensors = "pt")
     inputs = inputs.to(device)

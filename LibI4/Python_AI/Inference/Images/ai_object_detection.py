@@ -6,8 +6,8 @@ import os
 import random
 import ai_config as cfg
 
-processor: AutoImageProcessor = None
-model: AutoModelForObjectDetection = None
+processor: AutoImageProcessor | None = None
+model: AutoModelForObjectDetection | None = None
 device: str = "cpu"
 
 def __get_random_color__() -> tuple[int, int, int]:
@@ -16,23 +16,17 @@ def __get_random_color__() -> tuple[int, int, int]:
 def LoadModel() -> None:
     global processor, model, device
 
-    if (not cfg.current_data["prompt_order"].__contains__("od")):
-        raise Exception("Model is not in 'prompt_order'.")
+    if (cfg.current_data["models"].count("od") == 0):
+        raise Exception("Model is not in 'models'.")
 
     if (processor != None and model != None):
         return
-
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading model 'object detection'...")
 
     data = cfg.LoadModel("od", cfg.current_data["object_detection_model"], AutoModelForObjectDetection, AutoImageProcessor)
 
     model = data[0]
     processor = data[1]
     device = data[2]
-
-    if (cfg.current_data["print_loading_message"]):
-        print("   Loaded model on device '" + device + "'.")
 
 def MakePrompt(img: str) -> dict[str]:
     LoadModel()

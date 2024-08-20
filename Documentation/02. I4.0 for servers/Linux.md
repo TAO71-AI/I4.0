@@ -1,5 +1,5 @@
 -----
-DOCUMENTATION VERSION: v6.0.0
+DOCUMENTATION VERSION: v6.5.0
 -----
 
 > [!WARNING]
@@ -20,6 +20,7 @@ After=network-online.target ufw.service # Replace ufw.service with your firewall
 Type=simple
 WorkingDirectory=# I4.0/LibI4/Python_AI/ directory here.
 ExecStart=.env/bin/python ai_server.py
+KillSignal=SIGINT
 
 [Install]
 WantedBy=multi-user.target

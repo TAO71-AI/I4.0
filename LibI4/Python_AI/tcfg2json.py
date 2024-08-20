@@ -1,3 +1,8 @@
+"""
+This is deprecated.
+If you use this to convert your old .tcfg configuration you will need to change A LOT of things on the output .json file.
+"""
+
 import os
 import json
 import sys

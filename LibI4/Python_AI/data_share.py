@@ -6,13 +6,12 @@ import asyncio
 import json
 import os
 import base64
-import ai_logs as logs
-import ip_banning as ip_ban
 import ai_config as cfg
 
 UseServer: bool = False
 SaveDataDirectory: str = "DataShare/"
 Servers: list[str] = []
+BannedIPs: list[str] = []
 
 async def __connect_to_server__(Server: int | str) -> websockets.WebSocketClientProtocol:
     if (type(Server) == int):
@@ -20,7 +19,7 @@ async def __connect_to_server__(Server: int | str) -> websockets.WebSocketClient
 
     uri = "ws://" + Server + ":8062"
     connection = await websockets.connect(uri)
-    timeToWait = cfg.current_data.data_share_timeout
+    timeToWait = cfg.current_data["data_share_timeout"]
     t = 0
 
     while (not connection.open):
@@ -58,7 +57,6 @@ async def SendToAllServers(SendData: str | bytes) -> list[tuple[bool, str, webso
             results.append(await ConnectAndSend(server, SendData))
         except Exception as ex:
             print("[DATA SHARE] Error sending data to server: " + str(ex))
-            logs.AddToLog("[DATA SHARE] Error sending data to server: " + str(ex))
     
     return results
 
@@ -116,7 +114,6 @@ def __add_data_to_server__(Data: dict[str] | str) -> str:
         return "OK"
     except Exception as ex:
         print("ERROR ON DATA SHARE: " + str(ex))
-        logs.AddToLog("[DATA SHARE] ERROR: " + str(ex))
 
         return "ERROR [ID: 2]"
 
@@ -128,10 +125,8 @@ async def __handle_connection__(Connection: websockets.WebSocketClientProtocol) 
 
             if (len(data) > 0):
                 print("Received data from websocket.")
-                logs.AddToLog("[DATA SHARE] Received some data from websocket.")
 
                 server_response = __add_data_to_server__(data)
-
                 await Connection.send(server_response)
             else:
                 break
@@ -139,22 +134,26 @@ async def __handle_connection__(Connection: websockets.WebSocketClientProtocol) 
             try:
                 await Connection.send("ERROR [ID: 1]")
             except Exception as ex:
-                logs.AddToLog("[DATA SHARE] Could not send error response, connection might be closed? ERROR DETAILS: " + str(ex))
+                print("[DATA SHARE] Could not send error response, connection might be closed? ERROR DETAILS: " + str(ex))
 
             try:
                 await Connection.close()
             except Exception as ex:
-                logs.AddToLog("[DATA SHARE] Error closing the connection, ignoring. ERROR DETAILS: " + str(ex))
+                print("[DATA SHARE] Error closing the connection, ignoring. ERROR DETAILS: " + str(ex))
             
             break
 
 async def __listen__(Connection: websockets.WebSocketClientProtocol) -> None:
     print("Incomming connection from '" + str(Connection.remote_address[0]) + ":" + str(Connection.remote_address[1]) + "'.")
-    ip_ban.ReloadBannedIPs()
 
-    if (ip_ban.IsIPBanned(str(Connection.remote_address[0]))):
+    # Update banned IPs
+    if (os.path.exists("BannedIPs.json")):
+        with open("BannedIPs.json", "r") as f:
+            BannedIPs = cfg.JSONDeserializer(f.read())["ip"]
+            f.close()
+
+    if (str(Connection.remote_address[0]) in BannedIPs):
         print("Banned IP, connection closed.")
-        logs.AddToLog("A banned IP tried to connect. Closing connection.")
 
         try:
             await Connection.send("Banned.")
@@ -181,21 +180,22 @@ if (UseServer):
         os.mkdir(SaveDataDirectory + "Files/")
 
     try:
+        # Try to set the banned IPs
+        if (os.path.exists("BannedIPs.json")):
+            with open("BannedIPs.json", "r") as f:
+                BannedIPs = cfg.JSONDeserializer(f.read())
+                f.close()
+
         ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
         server = websockets.server.serve(__listen__, ip, 8062)
-
         print("Server started.")
-        logs.AddToLog("[DATA SHARE] Server started.")
 
         loop.run_until_complete(server)
         loop.run_forever()
     except KeyboardInterrupt:
         print("Closing server...")
-        logs.AddToLog("[DATA SHARE] Closing server...")
     except Exception as ex:
-        logs.AddToLog("[DATA SHARE] ERROR: " + str(ex))
-    
-    logs.WriteToFile(cfg.current_data["use_only_latest_log"])
+        print("[DATA SHARE] ERROR: " + str(ex))

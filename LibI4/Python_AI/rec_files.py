@@ -8,11 +8,11 @@ import json
 import time
 import sys
 import ai_config as cfg
-import ip_banning as ip_ban
 
 received_files: list[dict[str]] = []
 max_sf_minutes: int = 15
 update_every_seconds: int = 300
+banned_ips: list[str] = []
 
 if (not os.path.exists("ReceivedFiles/")):
     os.mkdir("ReceivedFiles/")
@@ -34,7 +34,6 @@ def UpdateReceivedFiles() -> None:
             print("Could not append file. Ignoring.")
 
 def UpdateServer() -> None:
-    ip_ban.ReloadBannedIPs()
     UpdateReceivedFiles()
 
     for rf in received_files:
@@ -60,7 +59,7 @@ def UpdateServer() -> None:
                 received_files.remove(rf)
 
 async def ProcessClient(websocket: websockets.WebSocketClientProtocol) -> None:
-    if (ip_ban.IsIPBanned(str(websocket.remote_address[0]))):
+    if (str(websocket.remote_address[0]) in banned_ips):
         print("Banned IP, ignoring...")
         await websocket.close()
 

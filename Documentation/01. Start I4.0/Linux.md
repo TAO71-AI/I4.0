@@ -1,5 +1,5 @@
 -----
-DOCUMENTATION VERSION: v6.0.0
+DOCUMENTATION VERSION: v6.5.0
 -----
 
 > [!WARNING]
@@ -8,18 +8,10 @@ DOCUMENTATION VERSION: v6.0.0
 > You must be in a VENV, otherwise errors are expected.
 > You must be inside the directory `I4.0/LibI4/Python_AI/`.
 
-# Creating I4.0 configuration file
-The configuration file should be created automatically when running the server for the first time.
-You can also create it manually by running:
-```sh
-touch config.tcfg
-```
-It's not recommended to create the configuration file manually.
-
 # First time running the server
 To start the I4.0 server, run:
 ```sh
-python ai_server_all.py
+python ai_server.py
 ```
 
 If the configuration file it's not created before running this command, it will be created automatically and the program will exit.

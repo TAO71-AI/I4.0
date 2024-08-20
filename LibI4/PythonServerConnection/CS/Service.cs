@@ -8,7 +8,7 @@ namespace TAO71.I4.PythonManager
         CustomCommand = 1,
         ImageGeneration = 2,
         ImageToText = 3,
-        WhisperSTT = 4,
+        SpeechToText = 4,
         Audio = 5,
         DepthEstimation = 6,
         ObjectDetection = 7,
@@ -50,8 +50,8 @@ namespace TAO71.I4.PythonManager
                     return Service.DepthEstimation;
                 case "text2audio":
                     return Service.Audio;
-                case "whisper":
-                    return Service.WhisperSTT;
+                case "speech2text":
+                    return Service.SpeechToText;
                 case "od":
                     return Service.ObjectDetection;
                 case "rvc":
@@ -91,8 +91,8 @@ namespace TAO71.I4.PythonManager
                     return "de";
                 case Service.Audio:
                     return "text2audio";
-                case Service.WhisperSTT:
-                    return "whisper";
+                case Service.SpeechToText:
+                    return "speech2text";
                 case Service.ObjectDetection:
                     return "od";
                 case Service.RVC:
@@ -137,7 +137,14 @@ namespace TAO71.I4.PythonManager
 
         public static Service AutoConvert(string ServiceName)
         {
-            return FromString(ServiceName);
+            try
+            {
+                return FromInt(Convert.ToInt32(ServiceName));
+            }
+            catch
+            {
+                return FromString(ServiceName);
+            }
         }
 
         public static Service AutoConvert(int ServiceID)
@@ -208,7 +215,14 @@ namespace TAO71.I4.PythonManager
 
         public static InternetSearchOptions AutoConvert(string ServiceName)
         {
-            return FromString(ServiceName);
+            try
+            {
+                return FromInt(Convert.ToInt32(ServiceName));
+            }
+            catch
+            {
+                return FromString(ServiceName);
+            }
         }
 
         public static InternetSearchOptions AutoConvert(int ServiceID)

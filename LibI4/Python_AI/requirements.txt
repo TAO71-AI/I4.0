@@ -28,11 +28,16 @@ google-tts
 git+https://github.com/Tps-F/fairseq.git@main
 bitsandbytes
 #huggingface-hub>=0.19.0,<0.20.0
+psutil
 
 # Requirements for inference
 gpt4all~=2.7.0
+llama-cpp-python
 SpeechRecognition~=3.10.4
 openai-whisper>=20231117
 git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
 pySpeakNG~=0.1.2
 #styletts2~=0.1.6
+
+# Requirements for the Discord bot
+discord.py

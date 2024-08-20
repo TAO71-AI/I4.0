@@ -13,7 +13,7 @@ import shutil
 import platform
 import ai_config as cfg
 
-uvr: AudioPreprocess = None
+uvr: AudioPreprocess | None = None
 
 def __download_asset__(URL: str, Name: str) -> None:
     if (not os.path.exists("uvr_assets/")):
@@ -44,45 +44,21 @@ def __get_file_name__(FilePath: str) -> str:
 def __load_model__(ModelPath: str, Agg: int) -> None:
     global uvr
 
+    if (cfg.current_data["models"].count("uvr") == 0):
+        raise Exception("Model is not in 'models'.")
+
     if (uvr != None):
         uvr = None
 
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading UVR...")
-
-    if (len(cfg.devices) == 0):
-        cfg.__get_gpu_devices__()
-
-    for i in range(len(cfg.devices)):
-        device = cfg.GetAvailableGPUDeviceForTask("uvr", i)
-
-        if (device.count(":") > 0):
-            device = device.split(":")[0].strip()
-
-        try:
-            uvr = AudioPreprocess(ModelPath, Agg)
+    device = cfg.GetAvailableGPUDeviceForTask("uvr")
+    uvr = AudioPreprocess(ModelPath, Agg)
         
-            if (device == "cuda"):
-                uvr.config.use_cuda()
-            elif (device == "mps"):
-                uvr.config.use_mps()
-            else:
-                if (device != "cpu"):
-                    print("Device not supported for UVR. Using CPU.")
-                    device = "cpu"
-                
-                uvr.config.use_cpu()
-            
-            uvr.model.to(uvr.config.device)
-
-            if (cfg.current_data["print_loading_message"]):
-                print("   Loaded model on device '" + device + "'.")
-
-            return
-        except Exception as ex:
-            print("ERROR: " + str(ex))
-    
-    raise Exception("Could not create UVR.")
+    if (device == "cuda"):
+        uvr.config.use_cuda()
+    elif (device == "mps"):
+        uvr.config.use_mps()
+    else:
+        uvr.config.use_cpu()
 
 def __write_output_file__(Type: str, sr: int, output: any) -> bytes:
     output_file_name = "tmp_uvr_"

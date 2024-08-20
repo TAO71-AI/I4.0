@@ -1,5 +1,5 @@
 -----
-DOCUMENTATION VERSION: v6.0.0
+DOCUMENTATION VERSION: v6.5.0
 -----
 
 # Download C# compiler
@@ -12,6 +12,9 @@ First of all, you need to download .NET or Mono for C#.
 
 You only need to install one of this compilers.
 If you're using Windows or have a x86_64 GNU/Linux distribution, we recommend to download `.NET`, **else** we recommend to download `Mono`.
+
+> [!WARNING]
+> For now I4.0 will still have compatibility with Mono and .NET, but in the future it will (probably) only be compatible with .NET.
 
 # Download an IDE
 Once you have downloaded a compiler, you should select an IDE to make some things easier for you.
@@ -43,69 +46,56 @@ License of the IDE: Unknown (but Open-Source).
 # Create project
 Now that you have an IDE, you need to create a project (of your choice, GUI, Console App, etc.) and add the I4.0/LibI4/ directory to it.
 
-# Install NuGet dependencies
-Once your C# project is created, you need to install the NuGet dependencies for C#.
-The dependencies are:
-```
-Newtonsoft.Json
-NAudio.Core
-```
+# Install dependencies
+You can find all the dependencies you need to install in the file `CS_DEPENDENCIES.md`
 
 If you want to use any I4.0 C# plugin, you need to download it NuGet dependencies. The dependencies of the plugins should be mentioned in the `README.txt` or `README.md` file inside the plugin directory.
 If there is no `README.txt` or `README.md` files or the dependencies are not mentioned, it means that the plugin doesn't need any extra dependencies.
 
 # Programming the connection
-## Automatically connect to an I4.0 server
-If you want to connect automatically to an I4.0 server, you can use this code:
+## Connect to an I4.0 server
+If you want to connect to an I4.0 server, you can use this code:
 ```cs
+// NOTE: In some cases, you don't need to connect to a server, some functions do it automatically if you allow it.
 // Put this at the beginning of your code.
-using TAO.I4;
-using TAO.I4.PythonManager;
+using TAO71.I4;
+using TAO71.I4.PythonManager;
 
-// Put this function inside your class.
-public void AutoConnectFunction()
+// Connect to the first server that have enabled the service you want to use.
+public async void ConnectToTheServer()
 {
-    PyAIResponse.DisconnectFromServer();        // Close any active connection.
-    PyAIResponse.ClearServersTasks();           // Clear the tasks.
+    // WARNING: If the function can't find any server with the service you're asking for on the Servers list, it will return an error.
 
-    int id = PyAIResponse.TryAllServer(true);   // Automatically connect to the first active server (from the servers list).
+    int server = await PyAIResponse.FindFirstServer(SERVICE, true);     // Find the first available server for a service. Remember to replace SERVICE with the service you want.
+    await PyAIResponse.Connect(server);                                 // Connect to the server.
+}
 
-    if (id < 0)
-    {
-        throw new Exception("Error connecting to all servers.");
-    }
-    
-    Console.WriteLine("Connected to the server " + id.ToString());
-
-    PyAIResponse.DefaultServer = id;            // Set the active server as default.
-    return id;                                  // Return the list ID of the connected server.
+// You can also connect using directly the IP of the server.
+public async void ConnectToTheServerWithIP(string IP)
+{
+    await Connect(IP);
 }
 ```
 
-## Connect manually to an I4.0 server
-If you want to connect manually to an I4.0 server, you can use this code:
+## Check if you're connected
+To check if you're connected to any server, you can use the following code:
 ```cs
 // Put this at the beginning of your code.
-using TAO.I4;
-using TAO.I4.PythonManager;
+using TAO71.I4;
+using TAO71.I4.PythonManager;
 
-// Put this function inside your class.
-public void ConnectToTheServerFunction(string Server)
-{
-    PyAIResponse.DisconnectFromServer();        // Close any active connection.
-    PyAIResponse.ClearServersTasks();           // Clear the tasks.
-    PyAIResponse.ConnectToServer(Server);       // Connect to the server.
-}
+// Put this code inside your function
+bool connected = PyAIResponse.IsConnected();
 ```
 
 ## Modify the servers list
 To modify the servers list to add or remove servers, you can use the following code:
 ```cs
 // Put this at the beginning of your code.
-using TAO.I4;
-using TAO.I4.PythonManager;
+using TAO71.I4;
+using TAO71.I4.PythonManager;
 
 // Put this code inside your function
-PyAIResponse.Servers.Add("SERVER IP");          // Adds a server.
-PyAIResponse.Servers.Remove("SERVER IP");       // Removes a server.
+PyAIResponse.Conf.Servers.Add("SERVER IP");          // Adds a server.
+PyAIResponse.Conf.Servers.Remove("SERVER IP");       // Removes a server.
 ```

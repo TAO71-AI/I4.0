@@ -30,11 +30,11 @@ namespace TAO71.I4.Plugins.VideoReaction
             Recorder.GetScreenshot(Monitor);
             Recorder.GetSystemSoundData(TimeBetweenFrames);
 
-            string imageID = PyAIResponse.SendFileToServer("tmp_pil_image.png", -1).Result.ToString();
-            string whisperID = PyAIResponse.SendFileToServer("tmp_whisper_audio.wav", -1).Result.ToString();
+            string imageID = PyAIResponse.SendFileToServer("tmp_pil_image.png").Result.ToString();
+            string whisperID = PyAIResponse.SendFileToServer("tmp_whisper_audio.wav").Result.ToString();
 
-            Response imageDescription = PyAIResponse.GetFullResponse(imageID, Service.ImageToText, null, "", false, "", "", true);
-            Response whisperRecognition = PyAIResponse.GetFullResponse(whisperID, Service.WhisperSTT, null, "", false, "", "", true);
+            Response imageDescription = PyAIResponse.GetResponseFromServer(imageID, Service.ImageToText, null, "", false, "", "", true).Result;
+            Response whisperRecognition = PyAIResponse.GetResponseFromServer(whisperID, Service.WhisperSTT, null, "", false, "", "", true).Result;
             string prompt = "What you see on the video: " + imageDescription.TextResponse + "\nWhat you hear on the video: " + whisperRecognition.TextResponse;
 
             if (imageDescription.Errors.Length > 0 || whisperRecognition.Errors.Length > 0)
@@ -65,10 +65,10 @@ namespace TAO71.I4.Plugins.VideoReaction
                 }
             }
 
-            return PyAIResponse.GetFullResponse(prompt, Service.Chatbot, new string[]
+            return PyAIResponse.GetResponseFromServer(prompt, Service.Chatbot, new string[]
             {
                 "You're reacting to a video."
-            }, Translator, true, AIArgs, Conversation, true);
+            }, Translator, true, AIArgs, Conversation, true).Result;
         }
 
         public static string GetRandomVideoName()

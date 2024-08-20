@@ -7,7 +7,7 @@ import requests
 import shutil
 import ai_config as cfg
 
-vc: VC = None
+vc: VC | None = None
 
 def __download_asset__(URL: str, Name: str) -> None:
     if (not os.path.exists("rvc_assets/")):
@@ -35,8 +35,11 @@ def __get_file_name__(FilePath: str) -> str:
     
     return FilePath
 
-def __load_model__(ModelPath: str, ModelName: str) -> None:
+def __load_model__(ModelPath: str) -> None:
     global vc
+
+    if (cfg.current_data["models"].count("rvc") == 0):
+        raise Exception("Model is not in 'models'.")
 
     if (vc != None):
         vc = None
@@ -44,16 +47,7 @@ def __load_model__(ModelPath: str, ModelName: str) -> None:
     os.environ["index_root"] = "rvc_assets"
     os.environ["rmvpe_root"] = "rvc_assets"
 
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading RVC model '" + ModelName + "'...")
-
-    device = cfg.GetAvailableGPUDeviceForTask("rvc", 0)
-
-    if (device.count(":") > 0):
-        device = device.split(":")[0].strip()
-    
-    if (device.count("-") > 0):
-        device = device.split("-")[0].strip()
+    device = cfg.GetAvailableGPUDeviceForTask("rvc")
 
     vc = VC()
     vc.version = "v2"
@@ -63,16 +57,9 @@ def __load_model__(ModelPath: str, ModelName: str) -> None:
     elif (device == "mps"):
         vc.config.use_mps()
     else:
-        if (device != "cpu"):
-            print("Device not supported for RVC. Using CPU.")
-            device = "cpu"
-        
         vc.config.use_cpu()
 
     vc.get_vc(os.getcwd() + "/rvc_assets/" + ModelPath)
-
-    if (cfg.current_data["print_loading_message"]):
-        print("   Loaded model on device '" + device + "'.")
 
 def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: int, f0_up_key: int) -> bytes:
     LoadModel(ModelName)
@@ -80,12 +67,7 @@ def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: i
     if (not os.path.exists(AudioPath)):
         raise Exception("Audio file doesn't exists.")
 
-    try:
-        tgt_sr, audio_opt, _, _ = vc.vc_inference(1, Path(AudioPath), f0_up_key = f0_up_key, protect = Protect, filter_radius = FilterRadius, f0_method = cfg.current_data["rvc_models"][ModelName][2], hubert_path = os.getcwd() + "/rvc_assets/hubert_base.pt", index_file = cfg.current_data["rvc_models"][ModelName][1])
-
-        print(str(tgt_sr == None) + " " + str(audio_opt == None))
-    except Exception as ex:
-        print("\n\n" + str(ex) + "\n\n")
+    tgt_sr, audio_opt, _, _ = vc.vc_inference(1, Path(AudioPath), f0_up_key = f0_up_key, protect = Protect, filter_radius = FilterRadius, f0_method = cfg.current_data["rvc_models"][ModelName][2], hubert_path = os.getcwd() + "/rvc_assets/hubert_base.pt", index_file = cfg.current_data["rvc_models"][ModelName][1])
     
     output_file_name = "tmp_rvc_"
     output_file_id = 0
@@ -126,7 +108,7 @@ def LoadModel(ModelName: str, AllowDownloads: bool = True) -> None:
     cfg.current_data["rvc_models"][ModelName][0] = __get_file_name__(cfg.current_data["rvc_models"][ModelName][0])
     cfg.current_data["rvc_models"][ModelName][1] = __get_file_name__(cfg.current_data["rvc_models"][ModelName][1])
 
-    __load_model__(cfg.current_data["rvc_models"][ModelName][0], ModelName)
+    __load_model__(cfg.current_data["rvc_models"][ModelName][0])
 
 def MakeRVC(Data: dict[str]) -> bytes:
     try:

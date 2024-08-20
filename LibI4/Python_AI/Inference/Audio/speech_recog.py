@@ -5,39 +5,22 @@ import ai_config as cfg
 
 recognizer: sr.Recognizer = sr.Recognizer()
 device: str = "cpu"
-whisperM: whisper.Whisper = None
+whisperM: whisper.Whisper | None = None
 
 def LoadModel() -> None:
     global device, whisperM
-
-    if (len(cfg.devices) == 0):
-        cfg.__get_gpu_devices__()
     
+    if (cfg.current_data["models"].count("speech2text") == 0):
+        raise Exception("Model is not in 'models'.")
+
     if (whisperM != None):
         return
     
-    if (cfg.current_data["print_loading_message"]):
-        print("Loading model 'whisper'...")
-
-    for i in range(len(cfg.devices)):
-        dev = cfg.GetAvailableGPUDeviceForTask("whisper", i)
-        
-        try:
-            whisperM = whisper.load_model(cfg.current_data["whisper_model"], dev, None, False)
-            device = dev
-
-            if (cfg.current_data["print_loading_message"]):
-                print("   Loaded model on device '" + device + "'.")
-
-            return
-        except:
-            pass
-    
-    raise Exception("Could not create Whisper.")
+    device = cfg.GetAvailableGPUDeviceForTask("speech2text")
+    whisperM = whisper.load_model(cfg.current_data["whisper_model"], device, None, False)
 
 def Recognize(data: sr.AudioData) -> dict[str, str]:
-    if (not cfg.current_data["prompt_order"].__contains__("whisper")):
-        raise Exception("Model is not loaded in 'prompt_order'.")
+    LoadModel()
     
     result = {
         "text": "",
@@ -63,9 +46,6 @@ def Recognize(data: sr.AudioData) -> dict[str, str]:
             "lang": result["language"],
             "error": ""
         }
-
-        if (cfg.current_data["print_prompt"]):
-            print("RESULT FROM WHISPER: " + str(result))
 
         os.remove(audio_name)
     except sr.UnknownValueError:
