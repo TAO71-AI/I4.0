@@ -44,14 +44,14 @@ fi
 if echo "$GPU_INFO" | grep -i nvidia; then
     echo -e "\e[1m > NVIDIA GPU detected! \e[0m"
 
-    if [ "${FORCE_CPU_PT}" -eq 0 ]; then
+    if [ "${FORCE_CPU_PT}" -ne 1 ]; then
         echo "   Building PyTorch with CUDA support..."
         PYTORCH_WHL="--index-url https://download.pytorch.org/whl/cu124"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
 
-    if [ "${FORCE_CPU_LLAMA}" -eq 0 ]; then
+    if [ "${FORCE_CPU_LLAMA}" -ne 1 ]; then
         echo "   Building LLaMA-CPP-Python with CUDA support..."
         LCPP_WHL="-DGGML_CUDA=on"
     else
@@ -60,14 +60,14 @@ if echo "$GPU_INFO" | grep -i nvidia; then
 elif echo "$GPU_INFO" | grep -i amd; then
     echo -e "\e[1m > AMD GPU detected! \e[0m"
 
-    if [ "${FORCE_CPU_PT}" -eq 0 ]; then
+    if [ "${FORCE_CPU_PT}" -ne 1 ]; then
         echo "   Building PyTorch with ROCm support..."
         PYTORCH_WHL="--index-url https://download.pytorch.org/whl/rocm6.1"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
 
-    if [ "${FORCE_CPU_LLAMA}" -eq 0 ]; then
+    if [ "${FORCE_CPU_LLAMA}" -ne 1 ]; then
         echo "   Building LLaMA-CPP-Python with ROCm support..."
         LCPP_WHL="-DGGML_HIPBLAS=on"
     else

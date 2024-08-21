@@ -114,13 +114,13 @@ def ProcessPrompt(Prompt: str, Conversation: list[str] = ["", ""]) -> Iterator[s
 
         for p in contentForModel:
             if (p["role"] == "system"):
-                sp += p + "\n"
+                sp += p["content"] + "\n"
         
         sp = sp.strip()
 
         with Model.chat_session(system_prompt = sp, prompt_template = "{0}\n### RESPONSE: "):
             response = Model.generate(
-                prompt = contentToShow,
+                prompt = convTemp.GetTemplate(Prompt, "", conv.GetConversation(Conversation[0], Conversation[1])),
                 max_tokens = cfg.current_data["max_length"],
                 temp = cfg.current_data["chatbot"]["temp"],
                 n_batch = cfg.current_data["chatbot"]["batch"],
@@ -184,9 +184,6 @@ def ProcessPrompt(Prompt: str, Conversation: list[str] = ["", ""]) -> Iterator[s
         raise Exception("Invalid model.")
 
 def __get_content__(Prompt: str, Conversation: list[str]) -> str | list[dict[str, str]]:
-    if (cfg.current_data["chatbot"]["type"] == "gpt4all"):
-        return conv.ConversationToStr(Conversation[0], Conversation[1])
-
     content = []
 
     if (len(SystemPrompts) > 0):
