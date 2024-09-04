@@ -1,4 +1,4 @@
-from typing import Iterator
+from collections.abc import Iterator
 import websockets.server
 import asyncio
 import threading
@@ -17,9 +17,9 @@ import rec_files as rfs
 # Variables
 max_buffer_length: int = 4096
 max_users: int = 1000
-queue: dict[str, int] = {}
+queue: dict[str, list[int]] = {}
 args: list[str] = []
-times: dict[str, list[float]] = {}
+times: dict[str, list[list[float]]] = {}
 banned: dict[str, list[str]] = {
     "ip": [],
     "key": []
@@ -35,6 +35,11 @@ def CheckFiles() -> None:
     
     if (not os.path.exists("Logs/")):
         os.mkdir("Logs/")
+    
+    if (not os.path.exists("TOS.txt")):
+        with open("TOS.txt", "w") as f:
+            f.write("")
+            f.close()
 
 def UpdateServer() -> None:
     # Check the files
@@ -75,10 +80,10 @@ def UpdateServer() -> None:
     # Update the banned IPs in other services
     rfs.banned_ips = banned["ip"]
 
-def GetQueueForService(Service: str) -> tuple[int, float]:
+def GetQueueForService(Service: str, Index: int) -> tuple[int, float]:
     # Get the users for the queue
     try:
-        users = queue[Service]
+        users = queue[Service][Index]
     except:
         users = 0
     
@@ -86,7 +91,7 @@ def GetQueueForService(Service: str) -> tuple[int, float]:
     try:
         t = 0
 
-        for ti in times[Service]:
+        for ti in times[Service][Index]:
             t += ti
         
         t = t * (users + 1)
@@ -172,9 +177,29 @@ def __share_data__(UserPrompt: str, UserFiles: dict[str, list[str | bytes]], Res
     except Exception as ex:
         print("[DATA SHARE] Error sending to ALL servers. Please check logs for more info.")
 
-def CheckIfHasEnoughTokens(Service: str, KeyTokens: float) -> bool:
+def CheckIfHasEnoughTokens(Service: str, Index: int, KeyTokens: float) -> bool:
     # Calculate price for each service
-    return KeyTokens >= cfg.current_data["price"][Service]
+    return KeyTokens >= cfg.GetInfoOfTask(Service, Index)["price"]
+
+def GetAutoIndex(Service: str) -> int:
+    try:
+        # Get the length of the service
+        length = cb.GetServicesAndIndexes()[Service]
+
+        # Check the length
+        if (length == 0):
+            raise Exception()
+        
+        # Check if the service exists in the queue
+        if (Service not in list(queue.keys())):
+            # It isn't, return 0 (the first index)
+            return 0
+        
+        # It is, return the index with the smallest queue
+        return min(queue[Service])
+    except:
+        # Return an error saying the service is not available
+        raise Exception("Service not available.")
 
 def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str, any]]:
     # Get some required variables
@@ -185,7 +210,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         key = sb.GetKey(Prompt["APIKey"])
     except:
         # Could not get the key, create empty key
-        key = {"tokens": 0, "key": (None if (cfg.current_data["force_api_key"]) else "")}
+        key = {"tokens": 0, "key": (None if (cfg.current_data["force_api_key"]) else ""), "admin": False}
     
     # Get some "optional" variables
     try:
@@ -238,15 +263,27 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # If an error occurs, set to default
         internetMethod = "qa"
     
+    try:
+        # Try to get the index of the model to use
+        index = Prompt["Index"]
+    except:
+        # If an error occurs, set to default
+        index = -1
+    
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
         raise Exception("Your API key is banned.")
     
     # Check if the user wants to execute a service
-    if (cfg.current_data["models"].split(" ").count(service) > 0):
+    if (len(cfg.GetAllInfosOfATask(service)) > 0):
         # It's a service to execute
+        # Check index
+        if (index < 0):
+            # Get index
+            index = GetAutoIndex(service)
+
         # Check the price and it's a valid key
-        if (not CheckIfHasEnoughTokens(service, key["tokens"]) and key["key"] != None and cfg.current_data["force_api_key"]):
+        if (not CheckIfHasEnoughTokens(service, index, key["tokens"]) and key["key"] != None and cfg.current_data["force_api_key"]):
             # Doesn't have enough tokens or the API key is invalid, return an error
             raise Exception("Not enough tokens or invalid API key. You need " + str(cfg.current_data["price"][service]) + " tokens, you have " + str(key["tokens"]) + ".")
         elif (key["key"] == None):
@@ -257,22 +294,34 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Start timer
             timer = time.time()
 
+            # Make sure the key of the service exists
+            if (service not in list(queue.keys())):
+                queue[service] = []
+                times[service] = []
+
             # Get queue
-            queueUsers, _ = GetQueueForService(service)
+            queueUsers, _ = GetQueueForService(service, index)
 
             # Wait for the queue to be valid
-            while (queueUsers > cfg.current_data["max_prompts"]):
+            while (queueUsers > 1):
                 pass
 
             try:
                 # Try to add to the queue
-                queue[service] += 1
-            except:
-                # The queue doesn't exists, create
-                queue[service] = 1
+                queue[service][index] += 1
+            except IndexError:
+                # The queue doesn't exists for this index
+                # While the length of the list of the queue is less than the index
+                while (len(queue[service]) < index + 1):
+                    # Add 0s to the queue and empty list to the times
+                    queue[service].append(0)
+                    times[service].append([])
+                
+                # Now, add 1 to the index
+                queue[service][index] += 1
 
             # Process the prompt and get a response
-            response = cb.MakePrompt(prompt, files, service, aiArgs, systemPrompts, [key["key"], conversation], useDefSystemPrompts)
+            response = cb.MakePrompt(index, prompt, files, service, aiArgs, systemPrompts, [key["key"], conversation], useDefSystemPrompts)
             fullResponse = ""
             responseFiles = []
             am = False
@@ -302,15 +351,19 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
 
             # Add the timer to the service
             try:
-                times[service].append(timer)
+                times[service][index].append(timer)
             except:
-                times[service] = [timer]
+                times[service][index] = [timer]
 
             # Remove the user from the queue
-            queue[service] -= 1
+            queue[service][index] -= 1
 
-            if (queue[service] < 0):
-                queue[service] = 0
+            if (queue[service][index] < 0):
+                queue[service][index] = 0
+            
+            # Remove tokens
+            key["tokens"] -= cfg.GetInfoOfTask(service, index)["price"]
+            sb.SaveKey(key, None)
 
             # Set the data share files
             sdFilesTemplate = {
@@ -374,7 +427,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                     cmd = line[6:].strip()
 
                     # Generate the image and append it to the files
-                    cmdResponse = cb.MakePrompt(cmd, [], "text2img")
+                    cmdResponse = cb.MakePrompt(GetAutoIndex("text2img"), cmd, [], "text2img")
 
                     # Append all the files
                     for token in cmdResponse:
@@ -388,7 +441,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                     cmd = line[6:].strip()
 
                     # Generate the audio and append it to the files
-                    cmdResponse = cb.MakePrompt(cmd, [], "text2audio")
+                    cmdResponse = cb.MakePrompt(GetAutoIndex("text2audio"), cmd, [], "text2audio")
 
                     # Append all the files
                     for token in cmdResponse:
@@ -411,7 +464,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                         continue
 
                     # Generate the image and append it to the files
-                    cmdResponse = cb.GetResponseFromInternet(cmd, cmdQ, internetMethod)
+                    cmdResponse = cb.GetResponseFromInternet(index, cmd, cmdQ, internetMethod)
                     text = ""
 
                     # Yield another line
@@ -442,7 +495,12 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                     banned["ip"].append(IPAddress)
             
             # Remove the user from the queue
-            queue[service] -= 1
+            queue[service][index] -= 1
+
+            # Check the list is not < 0
+            if (queue[service][index] < 0):
+                # It is, set to 0
+                queue[service][index] = 0
             
             # Return the exception
             raise ex
@@ -464,16 +522,56 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     elif (service == "get_all_services"):
         # Get all the available services
         # Return all the services
-        yield {"response": json.dumps(cb.GetAllModels()), "files": [], "ended": True}
+        yield {"response": json.dumps(cb.GetServicesAndIndexes()), "files": [], "ended": True}
     elif (service == "get_conversation"):
         # Get the conversation of the user
         # Return the conversation
         yield {"response": json.dumps(conv.GetConversation(key["key"], conversation)), "files": [], "ended": True}
+    elif (service == "get_conversations"):
+        # Get all the conversations of the user
+        # Return all the conversations
+        yield {"response": json.dumps([cn for cn in list(conv.conversations[key["key"]].keys())]), "files": [], "ended": True}
     elif (service == "get_queue"):
+        # Check index
+        if (index < 0):
+            # Set index
+            index = GetAutoIndex(prompt)
+
         # Get a queue for a service
         if (len(prompt) > 0):
-            queueUsers, queueTime = GetQueueForService(prompt)
+            queueUsers, queueTime = GetQueueForService(prompt, index)
+
+            print(f"Queue for service '{prompt}' and index '{index}': {queueUsers} users, ~{queueTime}s for full response.")
             yield {"response": json.dumps({"users": queueUsers, "time": queueTime}), "files": [], "ended": True}
+    elif (service == "get_tos"):
+        # Get the Terms of Service of the server
+        with open("TOS.txt", "r") as f:
+            yield {"response": f.read(), "files": [], "ended": True}
+            f.close()
+    elif (service == "create_key" and key["admin"]):
+        # Create a new API key
+        keyData = cfg.JSONDeserializer(Prompt)
+        keyData = sb.GenerateKey(keyData["tokens"], keyData["daily"])["key"]
+
+        yield {"response": keyData, "files": [], "ended": True}
+    elif (service == "get_key"):
+        # Get information about the key
+        keyData = key
+        keyData["key"] = "[PRIVATE]"
+
+        yield {"response": json.dumps(keyData), "files": [], "ended": True}
+    elif (service == "get_service_description"):
+        # Get the description of a specific service
+        # Get the info from the service
+        info = cfg.GetInfoOfTask(prompt, index)
+
+        # Check if contains a description
+        if ("description" in list(info.keys())):
+            # Contains a description, send it
+            yield {"response": info["description"], "files": [], "ended": True}
+        else:
+            # Does not contain a description, send an empty message
+            yield {"response": "", "files": [], "ended": True}
     else:
         raise Exception("Invalid command.")
 
@@ -578,7 +676,7 @@ def StartServer() -> None:
     eventLoop = asyncio.new_event_loop()
     asyncio.set_event_loop(eventLoop)
 
-    serverWS = websockets.serve(OnConnect, ip, 8060)
+    serverWS = websockets.serve(OnConnect, ip, 8060, max_size = None)
 
     # Start the server
     eventLoop.run_until_complete(serverWS)
@@ -605,6 +703,9 @@ except KeyboardInterrupt:
 
     # Save the configuration
     cfg.SaveConfig(cfg.current_data)
+
+    # Stop the DB
+    sb.StopDB()
 
     # Close
     started = False

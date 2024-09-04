@@ -18,7 +18,13 @@ def ReloadDB() -> None:
     global mysql_connection, mysql_cursor
 
     if (use_mysql):
-        mysql_connection = mysql.connect(host = cfg.current_data["keys_db"]["server"], user = cfg.current_data["keys_db"]["user"], password = cfg.current_data["keys_db"]["password"], database = cfg.current_data["keys_db"]["database"], cursorclass = mysql_c.DictCursor)
+        mysql_connection = mysql.connect(
+            host = cfg.current_data["keys_db"]["server"],
+            user = cfg.current_data["keys_db"]["user"],
+            password = cfg.current_data["keys_db"]["password"],
+            database = cfg.current_data["keys_db"]["database"],
+            cursorclass = mysql_c.DictCursor
+        )
         mysql_cursor = mysql_connection.cursor()
 
 def Init() -> None:
@@ -67,17 +73,26 @@ def GenerateKey(tokens: int = -1, daily_key: bool = False) -> dict:
         "tokens": tokens
     }
     
-    key_data["user_id"] = -1
     key_data["tokens"] = tokens
     key_data["key"] = key
-    key_data["daily"] = "true" if daily_key else "false"
+    key_data["daily"] = "true" if (daily_key) else "false"
     key_data["date"] = GetCurrentDateDict()
     key_data["default"] = default_key
+    key_data["admin"] = False
     SaveKey(key_data)
     
     return key_data
 
-def SaveKey(key_data: dict) -> str:
+def SaveKey(key_data: dict, UseMySQL: bool | None = None, Err: int = 0) -> None:
+    if (UseMySQL and use_mysql):
+        try:
+            mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
+            mysql_connection.commit()
+        except:
+            if (Err == 0):
+                ReloadDB()
+                return SaveKey(key_data, True, 1)
+
     try:
         if (key_data["user_id"] > 0 and use_mysql):
             raise Exception()
@@ -85,42 +100,17 @@ def SaveKey(key_data: dict) -> str:
         with open("API/" + key_data["key"] + ".key", "w+") as f:
             f.write(json.dumps(key_data))
             f.close()
-            
-        return "Done!"
+        
+        if (UseMySQL == None):
+            SaveKey(key_data, True)
     except:
         pass
 
-    if (use_mysql):
-        try:
-            mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
-            mysql_connection.commit()
-
-            return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
-        except:
-            ReloadDB()
-
-            try:
-                mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
-                mysql_connection.commit()
-
-                return "Database updated, " + str(mysql_cursor.rowcount) + " record(s) updated!"
-            except Exception as ex:
-                return "ERROR SAVING KEY ON DB: " + str(ex)
-    
-    return "Done!"
-
-def GetAllKeys() -> list[dict]:
+def GetAllKeys(UseMySQL: bool | None = None, Err: int = 0) -> list[dict]:
     Init()
     keys = []
 
-    for key in os.listdir("API/"):
-        with open("API/" + key) as f:
-            content = json.load(f)
-            f.close()
-
-            keys.append(content)
-    
-    if (use_mysql):
+    if (UseMySQL and use_mysql):
         try:
             mysql_cursor.execute("SELECT * FROM " + cfg.current_data["keys_db"]["table"])
             results = mysql_cursor.fetchall()
@@ -128,42 +118,37 @@ def GetAllKeys() -> list[dict]:
             for db_key in results:
                 try:
                     key_data = {
-                        "user_id": int(db_key[1]),
-                        "tokens": float(db_key[2]),
-                        "key": db_key[3],
-                        "daily": (int(db_key[4]) == 1 or str(db_key[4]).lower() == "true"),
-                        "date": json.loads(db_key[5]),
+                        "tokens": float(db_key[1]),
+                        "key": db_key[2],
+                        "daily": int(db_key[3]) == 1 or str(db_key[3]).lower() == "true",
+                        "date": json.loads(db_key[4]),
                         "default": {
-                            "tokens": float(db_key[6])
-                        }
+                            "tokens": float(db_key[5])
+                        },
+                        "admin": int(db_key[6]) == 1 or str(db_key[6]).lower() == "true"
                     }
                     keys.append(key_data)
                 except:
                     continue
+            
+            return keys
         except:
-            ReloadDB()
+            if (Err == 0):
+                ReloadDB()
+                return GetAllKeys(True, 1)
 
-            try:
-                mysql_cursor.execute("SELECT * FROM " + cfg.current_data["keys_db"]["table"])
-                results = mysql_cursor.fetchall()
+    for key in os.listdir("API/"):
+        with open("API/" + key) as f:
+            content: dict = json.load(f)
+            f.close()
 
-                for db_key in results:
-                    try:
-                        key_data = {
-                            "user_id": int(db_key[1]),
-                            "tokens": float(db_key[2]),
-                            "key": db_key[3],
-                            "daily": (int(db_key[4]) == 1 or str(db_key[4]).lower() == "true"),
-                            "date": json.loads(db_key[5]),
-                            "default": {
-                                "tokens": float(db_key[6])
-                            }
-                        }
-                        keys.append(key_data)
-                    except:
-                        continue
-            except:
-                pass
+            if (list(content.keys()).count("admin") == 0):
+                content["admin"] = False
+
+            keys.append(content)
+    
+    if (UseMySQL == None):
+        keys += GetAllKeys(True)
     
     return keys
 

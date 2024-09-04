@@ -6,36 +6,10 @@ import torch
 
 devices: list[str] = []
 __config_data__: dict[str] = {
-    "text_classification_model": "joeddav/distilbert-base-uncased-go-emotions-student",         # Sets the HuggingFace (Text-Classification) model.
-    "translation_classification_model": "papluca/xlm-roberta-base-language-detection",          # Sets the HuggingFace (Text-Classification) model used for detecting the language of the prompt.
-    "translation_models": {},                                                                   # Sets the HuggingFace (Translation) models.
-        # Example:
-        # {"es-en": "MODEL", "en-es": "MODEL", "en-ru": "MODEL"}
     "server_language": "en",                                                                    # Sets the default language to translate a prompt.
-    "whisper_model": "tiny",                                                                    # Sets the default Whisper model.
-    "image_generation": {                                                                       # Sets the config for the Image Generation model.
-        "model": "SimianLuo/LCM_Dreamshaper_v7",                                                    # HuggingFace (TextToImage) model.
-        "steps": 8,                                                                                 # The number of steps for the model.
-        "guidance": 3,                                                                              # The guidance scale.
-        "width": 768,                                                                               # Image width.
-        "height": 768,                                                                              # Image height.
-    },
-    "img_to_text_model": "Salesforce/blip-image-captioning-base",                               # Sets the HuggingFace (ImageToText) model.
-    "text_to_audio_model": "suno/bark-small",                                                   # Sets the HuggingFace (TextToAudio) model.
-    "nsfw_filter_text_model": "feruskas/CADD-NSFW-SFW",                                         # Sets the HuggingFace (Text-Classification) model used for NSFW detection on text.
-    "nsfw_filter_image_model": "Falconsai/nsfw_image_detection",                                # Sets the HuggingFace (Image-Classification) model used for NSFW detection on image.
-    "depth_estimation_model": "Intel/dpt-beit-base-384",                                        # Sets the HuggingFace (Depth-Estimation) model.
-    "object_detection_model": "hustvl/yolos-tiny",                                              # Sets the HuggingFace (Object-Detection) model.
-    "rvc_models": {},                                                                           # Sets the RVC models (must be on your local storage).
-        # Example:
-        # {"MODEL NAME": ["MODEL PATH", "INDEX PATH", "MODEL TYPE (rmvpe, crepe, pm, etc)"]}
-    "uvr_model": "9-HP2",                                                                       # Sets the UVR model (must be on your local storage).
-    "image_to_image_model": "stabilityai/stable-diffusion-xl-refiner-1.0",                      # Sets the model for the image to image service.
-    "qa_model": "google-bert/bert-large-uncased-whole-word-masking-finetuned-squad",            # Sets the HuggingFace (Question Answering) model.
     "force_api_key": True,                                                                      # Makes API keys required for using the AI models.
     "max_length": 250,                                                                          # Sets the max length that the chatbots (`g4a`, `hf`...) can generate.
     "use_dynamic_system_args": True,                                                            # Creates some extra system prompt for the chatbots (example: the current date, the state of humour...).
-    "models": "",                                                                               # Sets the models that will be loaded.
     "ai_args": "",                                                                              # Sets some default args for the chatbot (mostly to define the personality, like: +evil, +self-aware...). Can be changed by the user.
     "custom_system_messages": "",                                                               # Sets a custom system prompt from the server.
     "system_messages_in_first_person": False,                                                   # [DEPRECATED, soon will be deleted] Replaces `you're`, `you`... with `I'm`, `I`...
@@ -48,7 +22,6 @@ __config_data__: dict[str] = {
         "database": "",                                                                             # Database name.
         "table": "keys"                                                                             # Database table.
     },
-    "max_prompts": 1,                                                                           # Sets the max prompts that can be processed at a time for each service.
     "enabled_plugins": "sing vtuber discord_bot voicevox twitch gaming image_generation",       # I4.0 plugins that creates more system prompts.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
@@ -58,30 +31,6 @@ __config_data__: dict[str] = {
     "allow_data_share": True,                                                                   # Allows data sharing to TAO71's servers to make a better dataset for I4.0 and train AI models on that dataset (shares the user's prompt [files included], service used and the server's response and it's 100% anonymous).
     "data_share_servers": ["tao71.sytes.net"],                                                  # List of servers to share the data.
     "data_share_timeout": 2.5,                                                                  # Seconds to wait per server response on data share.
-    "google_tts_apikey": "",                                                                    # Google TTS API key.
-    "device": {                                                                                 # Set the device to load the models.
-        "chatbot": "cpu",
-        "text2img": "cpu",
-        "img2text": "cpu",
-        "de": "cpu",
-        "tr": "cpu",
-        "sc": "cpu",
-        "text2audio": "cpu",
-        "speech2text": "cpu",
-        "od": "cpu",
-        "rvc": "cpu",
-        "uvr": "cpu",
-        "img2img": "cpu",
-        "qa": "cpu",
-        "nsfw_filter-text": "cpu",
-        "nsfw_filter-image": "cpu",
-    },
-    "styletts2": {                                                                              # StyleTTS2 configuration.
-        "models": {},                                                                               # StyleTTS2 models.
-            # Example:
-            # {"MODEL NAME": ["MODEL PATH", "CONFIG PATH"]}
-        "steps": 5                                                                                  # Number of diffusion steps.
-    },
     "discord_bot": {                                                                            # Discord bot configuration. Most of this settings are server-configurable by ONLY the server's owner. This is just the default settings if not configured.
         "token": "",                                                                                # Discord's API key.
         "server_api_key": "",                                                                       # I4.0 server's API key.
@@ -101,144 +50,399 @@ __config_data__: dict[str] = {
         "auto-talk": True,                                                                          # Allows the bot to talk without the command prefix, activated at random moments.
         "prefix": "!i4",                                                                            # Command prefix.
     },
-    "chatbot": {                                                                                    # Chatbot configuration.
-        "ctx": 2048,                                                                                    # Maximum size of the context window.
-        "threads": -1,                                                                                  # Number of CPU threads to use. Set to -1 to use all, set to -2 to determine automatically.
-        "ngl": 100,                                                                                     # Number of GPU layers to use.
-        "batch": 8,                                                                                     # Prompt tokens processed in parallel.
-        "type": "gpt4all",                                                                              # Chatbot library to use. Available: `gpt4all` (SLOW on CPU, FAST on GPU, MAY NOT BE tested), `hf` (FAST for both CPU and GPU, LESS tested, it may broke depending on the model you're using), `lcpp` (VERY FAST on GPU, VERY SLOW on CPU, MORE tested, also can't change the device, so in order to use this one on another device you need to re-install the package).
-        "gpt4all": "Phi-3-mini-4k-instruct.Q4_0.gguf",                                                  # GPT4All's model path or name.
-        "hf": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",                                                     # HuggingFace's model name.
-        "lcpp": [                                                                                       # LlamaCPP-Python's model.
-            "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",                                                       # Model repository on HuggingFace or model path.
-            "mistral-7b-instruct-v0.2.Q4_K_M.gguf",                                                         # File of the model to use/download.
-            "mistralai/Mistral-7B-Instruct-v0.2",                                                           # HuggingFace repository for the chat format. Leave empty to use the repository of the model.
-        ],
-        "temp": 0.5,                                                                                    # Sets the temperature used for the models.
-    },
-    "price": {                                                                                          # Set the price of the services (in tokens of API key).
-        "chatbot": 20,
-        "text2img": 20,
-        "img2text": 10,
-        "de": 10,
-        "tr": 5,
-        "sc": 5,
-        "text2audio": 20,
-        "speech2text": 15,
-        "od": 10,
-        "rvc": 20,
-        "uvr": 15,
-        "img2img": 20,
-        "qa": 10,
-        "nsfw_filter-text": 2.5,
-        "nsfw_filter-image": 2.5,
-        "tts": 7.5
-    },
+    "models": [                                                                                     # Models to be used.
+        # Examples:
+        #{
+        #    "service": "chatbot",
+        #    "type": "lcpp",
+        #    "ctx": 2048,
+        #    "threads": -1,
+        #    "ngl": 100,
+        #    "batch": 8,
+        #    "model": [
+        #        "MODEL REPOSITORY / MODEL PATH",
+        #        "MODEL FILE NAME",
+        #        "TEMPLATE REPOSITORY"
+        #    ],
+        #    "temp": 0.5,
+        #    "device": "cpu",
+        #    "price": 20
+        #},
+        #{
+        #    "service": "qa",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 5
+        #},
+        #{
+        #    "service": "img2img",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 20
+        #},
+        #{
+        #    "service": "uvr",
+        #    "model": "MODEL NAME",
+        #    "device": "cpu",
+        #    "price": 15
+        #},
+        #{
+        #    "service": "rvc",
+        #    "model": [
+        #        "MODEL NAME",
+        #        "MODEL PATH",
+        #        "INDEX PATH",
+        #        "MODEL TYPE (rmvpe, harvest, pm, etc.)"
+        #    ],
+        #    "device": "cpu",
+        #    "price": 15
+        #},
+        #{
+        #    "service": "od",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 7.5
+        #},
+        #{
+        #    "service": "de",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 10
+        #},
+        #{
+        #    "service": "nsfw_filter-text",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "nsfw_label": "",
+        #    "price": 2.5
+        #},
+        #{
+        #    "service": "nsfw_filter-image",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "nsfw_label": "",
+        #    "price": 2.5
+        #},
+        #{
+        #    "service": "text2audio",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 20
+        #},
+        #{
+        #    "service": "img2text",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 7.5
+        #},
+        #{
+        #    "service": "text2img",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "steps": 8,
+        #    "guidance": 3,
+        #    "width": 1024,
+        #    "height": 1024,
+        #    "price": 20
+        #},
+        #{
+        #    "service": "speech2text",
+        #    "type": "[`whisper` or `hf`]",
+        #    "model": "MODEL NAME / MODEL REPOSITORY",
+        #    "batch": 8,
+        #    "temp": 0.5,
+        #    "device": "cpu",
+        #    "price": 12
+        #},
+        #{
+        #    "service": "ld",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 1.5
+        #},
+        #{
+        #    "service": "tr",
+        #    "model": "MODEL REPOSITORY",
+        #    "lang": "[INPUT LANGUAGE]-[OUTPUT LANGUAGE]",
+        #    "device": "cpu",
+        #    "price": 7.5
+        #},
+        #{
+        #    "service": "sc",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 1.5
+        #},
+        #{
+        #    "service": "tts",
+        #    "price": 1
+        #}
+        #
+        #
+        # NOTE: You can also add a description for each model, expample:
+        #{
+        #    "service": "sc",
+        #    "model": "MODEL REPOSITORY",
+        #    "device": "cpu",
+        #    "price": 1.5,
+        #    "description": "DESCRIPTION HERE"
+        #}
+    ]
 }
 
 def Init() -> None:
+    # Check if the config file exists
     if (not os.path.exists("config.json")):
+        # It doesn't exist, create it
         with open("config.json", "w+") as f:
             f.close()
         
+        # Save the config
         SaveConfig(__config_data__)
         print("Configuration created at 'config.json'! To start the server, please run this script again.")
 
+        # Close the program
         os._exit(0)
 
 def ReadConfig() -> dict[str]:
+    # Initialize
     Init()
     
+    # Read the config file
     with open("config.json", "r") as f:
         data: dict[str, any] = json.loads(f.read())
         f.close()
     
+    # For each option in the data
     for dkey in list(data.keys()):
+        # Check if the option exists in the config template
         if (dkey not in list(__config_data__.keys())):
+            # It doesn't exist, delete the option from the data
             data.pop(dkey)
             continue
 
+    # For each option in the config template
     for dkey in list(__config_data__.keys()):
+        # Check if the option exists in the data
         if (dkey not in list(data.keys())):
+            # It doesn't exist, add it with the default value from the config template
             data[dkey] = __config_data__[dkey]
     
+    # Save the config
     SaveConfig(data)
+
+    # Return the config
     return data
 
 def SaveConfig(Config: dict[str] = {}) -> None:
+    # Initialize
     Init()
 
+    # Check if the length of the config is 0
     if (len(list(Config.keys())) == 0):
+        # It is, set the config to the current config
         Config = current_data.copy()
 
+        # Check if the current config exists
         if (current_data == None):
+            # If it doesn't, return
             return
     
+    # Convert the config dict to a JSON text with indent
     text = json.dumps(Config, indent = 4)
 
+    # Save the config into the config file
     with open("config.json", "w") as f:
         f.write(text)
         f.close()
 
-def GetAvailableGPUDeviceForTask(Task: str) -> str:
-    device = current_data["device"][Task]
+def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
+    # Get the device set for the task
+    device = GetInfoOfTask(Task, Index)["device"]
 
-    if (not (device == "cuda" and torch.cuda.is_available()) and not device == "cpu"):
-        print("Invalid device or not available. Please use `cpu` or `cuda`. Changing to `cpu`.")
-        device = "cpu"
+    # Check if the device specified for this model is available
+    if (device == "cuda" and torch.cuda.is_available()):
+        # The device is CUDA and it's available, return it
+        return device
     
-    return device
+    # The device is not available, return the cpu
+    return "cpu"
 
-def LoadPipeline(PipeTask: str, Task: str, ModelName: str) -> tuple[Pipeline, str]:
-    dev = GetAvailableGPUDeviceForTask(Task)
+def LoadPipeline(PipeTask: str, Task: str, Index: int, ExtraKWargs: dict[str, any] | None = None) -> tuple[Pipeline, str]:
+    # Get the device to use
+    dev = GetAvailableGPUDeviceForTask(Task, Index)
 
-    print(f"Loading (transformers) pipeline for the service '{Task.upper()}' on the device '{dev}'...")
-    pipe = pipeline(task = PipeTask, model = ModelName, device = dev)
+    # Print the loading message
+    print(f"Loading (transformers) pipeline for the service '{Task.upper()} [INDEX {Index}]' on the device '{dev}'...")
+
+    # Set the args dict
+    args = {}
+
+    # Check if the extra kwargs are set
+    if (ExtraKWargs != None):
+        # It is, copy to the args
+        args = ExtraKWargs.copy()
+    
+    # Set the required args
+    args["task"] = PipeTask
+    args["model"] = GetInfoOfTask(Task, Index)["model"]
+    args["device"] = dev
+
+    # Load the pipeline using the specified args
+    pipe = pipeline(**args)
+
+    # Print the done loading message
     print("   Done!")
 
+    # Return the pipeline and the device where the model is loaded
     return (pipe, dev)
 
-def LoadDiffusersPipeline(Task: str, ModelName: str, CustomPipelineType: type | None = None) -> tuple[any, str]:
+def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None = None, ExtraKWargs: dict[str, any] | None = None) -> tuple[any, str]:
+    # Check the pipeline type
     if (CustomPipelineType == None):
+        # No pipeline type set, use an automatic pipeline for text to image
         CustomPipelineType = AutoPipelineForText2Image
     
-    dev = GetAvailableGPUDeviceForTask(Task)
-    print(f"Loading (diffusers) pipeline for the service '{Task.upper()}' on the device '{dev}'...")
+    # Get the device to use
+    dev = GetAvailableGPUDeviceForTask(Task, Index)
 
+    # Print loading message
+    print(f"Loading (diffusers) pipeline for the service '{Task.upper()} [INDEX {Index}]' on the device '{dev}'...")
+
+    # Set args dict
+    args = {}
+
+    # Check if the extra kwargs are set
+    if (ExtraKWargs != None):
+        # It is, copy to the args
+        args = ExtraKWargs.copy()
+    
+    # Set the required args
+    args["model"] = GetInfoOfTask(Task, Index)["model"],
+    args["device"] = dev
+
+    # Check the pipeline type
     if (Task == "img2img"):
-        pipe = CustomPipelineType.from_pretrained(ModelName, safety_checker = None, requires_safety_checker = False)
-    else:
-        pipe = CustomPipelineType.from_pretrained(ModelName)
-
-    pipe = pipe.to(dev)
+        # It's for image to image, set some extra args
+        args["safety_checker"] = None
+        args["requires_safety_checker"] = False
+    
+    # Load the pipeline using the specified args
+    pipe = CustomPipelineType.from_pretrained(**args)
+    
+    # Print the done loading message
     print("   Done!")
 
+    # Return the pipeline and the device where the model is loaded
     return (pipe, dev)
 
-def LoadModel(Task: str, ModelName: str, ModelType: type | None = None, TokenizerType: type | None = None) -> tuple[any, any, str]:
+def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerType: type | None = None, ExtraKWargsModel: dict[str, any] | None = None, ExtraKWargsTokenizer: dict[str, any] | None = None) -> tuple[any, any, str]:
+    # Check the model type
     if (ModelType == None):
+        # No model type specified, set a default model type
         ModelType = AutoModel
     
+    # Check the tokenizer type
     if (TokenizerType == None):
+        # No tokenizer type specified, set a default tokenizer type
         TokenizerType = AutoTokenizer
 
-    dev = GetAvailableGPUDeviceForTask(Task)
-    print(f"Loading model for '{Task.upper()}' on the device '{dev}'...")
+    # Get the available GPU to use for this model
+    dev = GetAvailableGPUDeviceForTask(Task, Index)
 
-    model = ModelType.from_pretrained(ModelName).to(dev)
-    tokenizer = TokenizerType.from_pretrained(ModelName)
+    # Set args dicts
+    argsModel = {}
+    argsTokenizer = {}
 
+    # Check if the extra kwargs are set for the model
+    if (ExtraKWargsModel != None):
+        # It is, copy to the args
+        argsModel = ExtraKWargsModel.copy()
+    
+    # Check if the extra kwargs are set for the tokenizer
+    if (ExtraKWargsTokenizer != None):
+        # It is, copy to the args
+        argsTokenizer = ExtraKWargsTokenizer.copy()
+    
+    # Set the model and tokenizer
+    argsModel["pretrained_model_name_or_path"] = GetInfoOfTask(Task, Index)["model"]
+    argsTokenizer["pretrained_model_name_or_path"] = GetInfoOfTask(Task, Index)["model"]
+
+    # Print loading message
+    print(f"Loading model for '{Task.upper()} [INDEX {Index}]' on the device '{dev}'...")
+
+    # Load the model and tokenizer using the args
+    model = ModelType.from_pretrained(**argsModel).to(dev)
+    tokenizer = TokenizerType.from_pretrained(**argsTokenizer)
+
+    # Print the done loading message
     print("   Done!")
+
+    # Return the model, tokenizer and device where the model is loaded
     return (model, tokenizer, dev)
 
 def JSONDeserializer(SerilizedText: str) -> dict:
     try:
+        # Try to return the result loaded using JSON
         return json.loads(SerilizedText)
     except:
+        # Error, check if the text starts and ends with "{" and "}"
         if (SerilizedText.startswith("{") and SerilizedText.endswith("}")):
+            # It does
             try:
+                # Try to return the result loaded using eval
                 return eval(SerilizedText)
             except:
+                # Error, return the result loaded using JSON, but replacing the quotes with double quotes
                 return json.loads(SerilizedText.replace("\'", "\""))
+        
+        # Return an error message
+        raise Exception("No valid text.")
 
+def GetAllTasks() -> dict[str, list[dict[str, any]]]:
+    # Create dict
+    tasks = {}
+
+    # For each task
+    for task in GetAllInfosOfATask():
+        try:
+            # Try to append the task to the dictionary
+            tasks[task["service"]].append(task)
+        except:
+            # Could not append it, probably the list doesn't exists, create it
+            tasks[task["service"]] = [task]
+    
+    # Return the tasks
+    return tasks
+
+def GetAllInfosOfATask(Service: str) -> list[dict[str, any]]:
+    # Create the list
+    infos = []
+
+    # For each model in the current data
+    for model in current_data["models"]:
+        # Check if the model belongs to the specified service
+        if (model["service"] == Service):
+            # It does, append it to the list of infos for the service
+            infos.append(model)
+    
+    # Return the list of infos for the service
+    return infos
+
+def GetInfoOfTask(Service: str, Index: int) -> dict[str, any] | None:
+    # Get the list of infos for the specified service
+    tasks = GetAllInfosOfATask(Service)
+
+    # Check if the index is valid
+    if (Index >= len(tasks) and len(tasks) > 0):
+        raise ValueError("Index > len(tasks)")
+    elif (Index < 0):
+        raise ValueError("Index < 0")
+    elif (len(tasks) == 0):
+        return None
+    
+    # Return the info of the task at the specified index
+    return tasks[Index]
+
+# Load the config
 current_data = ReadConfig()

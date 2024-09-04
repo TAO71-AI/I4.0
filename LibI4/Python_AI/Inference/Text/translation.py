@@ -1,111 +1,164 @@
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM, Pipeline
 import emoji
+import random
 import ai_config as cfg
 
-translation_classifier_model: Pipeline | None = None
-device_classifier: str = "cpu"
-
-models: dict[str, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str]] = {}
-models_loaded: bool = False
+__models__: list[tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str, dict[str, any]]] = []
+__classifiers__: list[Pipeline] = []
 
 def LoadModels() -> None:
-    global translation_classifier_model, models, models_loaded, device_classifier
-
-    if (cfg.current_data["models"].count("tr") == 0):
-        raise Exception("Models are not in 'models'.")
-
-    if (models_loaded):
-        return
-
-    if (translation_classifier_model == None):
-        dataClassifier = cfg.LoadPipeline("text-classification", "tr", cfg.current_data["translation_classification_model"])
-
-        translation_classifier_model = dataClassifier[0]
-        device_classifier = dataClassifier[1]
-    
-    for model in cfg.current_data["translation_models"]:
-        print("   Loading model 'translation (" + str(list(cfg.current_data["translation_models"].keys()).index(model)) + ")'...")
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("tr"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            continue
         
-        name = cfg.current_data["translation_models"][model]
-        data = cfg.LoadModel("tr", name, AutoModelForSeq2SeqLM, AutoTokenizer)
+        # Get the info of the model
+        info = cfg.GetInfoOfTask("tr", i)
 
-        models[model] = data
-    
-    models_loaded = True
+        # Check if contains a valid model
+        if (info["lang"].count("-") != 1):
+            # Return an error
+            raise Exception(f"Invalid language for model {info["model"]}. Expected 'INPUT LANGUAGE-OUTPUT LANGUAGE'; got '{info["lang"]}'.")
+
+        # Load the model
+        model, tokenizer, device = cfg.LoadModel("tr", i, AutoModelForSeq2SeqLM, AutoTokenizer)
+
+        # Add the model to the list of models
+        __models__.append((model, tokenizer, device, info))
+
+def LoadClassifiers() -> None:
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("ld"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            continue
+        
+        # Load the model
+        model, _ = cfg.LoadPipeline("text-classification", "ld", i)
+
+        # Add the model to the list of models
+        __classifiers__.append(model)
 
 def GetAvailableLanguages() -> list[str]:
-    return list(models.keys())
+    # Create list
+    langs = []
 
-def __translate__(prompt: str, language: str, tokenizer: AutoTokenizer, model: AutoModelForSeq2SeqLM, device: str) -> str:
+    # For each model
+    for model in __models__:
+        # Get the language and add it to the list
+        langs.append(model[3]["lang"])
+    
+    # Return the list
+    return langs
+
+def InferenceModel(Index: int, Prompt: str) -> str:
+    # Load the models
     LoadModels()
 
-    prompt = prompt.strip()
-    prompt = emoji.demojize(prompt, delimiters = (";;", ";;"), language = "alias")
+    # Strip and demojize the prompt
+    Prompt = Prompt.strip()
+    Prompt = emoji.demojize(Prompt, delimiters = (":", ":"), language = "alias")
 
-    prompt = prompt.split("\n")
+    # Strip the prompt (for better translation)
+    Prompt = Prompt.strip("\n")
     response = ""
 
-    if (len(prompt) == 1):
-        prompt = prompt[0].split("\\n")
+    # Get the model to use
+    model, tokenizer, device, _ = __models__[Index]
 
-    for line in prompt:
+    # For each line
+    for line in Prompt:
+        # Check the length of the line
         if (len(line.strip()) == 0):
+            # If the length of the stripped line is 0, add the line to the response and not translate
             response += line
             continue
 
-        inputs = tokenizer.encode(line.strip(), return_tensors = "pt")
-        inputs = inputs.to(device)
+        # Tokenize the line
+        inputs = tokenizer.encode(line.strip(), return_tensors = "pt").to(device)
 
-        mresponse = model.generate(inputs)
-        response += str(tokenizer.batch_decode(mresponse, skip_special_tokens = True)[0]) + "\n"
+        # Generate the response
+        translationResponse = model.generate(inputs)
 
+        # Detokenize the response
+        translationResponse = tokenizer.batch_decode(translationResponse, skip_special_tokens = True)[0]
+
+        # Add it to the response
+        response += str(translationResponse) + "\n"
+    
+    # Strip the response
     response = response.strip()
-    response = emoji.emojize(response, delimiters = (";;", ";;"), language = "alias")
 
+    # Emojize the response
+    emoji.emojize(response, delimiters = (":", ":"), language = "alias")
+
+    # Return the response
     return response
 
-def Translate(prompt: str, language: str) -> str:
-    LoadModels()
+def InferenceClassifier(Prompt: str, Index: int = -1) -> str:
+    # Load the classifiers
+    LoadClassifiers()
 
-    if (language == cfg.current_data["server_language"] + "-" + cfg.current_data["server_language"]):
-        return prompt
+    # Remove the emojis from the prompt and strip
+    Prompt = "".join([p if (not emoji.is_emoji(p)) else "" for p in Prompt])
+    Prompt = Prompt.strip()
 
-    availableLanguages = GetAvailableLanguages()
-
-    if (availableLanguages.count(language) == 0):
-        return prompt
+    # Check the index of the classifier
+    if (Index < 0):
+        # Set the index of the classifier to a random classifier
+        Index = random.randint(0, len(__classifiers__) - 1)
     
-    model = models[language][0]
-    tokenizer = models[language][1]
-    device = models[language][2]
+    # Inference the classifiers
+    result = __classifiers__[Index](Prompt)
 
-    return __translate__(prompt, language, tokenizer, model, device)
-
-def GetLanguage(prompt: str) -> str:
-    LoadModels()
-
-    prompt = prompt.strip()
-    promptNoEmoji = ""
-
-    for c in prompt:
-        if (emoji.is_emoji(c)):
-            continue
-
-        promptNoEmoji += c
-    
-    promptNoEmoji = promptNoEmoji.strip()
-
-    result = translation_classifier_model(promptNoEmoji)
+    # Get the label
     result = result[0]["label"]
-    result = str(result).lower()
 
+    # Strip and lower the result
+    result = result.strip().lower()
+
+    # Check the result
     if (len(result) == 0):
-        return "UNKNOWN"
+        # The language is unknown
+        return "unknown"
 
+    # Return the label
     return result
 
-def TranslateToServerLanguage(prompt: str, language: str) -> str:
-    return Translate(prompt, language + "-" + cfg.current_data["server_language"])
+def AutoTranslate(Prompt: str, InputLanguage: str = "unknown", OutputLanguage: str = "", IndexModel: int = 0, IndexClassifier: int = -1) -> str:
+    # Strip and lower the languages
+    InputLanguage = InputLanguage.lower().strip()
+    OutputLanguage = OutputLanguage.lower().strip()
 
-def TranslateFromServerLanguage(prompt: str, language: str) -> str:
-    return Translate(prompt, cfg.current_data["server_language"] + "-" + language)
+    # Check if the input language is the same as the output language
+    if (InputLanguage == OutputLanguage):
+        # It is, return the prompt
+        return Prompt
+
+    # Check the input language
+    if (InputLanguage == "unknown" or len(InputLanguage) == 0):
+        # The input language is unknown, use the classifier to detect the language
+        InputLanguage = InferenceClassifier(Prompt, IndexClassifier)
+    
+    # Check the output language
+    if (OutputLanguage == "unknown" or len(OutputLanguage) == 0):
+        # Return an error
+        raise Exception("Output language is unknown.")
+    
+    # Get the index of the model to use, considering the input and output languages
+    # Create the models list
+    models = []
+
+    # For each model
+    for model in __models__:
+        # Get the info of the model
+        info = model[3]
+
+        # Check if the desired input and output languages are available
+        if (info["lang"].lower().strip() == InputLanguage + "-" + OutputLanguage):
+            # They are, add the model index to the list
+            models.append(__models__.index(model))
+    
+    # Inference the model with the desired index and return the result
+    return InferenceModel(models[IndexModel], Prompt)

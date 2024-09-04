@@ -1,57 +1,69 @@
 from diffusers import AutoPipelineForImage2Image
 from PIL import Image, ImageOps
-import torch
 import os
 import json
 import ai_config as cfg
 
-pipeline: AutoPipelineForImage2Image | None = None
-device: str = "cpu"
+__models__: list[AutoPipelineForImage2Image] = []
 
-def LoadModel() -> None:
-    global pipeline, device
+def LoadModels() -> None:
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("img2img"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            continue
+        
+        # Load the model and get the info
+        model, _ = cfg.LoadDiffusersPipeline("img2img", i, AutoPipelineForImage2Image)
 
-    if (cfg.current_data["models"].count("img2img") == 0):
-        raise Exception("Model is not in 'models'.")
-    
-    if (pipeline != None):
-        return
-    
-    data = cfg.LoadDiffusersPipeline("img2img", cfg.current_data["image_to_image_model"], AutoPipelineForImage2Image)
+        # Add the model to the list of models
+        __models__.append(model)
 
-    pipeline = data[0]
-    device = data[1]
-
-def Prompt(prompt: str | dict[str, str]) -> list[bytes]:
-    if (type(prompt) == dict[str, str] or type(prompt) == dict):
-        return __process__(prompt["prompt"], prompt["image"])
+def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
+    # Check the type of the prompt
+    if (type(Prompt) == dict[str, str] or type(Prompt) == dict):
+        # It's a dict, process the image directly
+        return __process__(Index, Prompt["prompt"], Prompt["image"])
     
     try:
-        p = dict(prompt.replace("\"", "\'"))
-        return __process__(p["prompt"], p["image"])
+        # It's not a dict, try to convert it to a dict
+        p = dict(Prompt.replace("\"", "\'"))
+
+        # Process it and return the result
+        return __process__(Index, p["prompt"], p["image"])
     except:
-        p = json.loads(prompt)
-        return __process__(p["prompt"], p["image"])
+        # Try to convert into a dict using JSON
+        p = json.loads(Prompt)
 
-def __process__(prompt: str, image: str | Image.Image) -> list[bytes]:
-    LoadModel()
+        # Process it and return the result
+        return __process__(Index, p["prompt"], p["image"])
 
-    if (prompt.startswith("\"") or prompt.startswith("\'")):
-        prompt = prompt[1:]
+def __process__(Index: int, Prompt: str, Image: str | Image.Image) -> list[bytes]:
+    # Load the models
+    LoadModels()
+
+    # Cut the prompt
+    if (Prompt.startswith("\"") or Prompt.startswith("\'")):
+        Prompt = Prompt[1:]
     
-    if (prompt.endswith("\"") or prompt.endswith("\'")):
-        prompt = prompt[:-1]
+    if (Prompt.endswith("\"") or Prompt.endswith("\'")):
+        Prompt = Prompt[:-1]
     
+    # Convert into an image if it's a string
     if (type(image) == str):
         image = Image.open(image)
     
+    # Convert the image to RGB
     image = ImageOps.exif_transpose(image)
     image = image.convert("RGB")
 
-    images_generated = pipeline(prompt, image = image).images
+    # Inference the model
+    images_generated = __models__[Index](Prompt, image = image).images
     images = []
 
+    # For each image generated
     for image in images_generated:
+        # Save into a temporal file
         img_name = "ti.png"
         img_n = 0
 
@@ -64,10 +76,13 @@ def __process__(prompt: str, image: str | Image.Image) -> list[bytes]:
         
         image.save(img_name)
 
+        # Read the bytes of the saved image and add it to the images list
         with open(img_name, "rb") as f:
             images.append(f.read())
             f.close()
 
+        # Delete the temporal file
         os.remove(img_name)
 
+    # Return all the generated images
     return images

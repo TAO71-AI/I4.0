@@ -1,31 +1,29 @@
 from transformers import Pipeline
 import ai_config as cfg
 
-model_name: str = cfg.current_data["text_classification_model"]
-pipe: Pipeline | None = None
-device: str = "cpu"
+__models__: list[Pipeline] = []
 
-def LoadModel() -> None:
-    global pipe, device
+def LoadModels() -> None:
+    # For each model in the config
+    for i in range(len(cfg.GetAllInfosOfATask("sc"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            # It is, continue
+            continue
 
-    if (cfg.current_data["models"].count("sc") == 0):
-        raise Exception("Model is not in 'models'.")
+        # Get the model pipeline
+        pipe, _ = cfg.LoadPipeline("text-classification", "sc", i)
 
-    if (pipe != None or len(model_name.strip()) == 0):
-        return
+        # Add the pipeline to the models list
+        __models__.append(pipe)
 
-    data = cfg.LoadPipeline("text-classification", "sc", cfg.current_data["text_classification_model"])
+def Inference(Index: int, Prompt: str) -> str:
+    # Load the models
+    LoadModels()
 
-    pipe = data[0]
-    device = data[1]
-
-def DoPrompt(prompt: str) -> str:
-    LoadModel()
-
-    if (pipe == None):
-        return "-1"
-
-    result = pipe(prompt)
+    # Get a response from the model pipeline and get the label
+    result = __models__[Index](Prompt)
     result = result[0]["label"]
 
+    # Return the label as a string
     return str(result).lower()

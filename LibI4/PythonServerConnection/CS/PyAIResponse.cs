@@ -11,7 +11,6 @@ using System.Net.WebSockets;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
-using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 
 namespace TAO71.I4.PythonManager
@@ -66,8 +65,6 @@ namespace TAO71.I4.PythonManager
 
             while (ClientSocket.State != WebSocketState.Open)
             {
-                Console.WriteLine(ClientSocket.State.ToString());
-
                 if (time > 50)
                 {
                     throw new Exception("Server not responding.");
@@ -229,23 +226,12 @@ namespace TAO71.I4.PythonManager
 
             foreach (string service in jsonData.Keys)
             {
-                // Define the service obtained from the server
-                string sservice = service;
-
-                if (sservice == "hf" || sservice == "g4a")
-                {
-                    // The service is a chatbot
-                    sservice = "chatbot";
-                }
-
                 // Ignore if it alredy exists on the list
-                if (services.Contains(ServiceManager.FromString(sservice)))
+                if (!services.Contains(ServiceManager.FromString(service)))
                 {
-                    continue;
+                    // Add the service to the list if don't exists
+                    services.Add(ServiceManager.FromString(service));
                 }
-
-                // Add the service to the list if don't exists
-                services.Add(ServiceManager.FromString(sservice));
             }
 
             // Return all the services
@@ -281,7 +267,7 @@ namespace TAO71.I4.PythonManager
                         // Check every service available from this server
                         foreach (Service service in services)
                         {
-                            if (service == ServiceToExecute)
+                            if (service == ServiceToExecute && serverToReturn < 0)
                             {
                                 // If the service is the same the user requests, set the server ID to this server's ID
                                 serverToReturn = Conf.Servers.IndexOf(server);
@@ -365,11 +351,13 @@ namespace TAO71.I4.PythonManager
             yield break;
         }
 
-        public static IEnumerable<Dictionary<string, object>> ExecuteCommand(string Service, string Prompt = "")
+        public static IEnumerable<Dictionary<string, object>> ExecuteCommand(string Service, string Prompt = "", int Index = -1)
         {
             /*
              * Executes a very-basic command on the server.
              * You can use this, for example, to delete your conversation or get the queue for a service.
+             * 
+             * Index == -1 automatically gets the model with the smallest queue size.
             */
 
             // Serialize a very basic, minimum, data to send to the server
@@ -379,19 +367,22 @@ namespace TAO71.I4.PythonManager
                 {"Files", new Dictionary<string, string>()},
                 {"Service", Service},
                 {"Prompt", Prompt},
-                {"Conversation", Conf.Chatbot_Conversation}
+                {"Conversation", Conf.Chatbot_Conversation},
+                {"Index", Index}
             });
 
             // Return the response (probably serialized)
             return SendAndWaitForStreaming(jsonData);
         }
 
-        public static IEnumerable<Dictionary<string, object>> AutoGetResponseFromServer(string Prompt, Service ServerService, bool ForceNoConnect = false)
+        public static IEnumerable<Dictionary<string, object>> AutoGetResponseFromServer(string Prompt, Service ServerService, int Index = -1, bool ForceNoConnect = false)
         {
             /*
              * This will automatically get a response a server.
              * If the service requires it, this will serialize your prompt.
              * This will also do other thing before and after I4.0's response to your prompt.
+             * 
+             * Index == -1 automatically gets the model with the smallest queue size.
             */
 
             if (!ForceNoConnect)
@@ -554,11 +545,6 @@ namespace TAO71.I4.PythonManager
                     break;
                 case Service.UVR:
                     // Set prompt to the UVR template
-                    Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
-                    {
-                        {"agg", Conf.UVR_Agg}
-                    });
-
                     foreach (string file in Prompt.Split(' '))
                     {
                         files.Add(new Dictionary<string, string>()
@@ -568,6 +554,10 @@ namespace TAO71.I4.PythonManager
                         });
                     }
 
+                    Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                    {
+                        {"agg", Conf.UVR_Agg}
+                    });
                     break;
                 case Service.DepthEstimation:
                     // Set prompt to the Depth Estimation template
@@ -634,22 +624,25 @@ namespace TAO71.I4.PythonManager
                 {"AIArgs", Conf.Chatbot_AIArgs},
                 {"SystemPrompts", Conf.Chatbot_ExtraSystemPrompts},
                 {"UseDefaultSystemPrompts", Conf.Chatbot_AllowServerSystemPrompts},
-                {"Internet", InternetSearchManager.ToString(Conf.InternetOptions)}
+                {"Internet", InternetSearchManager.ToString(Conf.InternetOptions)},
+                {"Index", Index}
             });
 
             // Return the response
             return SendAndWaitForStreaming(Prompt);
         }
 
-        public static (int, float) GetQueueForService(Service QueueService)
+        public static (int, float) GetQueueForService(Service QueueService, int Index = -1)
         {
             /*
              * This will send a prompt to the connected server asking for the queue size and time.
              * Once received, it will return it.
+             * 
+             * Index == -1 automatically gets the model with the smallest queue size.
             */
 
             // Get response from the queue command
-            IEnumerable<Dictionary<string, object>> res = ExecuteCommand("get_queue", ServiceManager.ToString(QueueService));
+            IEnumerable<Dictionary<string, object>> res = ExecuteCommand("get_queue", ServiceManager.ToString(QueueService), Index);
 
             foreach (Dictionary<string, object> response in res)
             {
@@ -708,6 +701,45 @@ namespace TAO71.I4.PythonManager
 
             // Throw an error
             throw new Exception("Delete conversation error: Error getting queue.");
+        }
+
+        public static string GetTOS()
+        {
+            /*
+             * Gets the server's Terms Of Service.
+            */
+
+            // Send command to the server and wait for response
+            IEnumerable<Dictionary<string, object>> response = ExecuteCommand("get_tos");
+
+            // For each response
+            foreach (Dictionary<string, object> res in response)
+            {
+                // Check if it ended
+                if (!(bool)res["ended"])
+                {
+                    // The response didn't ended, return an error
+                    throw new Exception("Error getting TOS: Invalid ended arg.");
+                }
+
+                // It ended, get the text response
+                string tResponse = (string)res["response"];
+
+                // Trim the response
+                tResponse = tResponse.TrimStart().TrimEnd();
+
+                // Check the length of the response
+                if (tResponse.Length == 0)
+                {
+                    // There are no TOS
+                    return "No TOS.";
+                }
+
+                // There are TOS, return the text response
+                return tResponse;
+            }
+
+            throw new Exception("Error getting TOS: No response from server.");
         }
 
         public static async Task<int> SendFileToServer(string FilePath)

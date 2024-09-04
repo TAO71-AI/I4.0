@@ -2,27 +2,37 @@ from transformers import Pipeline
 import PIL.Image
 import ai_config as cfg
 
-pipe: Pipeline | None = None
-device: str = "cpu"
+__models__: list[Pipeline] = []
 
-def LoadModel() -> None:
-    global pipe, device
+def LoadModels() -> None:
+    # For each model of the service
+    for i in range(len(cfg.GetAllInfosOfATask("img2text"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            # It is, continue
+            continue
 
-    if (cfg.current_data["models"].count("img2text") == 0):
-        raise Exception("Model is not in 'models'.")
+        # Load the model and add it to the list of models
+        model, _ = cfg.LoadPipeline("image-to-text", "img2text", i)
+        __models__.append(model[0])
 
-    if (pipe != None):
-        return
+def Inference(Index: int, Img: str | PIL.Image.Image) -> str:
+    # Load the models
+    LoadModels()
 
-    data = cfg.LoadPipeline("image-to-text", "img2text", cfg.current_data["img_to_text_model"])
+    # Check the image type
+    if (type(Img) == str):
+        # The image is a string, open the file
+        image = PIL.Image.open(Img)
+    elif (type(Img) == PIL.Image.Image):
+        # The image is already an image, set the variable
+        image = Img
+    else:
+        # Invalid image type
+        raise Exception("Invalid image type.")
 
-    pipe = data[0]
-    device = data[1]
+    # Get the response from the model
+    response = __models__[Index](image)[0]["generated_text"]
 
-def MakePrompt(img: str) -> str:
-    LoadModel()
-
-    image = PIL.Image.open(img)
-    response = pipe(image)[0]["generated_text"]
-
+    # Return the response as a string
     return str(response)

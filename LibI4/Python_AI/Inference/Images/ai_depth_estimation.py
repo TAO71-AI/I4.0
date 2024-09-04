@@ -6,49 +6,54 @@ import numpy as np
 import os
 import ai_config as cfg
 
-processor: AutoImageProcessor | None = None
-model: AutoModelForDepthEstimation | None = None
-device: str = "cpu"
+__models__: list[tuple[AutoModelForDepthEstimation, AutoImageProcessor, str]] = []
 
-def __load_model__(model_name: str, device: str):
-    model = AutoModelForDepthEstimation.from_pretrained(model_name).to(device)
-    return model
-
-def LoadModel() -> None:
-    global processor, model, device
-
-    if (cfg.current_data["models"].count("de") == 0):
-        raise Exception("Model is not in 'models'.")
-
-    if (model != None and processor != None):
+def __load_model__(Index: int) -> None:
+    # Check if the model is loaded
+    if (Index < len(__models__)):
         return
-    
-    data = cfg.LoadModel("de", cfg.current_data["depth_estimation_model"], AutoModelForDepthEstimation, AutoImageProcessor)
 
-    model = data[0]
-    processor = data[1]
-    device = data[2]
+    # Load the model
+    model, processor, device = cfg.LoadModel("de", Index, AutoModelForDepthEstimation, AutoImageProcessor)
 
-def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
-    LoadModel()
+    # Add the model to the list of models
+    __models__.append((model, processor, device))
 
+def LoadModels() -> None:
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("de"))):
+        # Load the model
+        __load_model__(i)
+
+def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
+    # Load the models
+    LoadModels()
+
+    # Check the type of the image
     if (type(image) == str):
+        # It's an image from a path
+        # Open it
         image = PIL.Image.open(image)
     elif (type(image) != PIL.Image.Image):
+        # It's not a valid image
         raise Exception("Image is not 'str' or 'PIL.Image.Image'.")
     
-    inputs = processor(images = [image], return_tensors = "pt")
-    inputs = inputs.to(device)
+    # Tokenize the image and move to the device
+    inputs = __models__[Index][1](images = [image], return_tensors = "pt")
+    inputs = inputs.to(__models__[Index][2])
 
+    # Inference the model
     with torch.no_grad():
-        outputs = model(**inputs)
+        outputs = __models__[Index][0](**inputs)
         predicted_depth = outputs.predicted_depth
 
+    # Get the output
     prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = image.size[::-1], mode = "bicubic", align_corners = False)
     output = prediction.squeeze().cpu().numpy()
     output = (output * 255 / np.max(output)).astype("uint8")
     output = PIL.Image.fromarray(output)
 
+    # Save a temporal image
     img_name = "tdi.png"
     img_n = 0
 
@@ -61,9 +66,13 @@ def EstimateDepth(image: str | PIL.Image.Image) -> bytes:
     
     output.save(img_name)
 
+    # Read the bytes of the saved image
     with open(img_name, "rb") as f:
         output = f.read()
         f.close()
 
+    # Delete the temporal image
     os.remove(img_name)
+
+    # Return the bytes of the output image
     return output

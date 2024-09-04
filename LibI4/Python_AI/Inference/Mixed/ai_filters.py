@@ -1,79 +1,88 @@
+# Import some dependencies
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Pipeline
 from PIL import Image
+import torch
+
+# Import I4.0's utilities
 import ai_config as cfg
 
-text_filter: AutoModelForSequenceClassification | None = None
-image_filter: Pipeline | None = None
-tokenizer_text: AutoTokenizer | None = None
-device_text: str = "cpu"
-device_image: str = "cpu"
+__models_text__: list[tuple[AutoModelForSequenceClassification, AutoTokenizer, str, dict[str, any]]] = []
+__models_image__: list[tuple[Pipeline, str, dict[str, any]]] = []
 
-def LoadTextModel() -> None:
-    global text_filter, tokenizer_text, device_text
+def LoadTextModels() -> None:
+    # For each model
+    for i in range(len(cfg.GetAllInfosOfATask("nsfw_filter-text"))):
+        # Check if the model is already loaded
+        if (i < len(__models_text__)):
+            continue
 
-    if (cfg.current_data["models"].count("nsfw_filter-text") == 0):
-        raise Exception("Model is not in 'models'.")
+        # Load the model
+        model, tokenizer, device = cfg.LoadModel("nsfw_filter-text", i, AutoModelForSequenceClassification, AutoTokenizer)
 
-    if (text_filter != None and tokenizer_text != None):
-        return
+        # Add the model to the list
+        __models_text__.append((model, tokenizer, device, cfg.GetInfoOfTask("nsfw_filter-text", i)))
 
-    data = cfg.LoadModel("nsfw_filter-text", cfg.current_data["nsfw_filter_text_model"], AutoModelForSequenceClassification, AutoTokenizer)
+def LoadImageModels() -> None:
+    # For each model
+    for i in range(len(cfg.GetAllInfosOfATask("nsfw_filter-image"))):
+        # Check if the model is already loaded
+        if (i < len(__models_image__)):
+            continue
 
-    text_filter = data[0]
-    tokenizer_text = data[1]
-    device_text = data[2]
+        # Load the model
+        pipe, device = cfg.LoadPipeline("image-classification", "nsfw_filter-image", i)
 
-def LoadImageModel() -> None:
-    global image_filter, device_image
+        # Add the model to the list
+        __models_image__.append((pipe, device, cfg.GetInfoOfTask("nsfw_filter-image", i)))
 
-    if (cfg.current_data["models"].count("nsfw_filter-image") == 0):
-        raise Exception("Model is not in 'models'.")
+def LoadModels() -> None:
+    # Load both text and image filters
+    LoadTextModels()
+    LoadImageModels()
 
-    if (image_filter != None):
-        return
+def InferenceText(Prompt: str, Index: int) -> bool:
+    # Load the models
+    LoadTextModels()
 
-    data = cfg.LoadPipeline("image-classification", "nsfw_filter-image", cfg.current_data["nsfw_filter_image_model"])
+    # Set model, tokenizer, device and info
+    model, tokenizer, device, info = __models_text__[Index]
 
-    image_filter = data[0]
-    device_image = data[1]
+    # Tokenize the prompt
+    inputs = tokenizer.encode(Prompt, return_tensors = "pt").to(device)
 
-def IsTextNSFW(prompt: str) -> bool:
-    # NOTE: The value 0 means NSFW, the value 1 means SFW.
-    LoadTextModel()
+    # Inference the model
+    result = model(inputs).logits
 
-    if (tokenizer_text == None or text_filter == None):
-        return None
+    # Get the predicted class
+    predicted_class = result.argmax().item()
+    predicted_class = model.config.id2label[predicted_class].lower()
 
-    inputs = tokenizer_text.encode(prompt, return_tensors = "pt")
-    inputs = inputs.to(device_text)
+    # Return the response
+    return predicted_class == info["nsfw_label"].lower()
 
-    response = text_filter(inputs).logits
-    predicted_class = response.argmax().item()
+def InferenceImage(Prompt: str | Image.Image, Index: int) -> bool:
+    # Load the models
+    LoadImageModels()
 
-    return predicted_class == 0
-
-def IsImageNSFW(image: str | Image.Image) -> bool:
-    # NOTE: The value 0 means NSFW, the value 1 means SFW.
-    if (type(image) == str):
-        image = Image.open(image)
-    elif (type(image) != Image.Image):
+    # Check the image variable type
+    if (type(Prompt) == str):
+        # It's a string, open the image
+        Prompt = Image.open(Prompt)
+    elif (type(Prompt) != Image.Image):
+        # Invalid type
         raise Exception("The image in the NSFW filter must be 'str' or 'PIL.Image.Image'.")
     
-    LoadImageModel()
+    # Get the pipeline and the info
+    pipe, device, info = __models_image__[Index]
 
-    if (image_filter == None):
-        return None
-    
-    result = image_filter(image)
-    lr = -float("inf")
-    lrt = ""
+    # Inference the model
+    result = pipe(Prompt)
+    result = [item["score"] for item in result]
+    result = torch.log(torch.tensor(result) / (1 - torch.tensor(result))).to(device).unsqueeze(0)
 
-    for r in result:
-        score = float(r["score"])
-        tag = str(r["label"])
+    # Get the predicted class
+    predicted_class = result.argmax().item()
+    predicted_class = pipe.model.config.id2label[predicted_class].lower()
 
-        if (score >= lr):
-            lr = score
-            lrt = tag
-    
-    return (lrt.lower().strip() == "nsfw" or lrt.strip() == "0")
+    # Return the response
+    return predicted_class == info["nsfw_label"].lower()

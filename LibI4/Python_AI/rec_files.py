@@ -1,3 +1,7 @@
+# WARNING!!!!
+# This file is deprecated from now on.
+# This will be replaced in the next release.
+
 import websockets.server
 import asyncio
 import threading
@@ -146,7 +150,7 @@ def WSServer() -> None:
     asyncio.set_event_loop(event_loop)
     
     ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
-    server_ws = websockets.server.serve(AcceptClient, ip, 8061)
+    server_ws = websockets.server.serve(AcceptClient, ip, 8061, max_size = None)
 
     event_loop.run_until_complete(server_ws)
     event_loop.run_forever()

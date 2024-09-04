@@ -2,38 +2,37 @@ from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 import torch
 import ai_config as cfg
 
-model: AutoModelForQuestionAnswering | None = None
-tokenizer: AutoTokenizer | None = None
-device: str = "cpu"
+__models__: list[tuple[AutoModelForQuestionAnswering, AutoTokenizer, str]] = []
 
-def LoadModel() -> None:
-    global model, tokenizer, device
+def LoadModels() -> None:
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("qa"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            continue
+        
+        # Load the model and add it to the list of models
+        model = cfg.LoadModel("qa", i, AutoModelForQuestionAnswering, AutoTokenizer)
+        __models__.append(model)
 
-    if (cfg.current_data["models"].count("qa") == 0):
-        raise Exception("Model is not in 'models'.")
+def Inference(Index: int, Context: str, Question: str) -> str:
+    # Load the models
+    LoadModels()
 
-    if (model != None and tokenizer != None):
-        return
-    
-    data = cfg.LoadModel("qa", cfg.current_data["qa_model"], AutoModelForQuestionAnswering, AutoTokenizer)
+    # Tokenize the question and context
+    inputs = __models__[Index][1](Question, Context, return_tensors = "pt")
+    inputs = inputs.to(__models__[Index][2])
 
-    model = data[0]
-    tokenizer = data[1]
-    device = data[2]
-
-def ProcessPrompt(Context: str, Question: str) -> str:
-    LoadModel()
-
-    inputs = tokenizer(Question, Context, return_tensors = "pt")
-    inputs = inputs.to(device)
-
+    # Inference the model
     with torch.no_grad():
-        outputs = model(**inputs)
+        outputs = __models__[Index][0](**inputs)
 
     asi = outputs.start_logits.argmax()
     aei = outputs.end_logits.argmax()
 
+    # Get the answer (tokenized)
     outputs = inputs.input_ids[0, asi:aei + 1]
-    answer = tokenizer.decode(outputs, skip_special_tokens = True)
 
+    # Decode the answer and return it
+    answer = __models__[Index][1].decode(outputs, skip_special_tokens = True)
     return str(answer)

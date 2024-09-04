@@ -1,92 +1,102 @@
 from diffusers import AutoPipelineForText2Image
-import torch
 import os
-import json
 import ai_config as cfg
 
-pipeline: AutoPipelineForText2Image | None = None
-device: str = "cpu"
+__models__: list[tuple[AutoPipelineForText2Image, dict[str, any]]] = []
 
-def LoadModel() -> None:
-    global pipeline, device
+def LoadModels() -> None:
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("text2img"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            continue
+        
+        # Load the model and get the info
+        model, _ = cfg.LoadDiffusersPipeline("text2img", i, AutoPipelineForText2Image)
+        info = cfg.GetInfoOfTask("text2img", i)
 
-    if (cfg.current_data["models"].count("text2img") == 0):
-        raise Exception("Model is not in 'models'.")
-    
-    if (pipeline != None):
-        return
-    
-    data = cfg.LoadDiffusersPipeline("text2img", cfg.current_data["image_generation"]["model"], AutoPipelineForText2Image)
+        # Add the model to the list of models
+        __models__.append((model, info))
 
-    pipeline = data[0]
-    device = data[1]
-
-def GenerateImages(prompt: str | dict[str, str]) -> list[bytes]:
+def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
+    # Set some variables
     p = ""
     np = ""
-    width = cfg.current_data["image_generation"]["width"]
-    height = cfg.current_data["image_generation"]["height"]
-    guidance = cfg.current_data["image_generation"]["guidance"]
-    steps = cfg.current_data["image_generation"]["steps"]
+    width = -1
+    height = -1
+    guidance = -1
+    steps = -1
     
-    if (type(prompt) != dict[str, str] and type(prompt) != dict):
-        prompt = cfg.JSONDeserializer(prompt)
+    # Deserialize the prompt if it's not a dict
+    if (type(Prompt) != dict[str, str] and type(Prompt) != dict):
+        Prompt = cfg.JSONDeserializer(Prompt)
     
-    p = prompt["prompt"]
-    np = prompt["negative_prompt"]
+    # Set the prompt and negative prompt
+    p = Prompt["prompt"]
+    np = Prompt["negative_prompt"]
 
+    # Check if the prompt is empty
     if (len(p.strip()) == 0):
         raise Exception("Prompt is empty.")
 
+    # Set the width
     try:
-        width = int(prompt["width"])
+        width = int(Prompt["width"])
 
         if (width < 512):
-            width = cfg.current_data["image_generation"]["width"]
+            width = __models__[Index][1]["width"]
     except:
-        width = cfg.current_data["image_generation"]["width"]
+        width = __models__[Index][1]["width"]
 
+    # Set the height
     try:
-        height = int(prompt["height"])
+        height = int(Prompt["height"])
 
         if (height < 512):
-            height = cfg.current_data["image_generation"]["height"]
+            height = __models__[Index][1]["height"]
     except:
-        height = cfg.current_data["image_generation"]["height"]
+        height = __models__[Index][1]["height"]
 
+    # Set the guidance scale
     try:
-        guidance = float(prompt["guidance"])
+        guidance = float(Prompt["guidance"])
 
         if (guidance < 1):
-            guidance = cfg.current_data["image_generation"]["guidance"]
+            guidance = __models__[Index][1]["guidance"]
     except:
-        guidance = cfg.current_data["image_generation"]["guidance"]
+        guidance = __models__[Index][1]["guidance"]
 
+    # Set the number of steps
     try:
-        steps = int(prompt["steps"])
+        steps = int(Prompt["steps"])
 
         if (steps < 1):
-            steps = cfg.current_data["image_generation"]["steps"]
+            steps = __models__[Index][1]["steps"]
     except:
-        steps = cfg.current_data["image_generation"]["steps"]
+        steps = __models__[Index][1]["steps"]
 
-    return __generate_images__(p, np, width, height, guidance, steps)
+    # Return the output
+    return __generate_images__(Index, p, np, width, height, guidance, steps)
 
-def __generate_images__(prompt: str, negative_prompt: str, width: int, height: int, guidance: float, steps: int) -> list[bytes]:
-    LoadModel()
+def __generate_images__(Index: int, Prompt: str, NegativePrompt: str, Width: int, Height: int, Guidance: float, Steps: int) -> list[bytes]:
+    # Load the models
+    LoadModels()
 
-    images_generated = pipeline(
-        prompt,
-        num_inference_steps = steps,
-        width = width,
-        height = height,
-        guidance_scale = guidance,
+    # Generate the images using the model pipeline
+    images_generated = __models__[Index][0](
+        Prompt,
+        num_inference_steps = Steps,
+        width = Width,
+        height = Height,
+        guidance_scale = Guidance,
         output_type = "pil",
-        negative_prompt = negative_prompt
+        negative_prompt = NegativePrompt
     ).images
     images = []
 
+    # For each image
     for image in images_generated:
+        # Create a temporal file with the image
         img_name = "ti.png"
         img_n = 0
 
@@ -99,10 +109,13 @@ def __generate_images__(prompt: str, negative_prompt: str, width: int, height: i
         
         image.save(img_name)
 
+        # Read the bytes of the saved image and add it to the images list
         with open(img_name, "rb") as f:
             images.append(f.read())
             f.close()
 
+        # Delete the temporal file
         os.remove(img_name)
 
+    # Return all the generated images
     return images

@@ -190,7 +190,7 @@ if (UseServer):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        server = websockets.server.serve(__listen__, ip, 8062)
+        server = websockets.server.serve(__listen__, ip, 8062, max_size = None)
         print("Server started.")
 
         loop.run_until_complete(server)

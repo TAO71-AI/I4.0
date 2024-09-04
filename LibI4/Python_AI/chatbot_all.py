@@ -1,5 +1,5 @@
 # Import the models
-from typing import Iterator
+from collections.abc import Iterator
 import Inference.Text.chatbot as cb
 import Inference.Text.text_classification as tc
 import Inference.Text.translation as tns
@@ -20,7 +20,6 @@ import ai_config as cfg
 import ai_conversation as conv
 import chatbot_basics as cbbasics
 import PIL.Image as Image
-import os
 import base64
 import datetime
 import calendar
@@ -32,6 +31,7 @@ Models:
 chatbot - GPT4All or HuggingFace chatbot (Text Generation).
 sc - Text classification (Sequence Classification).
 tr - Translation.
+ld - Language Detection.
 text2img - Image generation.
 img2text - Image to Text.
 speech2text - Recognize audio using Whisper.
@@ -47,108 +47,47 @@ img2img - Image to Image.
 qa - Question Answering.
 """
 
-# Get the models' name
-def GetAllModels() -> dict[str]:
-    models = cfg.current_data["models"].split(" ")
-    mls = {}
+def GetServicesAndIndexes() -> dict[str, int]:
+    # Create the dict
+    services = {}
 
-    for i in models:
-        if (i == "chatbot"):
-            mls[i] = cb.__get_model_path__(True)
-        elif (i == "sc"):
-            mls[i] = cfg.current_data["text_classification_model"]
-        elif (i == "tr"):
-            mls[i] = str([cfg.current_data["translation_classification_model"]] + list(cfg.current_data["translation_models"].values()))
-        elif (i == "text2img"):
-            mls[i] = cfg.current_data["image_generation"]["model"]
-        elif (i == "img2text"):
-            mls[i] = cfg.current_data["img_to_text_model"]
-        elif (i == "text2audio"):
-            mls[i] = cfg.current_data["text_to_audio_model"]
-        elif (i == "speech2text"):
-            mls[i] = cfg.current_data["whisper_model"]
-        elif (i == "nsfw_filter-text"):
-            mls[i] = cfg.current_data["nsfw_filter_text_model"]
-        elif (i == "nsfw_filter-image"):
-            mls[i] = cfg.current_data["nsfw_filter_image_model"]
-        elif (i == "de"):
-            mls[i] = cfg.current_data["depth_estimation_model"]
-        elif (i == "od"):
-            mls[i] = cfg.current_data["object_detection_model"]
-        elif (i == "rvc"):
-            mls[i] = str(list(cfg.current_data["rvc_models"].keys()))
-        elif (i == "tts"):
-            mls[i] = str(tts.GetVoices())
-        elif (i == "uvr"):
-            mls[i] = cfg.current_data["uvr_model"]
-        elif (i == "img2img"):
-            mls[i] = cfg.current_data["image_to_image_model"]
-        elif (i == "qa"):
-            mls[i] = cfg.current_data["qa_model"]
+    # For each model
+    for model in cfg.current_data["models"]:
+        # Get the service
+        service = model["service"]
 
-        mls[i] = str(mls[i])
-        mls[i] = mls[i].replace("\\", "/")
-        
-        if (mls[i].count("/") > 0 and os.path.exists(mls[i])):
-            mls[i] = mls[i].split("/")[-1]
+        try:
+            # Try to add 1 to the count of the service
+            services[service] += 1
+        except:
+            # First count of the service, create to the dictionary
+            services[service] = 1
     
-    return mls
+    # Return the services
+    return services
 
-# Load all the models
 def LoadAllModels() -> None:
-    models = cfg.current_data["models"].split(" ")
+    # Load all the models
+    cb.LoadModels()
+    tc.LoadModels()
+    tns.LoadModels()
+    tns.LoadClassifiers()
+    agi.LoadModels()
+    itt.LoadModels()
+    sr.LoadModels()
+    aga.LoadModels()
+    filters.LoadModels()
+    de.LoadModels()
+    od.LoadModels()
+    rvc.LoadModels()
+    #uvr.LoadModels()                # TODO
+    tts.LoadTTS()
+    img2img.LoadModels()
+    qa.LoadModels()
 
-    for i in models:
-        if (i == "chatbot"):
-            cb.LoadModel()
-        elif (i == "sc"):
-            tc.LoadModel()
-        elif (i == "tr"):
-            tns.LoadModels()
-        elif (i == "text2img"):
-            agi.LoadModel()
-        elif (i == "img2text"):
-            itt.LoadModel()
-        elif (i == "text2audio"):
-            aga.LoadModel()
-        elif (i == "nsfw_filter-text"):
-            filters.LoadTextModel()
-        elif (i == "nsfw_filter-image"):
-            filters.LoadImageModel()
-        elif (i == "de"):
-            de.LoadModel()
-        elif (i == "od"):
-            od.LoadModel()
-        elif (i == "speech2text"):
-            sr.LoadModel()
-        elif (i == "tts"):
-            tts.LoadTTS()
-        elif (i == "img2img"):
-            img2img.LoadModel()
-        elif (i == "qa"):
-            qa.LoadModel()
-
-# Check if a text prompt is NSFW
-def IsTextNSFW(prompt: str) -> bool:
-    # If the model is loaded, check NSFW
-    if (cfg.current_data["models"].count("nsfw_filter-text") > 0):
-        return filters.IsTextNSFW(prompt)
-    
-    # If not, return none
-    return None
-
-# Check if an image prompt is NSFW
-def IsImageNSFW(image: str | Image.Image) -> bool:
-    # If the model is loaded, check NSFW
-    if (cfg.current_data["models"].count("nsfw_filter-image") > 0):
-        return filters.IsImageNSFW(image)
-    
-    # If not, return none
-    return None
-
-def SearchOverInternet(SearchPrompt: str, QuestionLength: int) -> str:
+def SearchOverInternet(Index: int, SearchPrompt: str, QuestionLength: int) -> str:
     # Set the limit
-    limit = cfg.current_data["chatbot"]["ctx"] - QuestionLength - 1
+    limit = cfg.GetInfoOfTask("chatbot", Index)["ctx"] - QuestionLength - 1
     underLength = 12
     maxResults = 5
 
@@ -171,26 +110,26 @@ def SearchOverInternet(SearchPrompt: str, QuestionLength: int) -> str:
     # Return the data
     return internetResponse
 
-def GetResponseFromInternet(SearchPrompt: str, Question: str, System: str, SearchOnInternet: bool = True) -> Iterator[str]:
+def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, System: str, SearchOnInternet: bool = True) -> Iterator[str]:
     # Delete empty conversation
     conv.ClearConversation("", "")
 
     # Search over internet
-    internetResponse = SearchOverInternet(SearchPrompt, len(Question)) if (SearchOnInternet) else SearchPrompt
+    internetResponse = SearchOverInternet(Index, SearchPrompt, len(Question)) if (SearchOnInternet) else SearchPrompt
     response = ""
     system2 = ""
 
     # Check system
     if (System == "qa" or System.startswith("qa-")):
         # The system to use is the Question Answering only
-        modelResponse = MakePrompt(json.dumps({
+        modelResponse = MakePrompt(Index, json.dumps({
             "context": internetResponse,
             "question": Question
         }), [], "qa", "", [], ["", ""], False)
         system2 = System[2:]
     elif (System == "chatbot" or System.startswith("chatbot-")):
         # The system to use is the Chatbot only
-        modelResponse = MakePrompt("\nInternet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], False)
+        modelResponse = MakePrompt(Index, "\nInternet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], False)
         system2 = System[7:]
     else:
         raise Exception("Invalid system.")
@@ -208,7 +147,7 @@ def GetResponseFromInternet(SearchPrompt: str, Question: str, System: str, Searc
     for token in modelResponse:
         yield token["response"]
 
-def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | None = None) -> Iterator[dict[str]]:
+def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | None = None) -> Iterator[dict[str]]:
     # Define I4.0's personality
     if (AIArgs == None):
         AIArgs = cfg.current_data["ai_args"].split("+")
@@ -253,7 +192,7 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
     # Check NSFW in prompt
     if ((Service == "chatbot" or Service == "sc" or Service == "tr" or Service == "text2img" or Service == "text2audio" or Service == "tts" or Service == "qa") and not cfg.current_data["allow_processing_if_nsfw"][0] and Service != "nsfw_filter-text"):
         # Check if the prompt is NSFW
-        isNSFW = FilterNSFWText(Prompt)
+        isNSFW = IsTextNSFW(Prompt)
 
         # Return error if it's NSFW
         if (isNSFW):
@@ -263,7 +202,7 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
     for file in Files:
         if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"):
             # The file is an image
-            isNSFW = FilterNSFWImage("ReceivedFiles/" + file["name"] + "_file")
+            isNSFW = IsImageNSFW("ReceivedFiles/" + file["name"] + "_file")
 
             # Return error if it's NSFW
             if (isNSFW):
@@ -273,9 +212,9 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
             pass
     
     # Check service
-    if (Service == "chatbot" and cfg.current_data["models"].count("chatbot") > 0):
+    if (Service == "chatbot" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get chatbot response
-        textResponse = cb.ProcessPrompt(Prompt, Conversation)
+        textResponse = cb.Inference(Index, Prompt, Conversation)
 
         # Set the final response
         finalResponse = ""
@@ -296,9 +235,9 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
         
         # Return an empty response
         yield {"response": "", "files": []}
-    elif (Service == "text2img" and cfg.current_data["models"].count("text2img") > 0):
+    elif (Service == "text2img" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Process image
-        imageFiles = GenerateImages(Prompt)
+        imageFiles = GenerateImages(Index, Prompt)
         fs = []
 
         # For every image
@@ -307,20 +246,20 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
 
         # Return the images
         yield {"response": "", "files": fs}
-    elif (Service == "sc" and cfg.current_data["models"].count("sc") > 0):
+    elif (Service == "sc" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get the classification
-        classification = ClassifyText(Prompt)
+        classification = ClassifyText(Index, Prompt)
 
         # Return the response
         yield {"response": classification, "files": []}
-    elif (Service == "tr" and cfg.current_data["models"].count("tr") > 0):
+    elif (Service == "tr" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Translate the prompt
         Prompt = cfg.JSONDeserializer(Prompt)
-        translation = Translate(Prompt["translator"], Prompt["text"])
+        translation = Translate(Prompt["translator"], Prompt["text"], Index)
 
         # Return the response
         yield {"response": translation, "files": []}
-    elif (Service == "img2text" and cfg.current_data["models"].count("img2text") > 0):
+    elif (Service == "img2text" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get the response from the model for each file
         for file in Files:
             # Check if the file is an image
@@ -329,14 +268,14 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
                 continue
 
             # Get the response
-            response = ImageToText("ReceivedFiles/" + file["name"] + "_file")
+            response = ImageToText(Index, "ReceivedFiles/" + file["name"] + "_file")
 
             # Return the response
             yield {"response": response, "files": []}
         
         # Return the final response
         yield {"response": "", "files": []}
-    elif (Service == "speech2text" and cfg.current_data["models"].count("speech2text") > 0):
+    elif (Service == "speech2text" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get the response from the model for each file
         for file in Files:
             # Check if the file is an audio file
@@ -345,26 +284,26 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
                 continue
 
             # Get the response
-            response = RecognizeAudio("ReceivedFiles/" + file["name"] + "_file")
+            response = RecognizeAudio(Index, "ReceivedFiles/" + file["name"] + "_file")
 
             # Return the response
             yield {"response": response, "files": []}
         
         # Return the final response
         yield {"response": "", "files": []}
-    elif (Service == "text2audio" and cfg.current_data["models"].count("text2audio") > 0):
+    elif (Service == "text2audio" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Process audio
-        audioFiles = GenerateAudio(Prompt)
+        audioFiles = GenerateAudio(Index, Prompt)
 
         # Return the audios
         yield {"response": "", "files": [{"type": "audio", "data": audioFiles}]}
-    elif (Service == "nsfw_filter-text" and cfg.current_data["models"].count("nsfw_filter-text") > 0):
+    elif (Service == "nsfw_filter-text" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Check if it's NSFW
-        nsfw = FilterNSFWText(Prompt)
+        nsfw = IsTextNSFW(Prompt, Index)
 
         # Return the response
         yield {"response": nsfw, "files": []}
-    elif (Service == "nsfw_filter-image" and cfg.current_data["models"].count("nsfw_filter-image") > 0):
+    elif (Service == "nsfw_filter-image" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Check if it's NSFW for each file
         for file in Files:
             # Check if the file is an image file
@@ -373,14 +312,14 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
                 continue
 
             # Get the response
-            response = FilterNSFWImage("ReceivedFiles/" + file["name"] + "_file")
+            response = IsImageNSFW("ReceivedFiles/" + file["name"] + "_file", Index)
 
             # Return the response
             yield {"response": response, "files": []}
 
         # Return the response
         yield {"response": "", "files": []}
-    elif (Service == "de" and cfg.current_data["models"].count("de") > 0):
+    elif (Service == "de" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Calculate depth estimation for each file
         for file in Files:
             # Check if the file is an image file
@@ -389,14 +328,14 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
                 continue
 
             # Get the response
-            response = EstimateDepth("ReceivedFiles/" + file["name"] + "_file")
+            response = EstimateDepth(Index, "ReceivedFiles/" + file["name"] + "_file")
 
             # Return the response
             yield {"response": "", "files": [{"type": "image", "data": response}]}
 
         # Return the response
         yield {"response": "", "files": []}
-    elif (Service == "od" and cfg.current_data["models"].count("od") > 0):
+    elif (Service == "od" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Calculate object detection for each file
         for file in Files:
             # Check if the file is an image file
@@ -405,14 +344,14 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
                 continue
 
             # Get the response
-            response = DetectObjects("ReceivedFiles/" + file["name"] + "_file")
+            response = DetectObjects(Index, "ReceivedFiles/" + file["name"] + "_file")
 
             # Return the response
             yield {"response": response["objects"], "files": [{"type": "image", "data": response["image"]}]}
 
         # Return the response
         yield {"response": "", "files": []}
-    elif (Service == "rvc" and cfg.current_data["models"].count("rvc") > 0):
+    elif (Service == "rvc" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get RVC of each file
         for file in Files:
             # Check if the file is an audio file
@@ -424,14 +363,14 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
             promptFile = cfg.JSONDeserializer(Prompt)
             promptFile["input"] = "ReceivedFiles/" + file["name"] + "_file"
 
-            response = DoRVC(promptFile)
+            response = DoRVC(Index, promptFile)
 
             # Return the response
             yield {"response": "", "files": [{"type": "audio", "data": response}]}
         
         # Return the response
         yield {"response": "", "files": []}
-    elif (Service == "uvr" and cfg.current_data["models"].count("uvr") > 0):
+    elif (Service == "uvr" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get UVR of each file
         for file in Files:
             # Check if the file is an audio file
@@ -443,7 +382,7 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
             promptFile = cfg.JSONDeserializer(Prompt)
             promptFile["input"] = "ReceivedFiles/" + file["name"] + "_file"
 
-            response = DoUVR(promptFile)
+            response = DoUVR(Index, promptFile)
             fs = []
 
             # For every file
@@ -456,13 +395,13 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
         
         # Return the response
         yield {"response": "", "files": []}
-    elif (Service == "tts" and cfg.current_data["models"].count("tts") > 0):
+    elif (Service == "tts" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Generate TTS
-        response = DoTTS(Prompt)
+        response = DoTTS(Index, Prompt)
 
         # Return the response
         yield {"response": "", "files": [{"type": "audio", "data": response}]}
-    elif (Service == "img2img" and cfg.current_data["models"].count("img2img") > 0):
+    elif (Service == "img2img" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get image to image for every file
         for file in Files:
             # Check if the file is an image file
@@ -471,7 +410,7 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
                 continue
 
             # Get the response
-            response = DoImg2Img(json.dumps({"prompt": Prompt, "image": "ReceivedFiles/" + file["name"] + "_file"}))
+            response = DoImg2Img(Index, json.dumps({"prompt": Prompt, "image": "ReceivedFiles/" + file["name"] + "_file"}))
             fs = []
 
             # For every file
@@ -484,19 +423,25 @@ def MakePrompt(Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: s
 
         # Return the response
         yield {"response": "", "files": []}
-    elif (Service == "qa" and cfg.current_data["models"].count("qa") > 0):
+    elif (Service == "qa" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Process the prompt
         Prompt = cfg.JSONDeserializer(Prompt)
-        response = qa.ProcessPrompt(Prompt["context"], Prompt["question"])
+        response = qa.Inference(Index, Prompt["context"], Prompt["question"])
 
         # Return the response
         yield {"response": response, "files": []}
-    else:
-        raise Exception("Service not recognized.")
+    elif (Service == "ld" and len(cfg.GetAllInfosOfATask(Service)) > 0):
+        # Get the language
+        lang = DetectLanguage(Index, Prompt)
 
-def GenerateImages(prompt: str) -> list[str]:
+        # Return the response
+        yield {"response": lang, "files": []}
+    else:
+        raise Exception(f"Service not recognized.")
+
+def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Get generated images
-    imgs_response = agi.GenerateImages(prompt)
+    imgs_response = agi.Inference(Prompt)
     images = []
 
     # Generate images
@@ -506,33 +451,33 @@ def GenerateImages(prompt: str) -> list[str]:
     # Return the generated images
     return images
 
-def EstimateDepth(img: str) -> str:
+def EstimateDepth(Index: int, Img: str) -> str:
     # Estimate depth
-    img_response = de.EstimateDepth(img)
+    img_response = de.Inference(Index, Img)
     # Encode the image in base64
     image = base64.b64encode(img_response).decode("utf-8")
 
     # Return the image
     return image
 
-def GenerateAudio(prompt: str) -> str:
+def GenerateAudio(Index: int, Prompt: str) -> str:
     # Get generated audio
-    aud_response = aga.GenerateAudio(prompt)
+    aud_response = aga.GenerateAudio(Index, Prompt)
 
     # Return generated audio
     return base64.b64encode(aud_response).decode("utf-8")
 
-def ImageToText(img: str) -> str:
+def ImageToText(Index: int, Img: str) -> str:
     # Get and return the text from an image
-    return itt.MakePrompt(img)
+    return itt.Inference(Index, Img)
 
-def RecognizeAudio(audio: str) -> dict[str, str]:
+def RecognizeAudio(Index: int, Audio: str) -> dict[str, str]:
     # Recognize and return an audio
-    return sr.Recognize(sr.FileToAudioData(audio))
+    return sr.Inference(Index, sr.GetAudioDataFromFile(Audio))
 
-def DetectObjects(img: str) -> dict[str]:
+def DetectObjects(Index: int, Img: str) -> dict[str]:
     # Get objects data
-    data = od.MakePrompt(img)
+    data = od.Inference(Index, Img)
     # Encode the image into base64
     image = base64.b64encode(data["image"]).decode("utf-8")
 
@@ -542,66 +487,77 @@ def DetectObjects(img: str) -> dict[str]:
         "image": image
     }
 
-def DoRVC(audio_data: str | dict[str, any]) -> str:
-    if (type(audio_data) == str):
+def DoRVC(Index: int, AudioData: str | dict[str, any]) -> str:
+    if (type(AudioData) == str):
         # Convert audio data to json
-        audio_data = cfg.JSONDeserializer(audio_data)
+        AudioData = cfg.JSONDeserializer(AudioData)
 
     # Get RVC audio response
-    data = rvc.MakeRVC(audio_data)
+    data = rvc.MakeRVC(AudioData)       # TODO
     # Encode the audio into base64
     audio = base64.b64encode(data).decode("utf-8")
 
     # Return the data
     return audio
 
-def Translate(translator: str, prompt: str) -> str:
-    if (cfg.current_data["models"].count("tr") > 0):
-        # Get the prompt language
-        lang = tns.GetLanguage(prompt)
-
-        if (translator.lower().strip() == "auto"):
-            # Translate using the auto translator to the server's language
-            return tns.TranslateToServerLanguage(prompt, lang)
-        
+def Translate(Translator: str, Prompt: str, Index: int = 0, IndexClassifier: int = -1) -> str:
+    if (len(cfg.GetAllInfosOfATask("tr")) > 0):
         # Try to translate using the specified language
-        return tns.TranslateFromServerLanguage(prompt, translator)
+        return tns.AutoTranslate(Prompt, "unknown", Translator, Index, IndexClassifier)
     
-    return prompt
+    return Prompt
 
-def ClassifyText(prompt: str) -> str:
+def ClassifyText(Index: int, Prompt: str) -> str:
     # Classify text
-    if (cfg.current_data["models"].count("sc") > 0):
-        return tc.DoPrompt(prompt)
+    if (len(cfg.GetAllInfosOfATask("sc")) > 0):
+        return tc.Inference(Index, Prompt)
     
+    # Return default class
     return "-1"
 
-def FilterNSFWText(prompt: str) -> bool:
-    # Filter NSFW text
-    return IsTextNSFW(prompt)
+def DetectLanguage(Index: int, Prompt: str) -> str:
+    # Get the language
+    if (len(cfg.GetAllInfosOfATask("ld")) > 0):
+        return tns.InferenceClassifier(Prompt, Index)
+    
+    # Return unknown language
+    return "unknown"
 
-def FilterNSFWImage(image: str) -> bool:
-    # Filter NSFW image
-    return IsImageNSFW(image)
+def IsTextNSFW(Prompt: str, Index: int = -1) -> bool:
+    # If the model is loaded, check NSFW
+    if (len(cfg.GetAllInfosOfATask("nsfw_filter-text")) > 0):
+        return filters.InferenceText(Prompt, Index)
+    
+    # If not, return none
+    return None
 
-def DoTTS(prompt: str):
+# Check if an image prompt is NSFW
+def IsImageNSFW(Image: str | Image.Image, Index: int = -1) -> bool:
+    # If the model is loaded, check NSFW
+    if (len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0):
+        return filters.InferenceImage(Image, Index)
+    
+    # If not, return none
+    return None
+
+def DoTTS(Index: int, Prompt: str):
     # Convert audio data to json
-    prompt = cfg.JSONDeserializer(prompt)
+    Prompt = cfg.JSONDeserializer(Prompt)
 
     # Get TTS audio response
-    data = tts.MakeTTS(prompt)
+    data = tts.MakeTTS(Index, Prompt)
     # Encode the audio into base64
     audio = base64.b64encode(data).decode("utf-8")
 
     # Return the data
     return audio
 
-def DoUVR(audio_data: str) -> list[str]:
+def DoUVR(Index: int, AudioData: str) -> list[str]:
     # Convert audio data to json
-    audio_data = cfg.JSONDeserializer(audio_data)
+    AudioData = cfg.JSONDeserializer(AudioData)
 
     # Get UVR audio response
-    data = uvr.MakeUVR(audio_data)
+    data = uvr.MakeUVR(Index, AudioData)
     
     for aud in data:
         # Encode the audio into base64
@@ -610,12 +566,12 @@ def DoUVR(audio_data: str) -> list[str]:
     # Return the data
     return data
 
-def DoImg2Img(prompt: str) -> list[str]:
+def DoImg2Img(Index: int, Prompt: str) -> list[str]:
     # Convert image data to json
-    img_data = cfg.JSONDeserializer(prompt)
+    img_data = cfg.JSONDeserializer(Prompt)
 
     # Get images
-    imgs_response = img2img.Prompt(img_data)
+    imgs_response = img2img.Inference(Index, img_data)
     images = []
 
     # Generate images

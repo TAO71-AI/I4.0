@@ -4,7 +4,7 @@ torch>=2.0.0
 torchtext
 torchvision
 torchaudio
-transformers~=4.44.1, >=4.44.1
+transformers~=4.44.2, >=4.44.2
 diffusers~=0.30.0, >=0.30.0
 
 # Server requirements
@@ -31,7 +31,7 @@ bitsandbytes
 psutil
 
 # Requirements for inference
-gpt4all~=2.7.0
+gpt4all~=2.8.2
 llama-cpp-python
 SpeechRecognition~=3.10.4
 openai-whisper>=20231117

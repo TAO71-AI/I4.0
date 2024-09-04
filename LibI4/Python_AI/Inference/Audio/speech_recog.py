@@ -1,78 +1,91 @@
+from transformers import Pipeline
 import speech_recognition as sr
 import whisper
 import os
 import ai_config as cfg
 
-recognizer: sr.Recognizer = sr.Recognizer()
-device: str = "cpu"
-whisperM: whisper.Whisper | None = None
+__models__: list[tuple[whisper.Whisper | Pipeline, dict[str, any]]] = []
 
-def LoadModel() -> None:
-    global device, whisperM
-    
-    if (cfg.current_data["models"].count("speech2text") == 0):
-        raise Exception("Model is not in 'models'.")
+def LoadModels() -> None:
+    # For each model of this service
+    for i in range(len(cfg.GetAllInfosOfATask("speech2text"))):
+        # Check if the model is already loaded
+        if (i < len(__models__)):
+            continue
 
-    if (whisperM != None):
-        return
-    
-    device = cfg.GetAvailableGPUDeviceForTask("speech2text")
-    whisperM = whisper.load_model(cfg.current_data["whisper_model"], device, None, False)
+        # Get the model info
+        info = cfg.GetInfoOfTask("speech2text", i)
 
-def Recognize(data: sr.AudioData) -> dict[str, str]:
-    LoadModel()
-    
-    result = {
-        "text": "",
-        "lang": "",
-        "error": ""
-    }
+        # Check the model type
+        if (info["type"] == "whisper"):
+            # Load the model using whisper
+            # Get device to use
+            device = cfg.GetAvailableGPUDeviceForTask("speech2text", i)
 
-    try:
-        audio_name = "tmp_whisper_audio_0.wav"
-        audio_id = 0
+            # Load the model
+            print(f"Loading Whisper model on the device '{device}'.")
+            print("Warning! Using the `whisper` option doesn't allow batch size.")
 
-        while (os.path.exists(audio_name)):
-            audio_id += 1
-            audio_name = "tmp_whisper_audio_" + str(audio_id) + ".wav"
+            model = whisper.load_model(
+                name = info["model"],
+                device = device,
+                in_memory = True
+            )
+
+            print("   Done!")
+        elif (info["type"] == "hf"):
+            # Load the model using transformers
+            model, _ = cfg.LoadPipeline("automatic-speech-recognition", "speech2text", i)
+        else:
+            # Invalid model type
+            raise Exception("Invalid model type.")
         
-        with open(audio_name, "wb") as f:
-            f.write(data.get_wav_data())
-            f.close()
+        # Add the model to the list of models
+        __models__.append((model, info))
+
+def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
+    # Load the models
+    LoadModels()
+
+    # Create temporal file
+    audio_name = "tmp_whisper_audio_0.wav"
+    audio_id = 0
+
+    while (os.path.exists(audio_name)):
+        audio_id += 1
+        audio_name = "tmp_whisper_audio_" + str(audio_id) + ".wav"
         
-        result = whisperM.transcribe(audio_name, temperature = cfg.current_data["temp"])
+    with open(audio_name, "wb") as f:
+        f.write(Data.get_wav_data())
+        f.close()
+    
+    # Check the model type
+    if (__models__[Index][1]["type"] == "whisper"):
+        # Use whisper
+        # Inference the model
+        result = __models__[Index][0].transcribe(audio_name, temperature = __models__[Index][1]["temp"])
+
+        # Set the result
         result = {
             "text": result["text"],
             "lang": result["language"],
-            "error": ""
         }
+    elif (__models__[Index][1]["type"] == "hf"):
+        # Use transformers
+        # Inference the model
+        result = __models__[Index][0](audio_name)
 
-        os.remove(audio_name)
-    except sr.UnknownValueError:
+        # Set the result
         result = {
-            "text": "",
-            "lang": "",
-            "error": "Could not recognize audio."
-        }
-    except sr.RequestError as ex:
-        result = {
-            "text": "",
-            "lang": "",
-            "error": "Error requesting: " + str(ex)
-        }
-    except Exception as ex:
-        result = {
-            "text": "",
-            "lang": "",
-            "error": "Unknown exception: " + str(ex)
+            "text": result["text"],
+            "lang": result["language"],
         }
     
+    # Return the result
     return result
 
-def GetMicrophoneAudioData(timeout = None, phase_time_limit = None) -> sr.AudioData:
-    with sr.Microphone() as source:
-        return recognizer.listen(source, timeout = timeout, phrase_time_limit = phase_time_limit)
-
-def FileToAudioData(audio_path: str) -> sr.AudioData:
-    with sr.AudioFile(audio_path) as source:
-        return recognizer.record(source)
+def GetAudioDataFromFile(FilePath: str) -> sr.AudioData:
+    # Open the file
+    with sr.AudioFile(FilePath) as source:
+        # Return the audio data
+        return sr.Recognizer().record(source)
