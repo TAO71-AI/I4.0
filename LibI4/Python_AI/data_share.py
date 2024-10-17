@@ -114,7 +114,6 @@ def __add_data_to_server__(Data: dict[str] | str) -> str:
         return "OK"
     except Exception as ex:
         print("ERROR ON DATA SHARE: " + str(ex))
-
         return "ERROR [ID: 2]"
 
 async def __handle_connection__(Connection: websockets.WebSocketClientProtocol) -> None:

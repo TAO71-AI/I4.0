@@ -1,6 +1,5 @@
 ﻿/*
  * REMEMBER: Both client-side code and server-side code can be updated and might not work with older versions.
- * This client-side code works for the versions: "v6.5.0".
 */
 
 using System;
@@ -139,7 +138,7 @@ namespace TAO71.I4.PythonManager
             // Result variables
             WebSocketReceiveResult result;
             MemoryStream stream = new MemoryStream();
-            byte[] streamBytes = new byte[8192];
+            byte[] streamBytes = new byte[314572800];  // Max receive size: 314 MB
 
             do
             {
@@ -396,221 +395,196 @@ namespace TAO71.I4.PythonManager
                 throw new Exception("Please connect to a server first or set `ForceNoConnect` to false.");
             }
 
-            // Check the service
-            if (ServerService == Service.DepthEstimation || ServerService == Service.ImageToImage || ServerService == Service.ImageToText || ServerService == Service.NSFWFilterImage || ServerService == Service.ObjectDetection || ServerService == Service.RVC || ServerService == Service.UVR || ServerService == Service.SpeechToText)
-            {
-                // The service is a `file2any` service
-                // Check if the file exists
-                if (!File.Exists(Prompt))
-                {
-                    throw new FileNotFoundException();
-                }
-
-                try
-                {
-                    try
-                    {
-                        // Try to send the file/s to the server
-                        // Check if the prompt is a file array, if not this will return an error
-                        List<string> filests = JsonConvert.DeserializeObject<List<string>>(Prompt.TrimStart().TrimEnd());
-
-                        // Reset prompt
-                        Prompt = "";
-
-                        // If it's a file array, send every file and get it's ID
-                        foreach (string file in filests)
-                        {
-                            // Upload the file to the server and get the ID
-                            int fID = SendFileToServer(file).Result;
-
-                            // Set the file ID on the prompt
-                            Prompt += fID.ToString() + " ";
-                        }
-
-                        // Trim the prompt
-                        Prompt = Prompt.TrimStart().TrimEnd();
-                    }
-                    catch (JsonException)
-                    {
-                        // This means the prompt isn't a file array
-                        // Upload the file to the server and get the ID
-                        int fID = SendFileToServer(Prompt.TrimStart().TrimEnd()).Result;
-
-                        // Set the prompt to the ID
-                        Prompt = fID.ToString();
-                    }
-                    catch (Exception ex)
-                    {
-                        // This means another error occurred, return the error
-                        throw ex;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // An error occurs while sending the file/s
-                    throw new Exception("Error sending file/s. Probably the server doesn't accept files?\nError details: " + ex.Message);
-                }
-            }
-
             // Set the files
             List<Dictionary<string, string>> files = new List<Dictionary<string, string>>();
 
-            // Check for prompt templates
-            switch (ServerService)
+            // Set prompt template
+            if (ServerService == Service.ImageToText || ServerService == Service.DepthEstimation || ServerService == Service.NSFWFilterImage || ServerService == Service.ObjectDetection)
             {
-                case Service.ImageGeneration:
-                    // Set variables
-                    string prompt;
-                    string nPrompt;
-
-                    if (Prompt.Contains(" [NEGATIVE] "))
+                // Template: img2any
+                // For each file
+                foreach (string file in Prompt.Split(' '))
+                {
+                    // Check if file exists
+                    if (!File.Exists(file))
                     {
-                        // Contains negative prompt, set prompt and negative prompt
-                        prompt = Prompt.Substring(0, Prompt.IndexOf(" [NEGATIVE] ", StringComparison.InvariantCulture));
-                        nPrompt = Prompt.Substring(Prompt.IndexOf(" [NEGATIVE] ", StringComparison.InvariantCulture) + 12);
-                    }
-                    else
-                    {
-                        // Doesn't contains negative prompt, set prompt
-                        prompt = Prompt;
-                        nPrompt = "";
+                        // Return an error
+                        throw new Exception("File doesn't exists!");
                     }
 
-                    // Set prompt to the Text2Image template
-                    Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                    // Read file bytes
+                    byte[] fBytes = File.ReadAllBytes(file);
+
+                    // Encode to Base64
+                    string fBase64 = Convert.ToBase64String(fBytes);
+
+                    // Add to the list
+                    files.Add(new Dictionary<string, string>()
                     {
-                        {"prompt", prompt},
-                        {"negative_prompt", nPrompt},
-                        {"width", Conf.Text2Image_Width},
-                        {"height", Conf.Text2Image_Height},
-                        {"guidance", Conf.Text2Image_GuidanceScale},
-                        {"steps", Conf.Text2Image_Steps}
+                        {"type", "image"},
+                        {"data", fBase64}
                     });
-                    break;
-                case Service.ImageToImage:
-                    // Set prompt to the Image2Image template
-                    foreach (string file in Prompt.Split(' '))
+                }
+            }
+            else if (ServerService == Service.SpeechToText)
+            {
+                // Template: audio2text
+                // For each file
+                foreach (string file in Prompt.Split(' '))
+                {
+                    // Check if file exists
+                    if (!File.Exists(file))
                     {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "image"},
-                            {"name", file}
-                        });
+                        // Return an error
+                        throw new Exception("File doesn't exists!");
                     }
 
-                    Prompt = "";
-                    break;
-                case Service.ImageToText:
-                    // Set prompt to the Image2Image template
-                    foreach (string file in Prompt.Split(' '))
-                    {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "image"},
-                            {"name", file}
-                        });
-                    }
+                    // Read file bytes
+                    byte[] fBytes = File.ReadAllBytes(file);
 
-                    Prompt = "";
-                    break;
-                case Service.TTS:
-                    // Set prompt to the TTS template
-                    Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                    // Encode to Base64
+                    string fBase64 = Convert.ToBase64String(fBytes);
+
+                    // Add to the list
+                    files.Add(new Dictionary<string, string>()
                     {
-                        {"voice", Conf.TTS_Voice},
-                        {"language", Conf.TTS_Language},
-                        {"pitch", Conf.TTS_Pitch},
-                        {"speed", Conf.TTS_Speed},
-                        {"text", Prompt}
+                        {"type", "audio"},
+                        {"data", fBase64}
                     });
-                    break;
-                case Service.RVC:
-                    // Set prompt to the RVC template
-                    foreach (string file in Prompt.Split(' '))
+                }
+            }
+            else if (ServerService == Service.ImageGeneration)
+            {
+                // Template: text2img
+                // Set variables
+                string prompt;
+                string nPrompt;
+
+                if (Prompt.Contains(" [NEGATIVE] "))
+                {
+                    // Contains negative prompt, set prompt and negative prompt
+                    prompt = Prompt.Substring(0, Prompt.IndexOf(" [NEGATIVE] ", StringComparison.InvariantCulture));
+                    nPrompt = Prompt.Substring(Prompt.IndexOf(" [NEGATIVE] ", StringComparison.InvariantCulture) + 12);
+                }
+                else
+                {
+                    // Doesn't contains negative prompt, set prompt
+                    prompt = Prompt;
+                    nPrompt = "";
+                }
+
+                // Set prompt to the Text2Image template
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"prompt", prompt},
+                    {"negative_prompt", nPrompt},
+                    {"width", Conf.Text2Image_Width},
+                    {"height", Conf.Text2Image_Height},
+                    {"guidance", Conf.Text2Image_GuidanceScale},
+                    {"steps", Conf.Text2Image_Steps}
+                });
+            }
+            else if (ServerService == Service.TTS)
+            {
+                // Template: text2audio (for TTS)
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"voice", Conf.TTS_Voice},
+                    {"language", Conf.TTS_Language},
+                    {"pitch", Conf.TTS_Pitch},
+                    {"speed", Conf.TTS_Speed},
+                    {"text", Prompt}
+                });
+            }
+            else if (ServerService == Service.RVC)
+            {
+                // Template: audio2audio (RVC)
+                foreach (string file in Prompt.Split(' '))
+                {
+                    // Check if file exists
+                    if (!File.Exists(file))
                     {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "audio"},
-                            {"name", file}
-                        });
+                        // Return an error
+                        throw new Exception("File doesn't exists!");
                     }
 
-                    Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                    // Read file bytes
+                    byte[] fBytes = File.ReadAllBytes(file);
+
+                    // Encode to Base64
+                    string fBase64 = Convert.ToBase64String(fBytes);
+
+                    // Add to the list
+                    files.Add(new Dictionary<string, string>()
                     {
-                        {"model", Conf.RVC_Model},
-                        {"filter_radius", Conf.RVC_FilterRadius},
-                        {"f0_up_key", Conf.RVC_F0},
-                        {"protect", Conf.RVC_Protect}
+                        {"type", "audio"},
+                        {"data", fBase64}
                     });
-                    break;
-                case Service.UVR:
-                    // Set prompt to the UVR template
-                    foreach (string file in Prompt.Split(' '))
+                }
+
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"filter_radius", Conf.RVC_FilterRadius},
+                    {"f0_up_key", Conf.RVC_F0},
+                    {"protect", Conf.RVC_Protect}
+                });
+            }
+            else if (ServerService == Service.UVR)
+            {
+                // Template: audio2audio+audio (UVR)
+                foreach (string file in Prompt.Split(' '))
+                {
+                    // Check if file exists
+                    if (!File.Exists(file))
                     {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "audio"},
-                            {"name", file}
-                        });
+                        // Return an error
+                        throw new Exception("File doesn't exists!");
                     }
 
-                    Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                    // Read file bytes
+                    byte[] fBytes = File.ReadAllBytes(file);
+
+                    // Encode to Base64
+                    string fBase64 = Convert.ToBase64String(fBytes);
+
+                    // Add to the list
+                    files.Add(new Dictionary<string, string>()
                     {
-                        {"agg", Conf.UVR_Agg}
+                        {"type", "audio"},
+                        {"data", fBase64}
                     });
-                    break;
-                case Service.DepthEstimation:
-                    // Set prompt to the Depth Estimation template
-                    foreach (string file in Prompt.Split(' '))
+                }
+
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"agg", Conf.UVR_Agg}
+                });
+            }
+            else if (ServerService == Service.Chatbot)
+            {
+                // Template: text2text (vision chatbot)
+                try
+                {
+                    // Try to convert to JSON
+                    Dictionary<string, object> jsonPrompt = JsonConvert.DeserializeObject<Dictionary<string, object>>(Prompt);
+
+                    // Check keys
+                    if (!jsonPrompt.ContainsKey("prompt") || jsonPrompt.ContainsKey("files"))
                     {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "image"},
-                            {"name", file}
-                        });
+                        // Return error
+                        throw new Exception("Invalid keys.");
                     }
 
-                    Prompt = "";
-                    break;
-                case Service.ObjectDetection:
-                    // Set prompt to the Depth Estimation template
-                    foreach (string file in Prompt.Split(' '))
-                    {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "image"},
-                            {"name", file}
-                        });
-                    }
+                    // Set prompt
+                    Prompt = (string)jsonPrompt["prompt"];
 
-                    Prompt = "";
-                    break;
-                case Service.NSFWFilterImage:
-                    // Set prompt to the NSFW filter (images) template
-                    foreach (string file in Prompt.Split(' '))
-                    {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "image"},
-                            {"name", file}
-                        });
-                    }
-
-                    Prompt = "";
-                    break;
-                case Service.SpeechToText:
-                    // Set prompt to the Speech Recognition template
-                    foreach (string file in Prompt.Split(' '))
-                    {
-                        files.Add(new Dictionary<string, string>()
-                        {
-                            {"type", "audio"},
-                            {"name", file}
-                        });
-                    }
-
-                    Prompt = "";
-                    break;
+                    // Set files
+                    files = (List<Dictionary<string, string>>)jsonPrompt["files"];
+                }
+                catch
+                {
+                    // Can't deserialize prompt of invalid keys, do not set the template
+                }
             }
 
             // Set prompt
@@ -648,8 +622,8 @@ namespace TAO71.I4.PythonManager
             {
                 if (!(bool)response["ended"])
                 {
-                    // Throw an error if it's not ended (expected only 1 response)
-                    throw new Exception("Queue error: Invalid ended arg.");
+                    // Continue ignoring this message
+                    continue;
                 }
 
                 // Deserialize the received JSON response to a Dictionary and return the users and the time
@@ -668,21 +642,26 @@ namespace TAO71.I4.PythonManager
              * If `Conversation` is null this will use the conversation of the configuration.
             */
 
-            if (Conversation == null)
+            string CConversation = Conf.Chatbot_Conversation.Clone().ToString();
+
+            if (Conversation != null)
             {
-                // Use the conversation set in the configuration
-                Conversation = Conf.Chatbot_Conversation;
+                // Update the conversation in the configuration settings
+                Conf.Chatbot_Conversation = Conversation;
             }
 
             // Send request to the server and get the result
             IEnumerable<Dictionary<string, object>> res = ExecuteCommand("clear_conversation");
 
+            // Restore the conversation in the configuration settings
+            Conf.Chatbot_Conversation = CConversation;
+
             foreach (Dictionary<string, object> response in res)
             {
                 if (!(bool)response["ended"])
                 {
-                    // Throw an error if it's not ended (expected only 1 response)
-                    throw new Exception("Delete conversation error: Invalid ended arg.");
+                    // Continue ignoring this message
+                    continue;
                 }
 
                 // Set response variable
@@ -700,7 +679,56 @@ namespace TAO71.I4.PythonManager
             }
 
             // Throw an error
-            throw new Exception("Delete conversation error: Error getting queue.");
+            throw new Exception("Delete conversation error.");
+        }
+
+        public static void DeleteMemory(int Memory = -1)
+        {
+            /*
+             * This will delete your current memory/memories ONLY on the connected server.
+             * If `Memory` is -1 this will delete all the memories.
+            */
+
+            string cmd;
+
+            if (Memory == -1)
+            {
+                // Set the command to delete all the memories
+                cmd = "clear_memories";
+            }
+            else
+            {
+                // Set the command to delete a memory
+                cmd = "clear_memory";
+            }
+
+            // Send request to the server and get the result
+            IEnumerable<Dictionary<string, object>> res = ExecuteCommand(cmd, Memory.ToString());
+
+            foreach (Dictionary<string, object> response in res)
+            {
+                if (!(bool)response["ended"])
+                {
+                    // Continue ignoring this message
+                    continue;
+                }
+
+                // Set response variable
+                string result = ((string)response["response"]).ToLower().TrimStart().TrimEnd();
+
+                // Check if response it's invalid
+                if (result != "memories deleted." && result != "memory deleted.")
+                {
+                    // It's invalid, throw an error
+                    throw new Exception("Error deleting the memories/memory. Got `" + result + "`; `memories deleted.` or `memory deleted.` expected.");
+                }
+
+                // It's a valid response, return
+                return;
+            }
+
+            // Throw an error
+            throw new Exception("Delete memory/memories error.");
         }
 
         public static string GetTOS()
@@ -718,8 +746,8 @@ namespace TAO71.I4.PythonManager
                 // Check if it ended
                 if (!(bool)res["ended"])
                 {
-                    // The response didn't ended, return an error
-                    throw new Exception("Error getting TOS: Invalid ended arg.");
+                    // Continue ignoring this message
+                    continue;
                 }
 
                 // It ended, get the text response
@@ -740,93 +768,6 @@ namespace TAO71.I4.PythonManager
             }
 
             throw new Exception("Error getting TOS: No response from server.");
-        }
-
-        public static async Task<int> SendFileToServer(string FilePath)
-        {
-            /*
-             * This will send files to the current connected server.           
-            */
-
-            // Check if the file exists
-            if (!File.Exists(FilePath))
-            {
-                throw new Exception("File doesn't exists.");
-            }
-
-            // Check if the user is connected
-            if (!IsConnected())
-            {
-                throw new Exception("Connect to a server first.");
-            }
-
-            // Create the client WebSocket and some other variables
-            ClientWebSocket client = new ClientWebSocket();
-            byte[] fileBytes = File.ReadAllBytes(FilePath);
-            int chunkSize = 4096;
-            int totalChunks = (int)Math.Ceiling((double)fileBytes.Length / chunkSize);
-            int maxTime = 50;
-            int time = 0;
-
-            // Connect to I4.0's files server from the current connected server
-            await client.ConnectAsync(new Uri("ws://" + Connected + ":8061"), CancellationToken.None);
-
-            // Wait until connected
-            while (client.State != WebSocketState.Open)
-            {
-                if (time > maxTime)
-                {
-                    // If the connecting time exceeds the max time, return an error
-                    // This usually means that the server doesn't responds
-                    throw new Exception("Could not connect to Rec Files server.");
-                }
-
-                time++;
-                Thread.Sleep(100);
-            }
-
-            try
-            {
-                for (int i = 0; i < totalChunks; i++)
-                {
-                    // Calculate the current chunk to send
-                    int offset = i * chunkSize;
-                    int length = Math.Min(chunkSize, fileBytes.Length - offset);
-                    byte[] chunk = new byte[length];
-
-                    // Copy the chunk to an array
-                    Array.Copy(fileBytes, offset, chunk, 0, length);
-
-                    // Send the chunk to the server
-                    await client.SendAsync(new ArraySegment<byte>(chunk), WebSocketMessageType.Binary, true, CancellationToken.None);
-
-                    // Stop the loop if the current chunk is the total chunks to send - 1
-                    // This means the file has been fully sent
-                    if (i == totalChunks - 1)
-                    {
-                        break;
-                    }
-                }
-
-                // Send an <end> meaning that the file is sent and telling the server to store it
-                await client.SendAsync(new ArraySegment<byte>(Encoding.UTF8.GetBytes("<end>")), WebSocketMessageType.Binary, true, CancellationToken.None);
-            }
-            catch
-            {
-                // If there's any error, close the connection and return a error
-                await client.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
-                throw new Exception("Bytes limit error.");
-            }
-
-            // Wait for the server's response with the stored file ID
-            ArraySegment<byte> rbuffer = new ArraySegment<byte>(new byte[64]);
-            await client.ReceiveAsync(rbuffer, CancellationToken.None);
-
-            // Close the connection when done
-            await client.CloseAsync(WebSocketCloseStatus.Empty, "", CancellationToken.None);
-
-            // Return the received file ID as an integer
-            return Convert.ToInt32(Encoding.UTF8.GetString(rbuffer.Array));
         }
 
         public static void OpenFile(string Path, bool WaitForExit = false, bool TemporalFile = false)

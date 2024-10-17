@@ -21,6 +21,7 @@ namespace TAO71.I4.PythonManager
         UVR = 14,
         ImageToImage = 15,
         QuestionAnswering = 16,
+        LanguageDetection = 17,
         None = -1
     }
 
@@ -58,6 +59,8 @@ namespace TAO71.I4.PythonManager
                     return Service.RVC;
                 case "tr":
                     return Service.Translator;
+                case "ld":
+                    return Service.LanguageDetection;
                 case "sc":
                     return Service.TextClassification;
                 case "nsfw_filter-text":
@@ -99,6 +102,8 @@ namespace TAO71.I4.PythonManager
                     return "rvc";
                 case Service.Translator:
                     return "tr";
+                case Service.LanguageDetection:
+                    return "ld";
                 case Service.TextClassification:
                     return "sc";
                 case Service.NSFWFilterText:

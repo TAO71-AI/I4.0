@@ -1,9 +1,9 @@
-from transformers import Pipeline
+from transformers import AutoModelForTextToWaveform, AutoProcessor
 import soundfile as sf
 import os
 import ai_config as cfg
 
-__models__: list[Pipeline] = []
+__models__: list[tuple[AutoModelForTextToWaveform, AutoProcessor, str]] = []
 
 def LoadModels() -> None:
     # For each model
@@ -13,8 +13,8 @@ def LoadModels() -> None:
             continue
         
         # Load the model and add it to the list of models
-        model, _ = cfg.LoadPipeline("text-to-audio", "text2audio", i)
-        __models__.append(model)
+        model, processor, device = cfg.LoadModel("text2audio", i, AutoModelForTextToWaveform, AutoProcessor)
+        __models__.append((model, processor, device))
 
 def GenerateAudio(Index: int, Prompt: str) -> bytes:
     # Load the models
@@ -25,10 +25,13 @@ def GenerateAudio(Index: int, Prompt: str) -> bytes:
         Prompt = Prompt[1:]
     
     if (Prompt.endswith("\"") or Prompt.endswith("'")):
-        Prompt = Prompt[0:-2]
+        Prompt = Prompt[:-1]
+
+    # Tokenize the prompt
+    inputs = __models__[Index][1](text = [Prompt], return_tensors = "pt").to(__models__[Index][2])
 
     # Inference the model
-    result = __models__[Index](Prompt)
+    result = __models__[Index][0].generate(**inputs, do_sample = True)
     
     # Save the audio into a temporal file
     audio_name = "ta.wav"
@@ -38,7 +41,7 @@ def GenerateAudio(Index: int, Prompt: str) -> bytes:
         audio_n += 1
         audio_name = "ta_" + str(audio_n) + ".wav"
 
-    sf.write(audio_name, result["audio"][0].T, result["sampling_rate"])
+    sf.write(audio_name, result.cpu().numpy().squeeze(), __models__[Index][0].generation_config.sample_rate)
 
     # Read the bytes of the saved audio
     with open(audio_name, "rb") as f:

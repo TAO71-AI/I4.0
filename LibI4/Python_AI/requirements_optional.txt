@@ -7,3 +7,4 @@ optimum[openvino]
 optimum[onnxruntime]
 ctranslate2
 datasets
+flash_attn

@@ -138,7 +138,7 @@ namespace TAO71.I4
 
         public static byte[] GetScreenshot(int Monitor = -1)
         {
-            return new byte[0];
+            return new byte[0]; // TODO
         }
     }
 }

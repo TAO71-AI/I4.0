@@ -14,6 +14,7 @@ elif echo "$GPU_INFO" | grep -i amd; then
     # ^--- This bug only affects Docker tho
     # Also, PyTorch seems to work fine with ROCm on Docker :)
     PIP_EINDEX="--extra-index-url https://download.pytorch.org/whl/rocm6.1"
+# No Intel GPUs support yet
 fi
 
 CMAKE_ARGS="$LCPP_ARGS" FORCE_CMAKE=1 pip install --upgrade --root-user-action ignore -r requirements.txt $PIP_EINDEX

@@ -66,11 +66,11 @@ def __load_model__(ModelPath: str, ModelName: str, ModelIndex: str, ModelType: s
     vc.version = "v2"
 
     # Set the device for the VC
-    if (device == "cuda"):
+    if (device == "cuda" or device == "xpu"):
         # Use CUDA
         vc.config.use_cuda()
     elif (device == "mps"):
-        # use MPS
+        # Use MPS
         vc.config.use_mps()
     else:
         # Use CPU
@@ -164,7 +164,10 @@ def MakeRVC(Data: dict[str]) -> bytes:
     try:
         ModelName = Data["model"]
     except:
-        raise Exception("Model name can't be NULL.")
+        try:
+            ModelName = list(__models__.keys())[Data["index"]]
+        except:
+            raise Exception("Model name can't be NULL.")
     
     # Get the filter radius
     try:

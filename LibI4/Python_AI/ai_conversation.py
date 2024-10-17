@@ -34,8 +34,11 @@ def ClearConversation(Name: str, Conv: str) -> None:
     Name = __filter_name__(Name)
     Conv = __filter_name__(Conv)
 
-    CreateConversation(Name, Conv)
-    conversations[Name][Conv] = []
+    try:
+        conversations[Name].pop(Conv)
+    except:
+        pass
+
     SaveConversation(Name)
 
 def SaveConversations() -> None:

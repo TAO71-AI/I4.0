@@ -30,16 +30,16 @@ def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
     LoadModels()
 
     # Check the type of the image
-    if (type(image) == str):
+    if (type(Image) == str):
         # It's an image from a path
         # Open it
-        image = PIL.Image.open(image)
-    elif (type(image) != PIL.Image.Image):
+        Image = PIL.Image.open(Image)
+    elif (type(Image) != PIL.Image.Image):
         # It's not a valid image
         raise Exception("Image is not 'str' or 'PIL.Image.Image'.")
     
     # Tokenize the image and move to the device
-    inputs = __models__[Index][1](images = [image], return_tensors = "pt")
+    inputs = __models__[Index][1](images = [Image], return_tensors = "pt")
     inputs = inputs.to(__models__[Index][2])
 
     # Inference the model
@@ -48,7 +48,7 @@ def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
         predicted_depth = outputs.predicted_depth
 
     # Get the output
-    prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = image.size[::-1], mode = "bicubic", align_corners = False)
+    prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = Image.size[::-1], mode = "bicubic", align_corners = False)
     output = prediction.squeeze().cpu().numpy()
     output = (output * 255 / np.max(output)).astype("uint8")
     output = PIL.Image.fromarray(output)

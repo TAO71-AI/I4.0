@@ -11,6 +11,7 @@ import random
 import base64
 import requests
 import os
+import shutil
 
 Servers: list[str] = ["127.0.0.1"]
 Client: websockets.WebSocketClientProtocol | None = None
@@ -20,14 +21,20 @@ TestImage: str = ""
 TestAudio: str = ""
 
 def DownloadFile(URL: str, FileName: str) -> None:
-    # Get the response
-    response = requests.get(URL)
-    response.raise_for_status()
+    # Check if the file exists
+    if (os.path.exists(URL)):
+        # It exists, copy the file
+        shutil.copy(URL, FileName)
+    else:
+        # It doesn't exist, download from internet
+        # Get the response
+        response = requests.get(URL)
+        response.raise_for_status()
 
-    # Write the file
-    with open(FileName, "wb") as f:
-        f.write(response.content)
-        f.close()
+        # Write the file
+        with open(FileName, "wb") as f:
+            f.write(response.content)
+            f.close()
 
 def GetServiceInputType(Service: str, Simplify: bool) -> str:
     # Check the service type
@@ -332,6 +339,12 @@ for arg in sys.argv:
     if (arg.startswith("key=")):
         # Set the key
         Key = arg[4:]
+    elif (arg.startswith("img=")):
+        # Set the test image
+        TestImage = arg[4:]
+    elif (arg.startswith("aud=")):
+        # Set the test audio
+        TestAudio = arg[4:]
 
 # Create asyncio loop
 loop = asyncio.new_event_loop()

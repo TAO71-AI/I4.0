@@ -28,7 +28,6 @@ export class Config
     RVC_FilterRadius: number = 3;
     RVC_Protect: number = 0.33;
     RVC_F0: number = 0;
-    RVC_Model: string = "";
 
     // TTS
     TTS_Voice: string = "espeak-f1";

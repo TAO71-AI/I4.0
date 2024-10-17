@@ -4,7 +4,7 @@ import os
 import json
 import ai_config as cfg
 
-__models__: list[AutoPipelineForImage2Image] = []
+__models__: list[tuple[AutoPipelineForImage2Image, dict[str, any]]] = []
 
 def LoadModels() -> None:
     # For each model of this service
@@ -13,11 +13,11 @@ def LoadModels() -> None:
         if (i < len(__models__)):
             continue
         
-        # Load the model and get the info
+        # Load the model
         model, _ = cfg.LoadDiffusersPipeline("img2img", i, AutoPipelineForImage2Image)
 
-        # Add the model to the list of models
-        __models__.append(model)
+        # Add the model and info to the list of models
+        __models__.append((model, cfg.GetInfoOfTask("img2img", i)))
 
 def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     # Check the type of the prompt
@@ -28,17 +28,20 @@ def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     try:
         # It's not a dict, try to convert it to a dict
         p = dict(Prompt.replace("\"", "\'"))
-
-        # Process it and return the result
-        return __process__(Index, p["prompt"], p["image"])
     except:
         # Try to convert into a dict using JSON
         p = json.loads(Prompt)
+    
+    # Try to get the steps of the user
+    try:
+        steps = int(p["steps"])
+    except:
+        steps = __models__[Index][1]["steps"]
 
-        # Process it and return the result
-        return __process__(Index, p["prompt"], p["image"])
+    # Process the image
+    return __process__(Index, p["prompt"], steps, p["image"])
 
-def __process__(Index: int, Prompt: str, Image: str | Image.Image) -> list[bytes]:
+def __process__(Index: int, Prompt: str, Steps: int, Image: str | Image.Image) -> list[bytes]:
     # Load the models
     LoadModels()
 
@@ -58,7 +61,7 @@ def __process__(Index: int, Prompt: str, Image: str | Image.Image) -> list[bytes
     image = image.convert("RGB")
 
     # Inference the model
-    images_generated = __models__[Index](Prompt, image = image).images
+    images_generated = __models__[Index][0](Prompt, image = image, num_inference_steps = Steps).images
     images = []
 
     # For each image generated

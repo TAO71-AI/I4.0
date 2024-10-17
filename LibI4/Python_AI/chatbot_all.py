@@ -18,12 +18,15 @@ import Inference.Text.ai_question_answering as qa
 import internet_connection as internet
 import ai_config as cfg
 import ai_conversation as conv
+import ai_memory as memories
 import chatbot_basics as cbbasics
 import PIL.Image as Image
 import base64
 import datetime
 import calendar
 import json
+import os
+import random
 
 # Please read this
 """
@@ -46,6 +49,34 @@ tts - Text to Speech.
 img2img - Image to Image.
 qa - Question Answering.
 """
+
+def __create_file__(FileType: str, FileData: bytes | str) -> str:
+    # Set file extension
+    if (FileType == "image"):
+        ext = "png"
+    elif (FileType == "audio"):
+        ext = "wav"
+    
+    # Set file name
+    fName = f"temp_input_file_0.{ext}"
+
+    # Check if name exists
+    while (os.path.exists(fName)):
+        # It exists, change name
+        fName = f"temp_input_file_{random.randint(-99999, 99999)}.{ext}"
+    
+    # Check bytes type
+    if (type(FileData) == str):
+        # Base64 encoded, decode
+        FileData = base64.b64decode(FileData)
+
+    # Add the bytes to the file
+    with open(fName, "wb") as f:
+        f.write(FileData)
+        f.close()
+
+    # Return the file name
+    return fName
 
 def GetServicesAndIndexes() -> dict[str, int]:
     # Create the dict
@@ -153,6 +184,17 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         AIArgs = cfg.current_data["ai_args"].split("+")
     else:
         AIArgs = AIArgs.split("+")
+    
+    # Check conversation to prevent errors
+    if (Conversation[0] == None):
+        Conversation[0] = ""
+    elif (type(Conversation[0]) != str):
+        raise ValueError("Conversation [0] MUST be a string.")
+    
+    if (Conversation[1] == None):
+        Conversation[1] = ""
+    elif (type(Conversation[1]) != str):
+        raise ValueError("Conversation [1] MUST be a string.")
 
     # Set system prompts
     sp = []
@@ -164,12 +206,19 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Get default system prompts (for I4.0's personality and server's tools)
         sp += cbbasics.GetDefaultI4SystemMessages(AIArgs)
     
-    if (type(ExtraSystemPrompts) == list or type(ExtraSystemPrompts) == list[str]):
+    if ((type(ExtraSystemPrompts) == list or type(ExtraSystemPrompts) == list[str]) and len(ExtraSystemPrompts) > 0):
         sp += ExtraSystemPrompts
-    elif (type(ExtraSystemPrompts) == str):
-        sp.append(ExtraSystemPrompts)
-    else:
-        raise ValueError("Invalid type of ExtraSystemPrompts.")
+    elif (len(ExtraSystemPrompts) > 0):
+        sp.append(str(ExtraSystemPrompts))
+
+    # Get the info of the model
+    info = cfg.GetInfoOfTask(Service, Index)
+
+    # Check if the info contains information about the model and it's not empty
+    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"])) > 0):
+        # Add the model info to the model
+        sp.append("# More information about you:")
+        sp.append(str(info["model_info"]))
     
     if (cfg.current_data["use_dynamic_system_args"]):
         # Get dynamic system prompts (for current date, etc.)
@@ -178,16 +227,28 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
         # Add sprompts
         sp += [
-            "The current date is " + str(cDate.day) + " of " + calendar.month_name[cDate.month] + " " + str(cDate.year),
-            "The current time is " + ("0" + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)) + ":" + ("0" + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)) + "."
+            "# Extra information:\n"
+            f"The current date is {cDate.day} of {calendar.month_name[cDate.month]}, {cDate.year}.",
+            f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
         ]
 
         if (cDate.day == 16 and cDate.month == 9 and UseDefaultSystemPrompts):
             # I4.0's birthday!!!!
             sp.append("Today it's your birthday.")
     
-    # Apply the system prompts to the services
-    cb.SystemPrompts = sp
+    # Get the memories
+    mems = memories.GetMemories(Conversation[0])
+
+    # Check if the length of the memories is higher than 0
+    if (len(mems) > 0):
+        # It is
+        # Add a memories category
+        sp.append("# Memories:")
+        
+        # For each memory
+        for mem in range(len(mems)):
+            # Add the memory
+            sp.append(f"Memory #{mem}: {mems[mem]}")
     
     # Check NSFW in prompt
     if ((Service == "chatbot" or Service == "sc" or Service == "tr" or Service == "text2img" or Service == "text2audio" or Service == "tts" or Service == "qa") and not cfg.current_data["allow_processing_if_nsfw"][0] and Service != "nsfw_filter-text"):
@@ -197,12 +258,24 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Return error if it's NSFW
         if (isNSFW):
             raise Exception("NSFW detected!")
-    
-    # Check NSFW in files
+
+    # For each file
     for file in Files:
+        # Check file size
+        if (len(file["data"]) > cfg.current_data["max_files_size"] * 1024 * 1024):
+            # Bigger than the server allows, return an error
+            raise Exception("File exceeds the maximum file size allowed by the server.")
+
+        # Create file
+        f = __create_file__(file["type"], file["data"])
+
+        # Replace from the list
+        Files[Files.index(file)]["data"] = f
+
+        # Check NSFW
         if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"):
             # The file is an image
-            isNSFW = IsImageNSFW("ReceivedFiles/" + file["name"] + "_file")
+            isNSFW = IsImageNSFW(f)
 
             # Return error if it's NSFW
             if (isNSFW):
@@ -214,7 +287,12 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Check service
     if (Service == "chatbot" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get chatbot response
-        textResponse = cb.Inference(Index, Prompt, Conversation)
+        if (cfg.GetInfoOfTask(Service, Index)["allows_files"]):
+            # Use vision chatbot
+            pass        # TODO
+        else:
+            # Use normal chatbot
+            textResponse = cb.Inference(Index, Prompt, sp, Conversation)
 
         # Set the final response
         finalResponse = ""
@@ -260,37 +338,27 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Return the response
         yield {"response": translation, "files": []}
     elif (Service == "img2text" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Get the response from the model for each file
-        for file in Files:
-            # Check if the file is an image
-            if (file["type"] != "image"):
-                # If it's not, ignore
-                continue
+        # Check file 0 type
+        if (Files[0]["type"] != "image"):
+            # Error, unexpected file type
+            raise Exception("File must be an image.")
 
-            # Get the response
-            response = ImageToText(Index, "ReceivedFiles/" + file["name"] + "_file")
+        # Get the response of file 0
+        response = ImageToText(Index, Files[0]["data"])
 
-            # Return the response
-            yield {"response": response, "files": []}
-        
-        # Return the final response
-        yield {"response": "", "files": []}
+        # Return the response
+        yield {"response": response, "files": []}
     elif (Service == "speech2text" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Get the response from the model for each file
-        for file in Files:
-            # Check if the file is an audio file
-            if (file["type"] != "audio"):
-                # If it's not, ignore
-                continue
-
-            # Get the response
-            response = RecognizeAudio(Index, "ReceivedFiles/" + file["name"] + "_file")
-
-            # Return the response
-            yield {"response": response, "files": []}
+        # Check file 0 type
+        if (Files[0]["type"] != "audio"):
+            # Error, unexpected file type
+            raise Exception("File must be an audio.")
         
-        # Return the final response
-        yield {"response": "", "files": []}
+        # Get the response of file 0
+        response = RecognizeAudio(Index, Files[0]["data"])
+
+        # Return the response
+        yield {"response": response, "files": []}
     elif (Service == "text2audio" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Process audio
         audioFiles = GenerateAudio(Index, Prompt)
@@ -304,74 +372,56 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Return the response
         yield {"response": nsfw, "files": []}
     elif (Service == "nsfw_filter-image" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Check if it's NSFW for each file
-        for file in Files:
-            # Check if the file is an image file
-            if (file["type"] != "image"):
-                # If it's not, ignore
-                continue
-
-            # Get the response
-            response = IsImageNSFW("ReceivedFiles/" + file["name"] + "_file", Index)
-
-            # Return the response
-            yield {"response": response, "files": []}
-
-        # Return the response
-        yield {"response": "", "files": []}
-    elif (Service == "de" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Calculate depth estimation for each file
-        for file in Files:
-            # Check if the file is an image file
-            if (file["type"] != "image"):
-                # If it's not, ignore
-                continue
-
-            # Get the response
-            response = EstimateDepth(Index, "ReceivedFiles/" + file["name"] + "_file")
-
-            # Return the response
-            yield {"response": "", "files": [{"type": "image", "data": response}]}
-
-        # Return the response
-        yield {"response": "", "files": []}
-    elif (Service == "od" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Calculate object detection for each file
-        for file in Files:
-            # Check if the file is an image file
-            if (file["type"] != "image"):
-                # If it's not, ignore
-                continue
-
-            # Get the response
-            response = DetectObjects(Index, "ReceivedFiles/" + file["name"] + "_file")
-
-            # Return the response
-            yield {"response": response["objects"], "files": [{"type": "image", "data": response["image"]}]}
-
-        # Return the response
-        yield {"response": "", "files": []}
-    elif (Service == "rvc" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Get RVC of each file
-        for file in Files:
-            # Check if the file is an audio file
-            if (file["type"] != "audio"):
-                # If it's not, ignore
-                continue
-
-            # Get the response
-            promptFile = cfg.JSONDeserializer(Prompt)
-            promptFile["input"] = "ReceivedFiles/" + file["name"] + "_file"
-
-            response = DoRVC(Index, promptFile)
-
-            # Return the response
-            yield {"response": "", "files": [{"type": "audio", "data": response}]}
+        # Check file 0 type
+        if (Files[0]["type"] != "image"):
+            # Error, unexpected file type
+            raise Exception("File must be an image.")
         
+        # Get the response of file 0
+        response = IsImageNSFW(Files[0]["data"], Index)
+
         # Return the response
-        yield {"response": "", "files": []}
+        yield {"response": response, "files": []}
+    elif (Service == "de" and len(cfg.GetAllInfosOfATask(Service)) > 0):
+        # Check file 0 type
+        if (Files[0]["type"] != "image"):
+            # Error, unexpected file type
+            raise Exception("File must be an image.")
+        
+        # Get the response of file 0
+        response = EstimateDepth(Index, Files[0]["data"])
+
+        # Return the response
+        yield {"response": "", "files": [{"type": "image", "data": response}]}
+    elif (Service == "od" and len(cfg.GetAllInfosOfATask(Service)) > 0):
+        # Check file 0 type
+        if (Files[0]["type"] != "image"):
+            # Error, unexpected file type
+            raise Exception("File must be an image.")
+        
+        # Get the response of file 0
+        response = DetectObjects(Index, Files[0]["data"])
+
+        # Return the response
+        yield {"response": response["objects"], "files": [{"type": "image", "data": response["image"]}]}
+    elif (Service == "rvc" and len(cfg.GetAllInfosOfATask(Service)) > 0):
+        # Check file 0 type
+        if (Files[0]["type"] != "audio"):
+            # Error, unexpected file type
+            raise Exception("File must be an audio.")
+
+        # Get the response of file 0
+        promptFile = cfg.JSONDeserializer(Prompt)
+        promptFile["input"] = Files[0]["data"]
+        promptFile["index"] = Index
+
+        response = DoRVC(promptFile)
+
+        # Return the response
+        yield {"response": "", "files": [{"type": "audio", "data": response}]}
     elif (Service == "uvr" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Get UVR of each file
+        yield {"response": "TODO; UVR is under creation..."}
+        """# Get UVR of each file
         for file in Files:
             # Check if the file is an audio file
             if (file["type"] != "audio"):
@@ -380,7 +430,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
             # Get the response
             promptFile = cfg.JSONDeserializer(Prompt)
-            promptFile["input"] = "ReceivedFiles/" + file["name"] + "_file"
+            promptFile["input"] = file["name"]
 
             response = DoUVR(Index, promptFile)
             fs = []
@@ -394,7 +444,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
             yield {"response": "", "files": fs}
         
         # Return the response
-        yield {"response": "", "files": []}
+        yield {"response": "", "files": []}"""
     elif (Service == "tts" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Generate TTS
         response = DoTTS(Index, Prompt)
@@ -402,27 +452,22 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Return the response
         yield {"response": "", "files": [{"type": "audio", "data": response}]}
     elif (Service == "img2img" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Get image to image for every file
-        for file in Files:
-            # Check if the file is an image file
-            if (file["type"] != "image"):
-                # If it's not, ignore
-                continue
+        # Check file 0 type
+        if (Files[0]["type"] != "image"):
+            # Error, unexpected file type
+            raise Exception("File must be an image.")
+        
+        # Get the response of file 0
+        response = DoImg2Img(Index, json.dumps({"prompt": Prompt, "image": Files[0]["data"]}))
+        fs = []
 
-            # Get the response
-            response = DoImg2Img(Index, json.dumps({"prompt": Prompt, "image": "ReceivedFiles/" + file["name"] + "_file"}))
-            fs = []
-
-            # For every file
-            for fi in response:
-                # Append it
-                fs.append({"type": "image", "data": fi})
-
-            # Return the response
-            yield {"response": "", "files": fs}
+        # For every file
+        for fi in response:
+            # Append it
+            fs.append({"type": "image", "data": fi})
 
         # Return the response
-        yield {"response": "", "files": []}
+        yield {"response": "", "files": fs}
     elif (Service == "qa" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Process the prompt
         Prompt = cfg.JSONDeserializer(Prompt)
@@ -437,11 +482,17 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Return the response
         yield {"response": lang, "files": []}
     else:
-        raise Exception(f"Service not recognized.")
+        # Return an error
+        yield {"response": "ERROR! Service not found.", "files": []}
+
+    # For each file
+    for file in Files:
+        # Remove the file from the server
+        os.remove(file["data"])
 
 def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Get generated images
-    imgs_response = agi.Inference(Prompt)
+    imgs_response = agi.Inference(Index, Prompt)
     images = []
 
     # Generate images
@@ -487,13 +538,13 @@ def DetectObjects(Index: int, Img: str) -> dict[str]:
         "image": image
     }
 
-def DoRVC(Index: int, AudioData: str | dict[str, any]) -> str:
+def DoRVC(AudioData: str | dict[str, any]) -> str:
     if (type(AudioData) == str):
         # Convert audio data to json
         AudioData = cfg.JSONDeserializer(AudioData)
 
     # Get RVC audio response
-    data = rvc.MakeRVC(AudioData)       # TODO
+    data = rvc.MakeRVC(AudioData)
     # Encode the audio into base64
     audio = base64.b64encode(data).decode("utf-8")
 

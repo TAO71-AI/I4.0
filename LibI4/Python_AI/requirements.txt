@@ -4,8 +4,8 @@ torch>=2.0.0
 torchtext
 torchvision
 torchaudio
-transformers~=4.44.2, >=4.44.2
-diffusers~=0.30.0, >=0.30.0
+transformers~=4.45.1, >=4.45.1
+diffusers~=0.30.3, >=0.30.3
 
 # Server requirements
 asyncio

@@ -17,6 +17,7 @@ echo -e "\e[1m > Checking GPU... \e[0m"
 
 GPU_INFO=$(lspci -nn | grep -E "VGA|3D|Display")
 VULKAN_INFO=$(vulkaninfo)
+INTEL_GPU_VARS="/opt/intel/oneapi/setvars.sh"       # Only used if you have a Intel GPU.
 
 PYTORCH_WHL="--index-url https://download.pytorch.org/whl/cpu"      # PyTorch CPU version.
 LCPP_WHL="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"               # LlamaCPP (Python) CPU version.
@@ -29,6 +30,10 @@ if [ -z "${FORCE_CPU_LLAMA}" ]; then
     FORCE_CPU_LLAMA=0
 fi
 
+if [ -z "${FORCE_VULKAN_LLAMA}" ]; then
+    FORCE_VULKAN_LLAMA=0
+fi
+
 if [ -z "${EXTRA_PIP_ARGS}" ]; then
     EXTRA_PIP_ARGS=""
 fi
@@ -39,19 +44,23 @@ fi
 
 if [ "$ALLOW_GPU" = false ]; then
     GPU_INFO=""
+    VULKAN_INFO=""
 fi
 
 if echo "$GPU_INFO" | grep -i nvidia; then
     echo -e "\e[1m > NVIDIA GPU detected! \e[0m"
 
-    if [ "${FORCE_CPU_PT}" -ne 1 ]; then
+    if [ $FORCE_CPU_PT -ne 1 ]; then
         echo "   Building PyTorch with CUDA support..."
         PYTORCH_WHL="--index-url https://download.pytorch.org/whl/cu124"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
 
-    if [ "${FORCE_CPU_LLAMA}" -ne 1 ]; then
+    if [ $FORCE_VULKAN_LLAMA -ne 1 ]; then
+        echo "   Building LLaMA-CPP-Python with Vulkan support..."
+        LCPP_WHL="-DGGML_VULKAN=on"
+    elif [ $FORCE_CPU_LLAMA -ne 1 ]; then
         echo "   Building LLaMA-CPP-Python with CUDA support..."
         LCPP_WHL="-DGGML_CUDA=on"
     else
@@ -60,30 +69,42 @@ if echo "$GPU_INFO" | grep -i nvidia; then
 elif echo "$GPU_INFO" | grep -i amd; then
     echo -e "\e[1m > AMD GPU detected! \e[0m"
 
-    if [ "${FORCE_CPU_PT}" -ne 1 ]; then
+    if [ $FORCE_CPU_PT -ne 1 ]; then
         echo "   Building PyTorch with ROCm support..."
         PYTORCH_WHL="--index-url https://download.pytorch.org/whl/rocm6.1"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
 
-    if [ "${FORCE_CPU_LLAMA}" -ne 1 ]; then
+    if [ $FORCE_VULKAN_LLAMA -ne 1 ]; then
+        echo "   Building LLaMA-CPP-Python with Vulkan support..."
+        LCPP_WHL="-DGGML_VULKAN=on"
+    elif [ $FORCE_CPU_LLAMA -ne 1 ]; then
         echo "   Building LLaMA-CPP-Python with ROCm support..."
         LCPP_WHL="-DGGML_HIPBLAS=on"
     else
         echo "   Building LLaMA-CPP-Python with CPU support only..."
     fi
-#elif echo "$GPU_INFO" | grep -i intel; then
-#    echo -e "\e[1m > INTEL GPU detected! Installing dependencies with ???. \e[0m"
-#
-#    if [ $FORCE_CPU_PT -ne 0 ]; then
-#        PYTORCH_WHL="--index-url ???????????????"
-#    fi
-#
-#    if [ $FORCE_CPU_LLAMA -ne 0 ]; then
-#        LCPP_WHL="???????????????????"
-#    fi
-# ^--- Under creation!!!!!!!
+elif echo "$GPU_INFO" | grep -i intel; then                                 # EXPERIMENTAL SUPPORT.
+    echo -e "\e[1m > Intel GPU detected! \e[0m"
+    source "$INTEL_GPU_VARS"
+
+    if [ $FORCE_CPU_PT -ne 1 ]; then
+        echo "   Building PyTorch with XPU support..."
+        PYTORCH_WHL="torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu oneccl_bind_pt==2.3.100+xpu --index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/"
+    else
+        echo "   Building PyTorch with CPU support only..."
+    fi
+
+    if [ $FORCE_VULKAN_LLAMA -ne 1 ]; then
+        echo "   Building LLaMA-CPP-Python with Vulkan support..."
+        LCPP_WHL="-DGGML_VULKAN=on"
+    elif [ $FORCE_CPU_LLAMA -ne 1 ]; then
+        echo "   Building LLaMA-CPP-Python with SYCL support..."
+        LCPP_WHL="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
+    else
+        echo "   Building LLaMA-CPP-Python with CPU support only..."
+    fi
 else
     echo -e "\e[1m > No valid GPU detected. PyTorch (CPU version) will be installed. \e[0m"
 
@@ -100,7 +121,7 @@ else
     fi
 fi
 
-# 2. Update PIP
+# 2. Update PIP.
 echo -e "\e[1m > Updating PIP... \e[0m"
 "$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS pip
 
@@ -113,7 +134,7 @@ if [ $? != 0 ]; then
     exit 1
 fi
 
-# 4. Install LlamaCPP-Python
+# 4. Install LlamaCPP-Python.
 echo -e "\e[1m > Installing LlamaCPP-Python... \e[0m"
 CMAKE_ARGS="$LCPP_WHL" FORCE_CMAKE=1 "$PIP_CMD" install --verbose --upgrade $EXTRA_PIP_ARGS llama-cpp-python
 

@@ -25,6 +25,7 @@ export enum Service
     UVR = 14,
     ImageToImage = 15,
     QuestionAnswering = 16,
+    LanguageDetection = 17,
     None = -1
 }
 
@@ -66,6 +67,8 @@ export class ServiceManager
                 return Service.ImageToImage;
             case "qa":
                 return Service.QuestionAnswering;
+            case "ld":
+                    return Service.LanguageDetection;
             default:
                 throw new Error("Could not parse service.");
         }
@@ -107,6 +110,8 @@ export class ServiceManager
                 return "img2img";
             case Service.QuestionAnswering:
                 return "qa";
+            case Service.LanguageDetection:
+                return "ld";
             default:
                 throw new Error("Could not parse service.");
         }

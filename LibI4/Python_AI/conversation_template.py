@@ -1,4 +1,4 @@
-def GetTemplate(Prompt: str, SystemPrompt: str, Conversation: list[dict[str, str]]) -> str:
+def GetTemplate(Prompt: str, SystemPrompt: str, Conversation: list[dict[str, str]], AllowsFiles: bool) -> str:
     conv = SystemPrompt + "\n"
     
     if (len(Conversation) > 0):
@@ -11,7 +11,10 @@ def GetTemplate(Prompt: str, SystemPrompt: str, Conversation: list[dict[str, str
                 conv += "You: "
                 
             if (len(msg["content"].strip()) > 0):
-                conv += msg["content"] + "\n"
+                if (AllowsFiles):
+                    conv += str(msg["content"]) + "\n"
+                else:
+                    conv += msg["content"] + "\n"
         
     conv += "\n### USER: " + Prompt
     conv = conv.strip()

@@ -22,7 +22,8 @@ __config_data__: dict[str] = {
         "database": "",                                                                             # Database name.
         "table": "keys"                                                                             # Database table.
     },
-    "enabled_plugins": "sing vtuber discord_bot voicevox twitch gaming image_generation",       # I4.0 plugins that creates more system prompts.
+    "enabled_plugins": "sing vtuber discord_bot twitch gaming image_generation audio_generation internet",
+    # ^-- I4.0 plugins that creates more system prompts.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
     "ban_if_nsfw": True,                                                                        # Bans the API key if a NSFW prompt is detected (requires `force_api_key` to be true).
@@ -47,25 +48,44 @@ __config_data__: dict[str] = {
         "auto_mod": False,                                                                          # The bot will check for NSFW texts & images (if the services are available). If found something NSFW, it will automatically isolate the user from the server and contact mods.
         "mods_role": "",                                                                            # The role of the mods I4.0 will contact (empty to disable).
         "allow_vc": True,                                                                           # Allows the bot to connect to a voice chat, talk and listen.
-        "auto-talk": True,                                                                          # Allows the bot to talk without the command prefix, activated at random moments.
         "prefix": "!i4",                                                                            # Command prefix.
     },
-    "models": [                                                                                     # Models to be used.
+    "force_device_check": True,                                                                 # Will check if the device is compatible.
+    "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
+    "models": [                                                                                 # Models to be used.
         # Examples:
         #{
         #    "service": "chatbot",
         #    "type": "lcpp",
         #    "ctx": 2048,
         #    "threads": -1,
-        #    "ngl": 100,
+        #    "ngl": -1,
         #    "batch": 8,
         #    "model": [
-        #        "MODEL REPOSITORY / MODEL PATH",
-        #        "MODEL FILE NAME",
-        #        "TEMPLATE REPOSITORY"
+        #        "MODEL REPOSITORY (leave empty if you're going to use a path)",
+        #        "MODEL FILE NAME / MODEL PATH",
+        #        "TEMPLATE REPOSITORY",
+        #        "CHAT TEMPLATE"  # Set if you're going to leave the template repository empty!
+        #        # ^-- If `TEMPLATE REPOSITORY` and `CHAT TEMPLATE` are both empty, LLaMA-CPP-Python will use the tokenizer's chat template. Might fail in most of old GGUF models.
         #    ],
         #    "temp": 0.5,
         #    "device": "cpu",
+        #    "allows_files": false,
+        #    "price": 20
+        #},
+        #{
+        #    "service": "chatbot",
+        #    "type": "`gpt4all` or `hf`",
+        #    "ctx": 2048,
+        #    "threads": -1,
+        #    "ngl": -1,
+        #    "batch": 8,
+        #    "model": "MODEL REPOSITORY / MODEL PATH",
+        #    "hf_load_mode": None,          # False for 4-bit, True for 8-bit, None to deactivate this. Only works for the `hf` type.
+        #    "hf_low": False,               # False loads the model normally, True if you have low specs.
+        #    "temp": 0.5,
+        #    "device": "cpu",
+        #    "allows_files": false,
         #    "price": 20
         #},
         #{
@@ -77,6 +97,7 @@ __config_data__: dict[str] = {
         #{
         #    "service": "img2img",
         #    "model": "MODEL REPOSITORY",
+        #    "steps": 4,
         #    "device": "cpu",
         #    "price": 20
         #},
@@ -179,13 +200,14 @@ __config_data__: dict[str] = {
         #}
         #
         #
-        # NOTE: You can also add a description for each model, expample:
+        # NOTE: You can also add a description and information of the model for each model, expample:
         #{
         #    "service": "sc",
         #    "model": "MODEL REPOSITORY",
         #    "device": "cpu",
         #    "price": 1.5,
-        #    "description": "DESCRIPTION HERE"
+        #    "description": "DESCRIPTION HERE",
+        #    "model_info": ""  # This is some extra info about the model that will be sent to the model when inference via System Prompts.
         #}
     ]
 }
@@ -260,10 +282,21 @@ def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
     # Get the device set for the task
     device = GetInfoOfTask(Task, Index)["device"]
 
-    # Check if the device specified for this model is available
-    if (device == "cuda" and torch.cuda.is_available()):
-        # The device is CUDA and it's available, return it
+    # Check if the force_device_check flag is set to true in the config
+    if (list(current_data.keys()).count("force_device_check") > 0 and not current_data["force_device_check"]):
+        # Return the device without checking
         return device
+
+    # Check if the device specified for this model is available
+    if (
+        (device == "cuda" and torch.cuda.is_available()) or             # Check for NVIDIA or AMD GPUs
+        (device == "xpu" and torch.xpu.is_available())                  # Check for Intel GPUs
+    ):
+        # The device set is compatible, return the device
+        return device
+    elif (device != "cpu"):
+        # Print message
+        print(f"WARNING! Tryed to use the device '{device}', but torch doesn't support it. Returning 'cpu' instead.")
     
     # The device is not available, return the cpu
     return "cpu"
@@ -318,7 +351,7 @@ def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None
         args = ExtraKWargs.copy()
     
     # Set the required args
-    args["model"] = GetInfoOfTask(Task, Index)["model"],
+    args["pretrained_model_or_path"] = GetInfoOfTask(Task, Index)["model"]
     args["device"] = dev
 
     # Check the pipeline type

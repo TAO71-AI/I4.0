@@ -19,7 +19,7 @@ def LoadModels() -> None:
         # Check if contains a valid model
         if (info["lang"].count("-") != 1):
             # Return an error
-            raise Exception(f"Invalid language for model {info["model"]}. Expected 'INPUT LANGUAGE-OUTPUT LANGUAGE'; got '{info["lang"]}'.")
+            raise Exception(f"Invalid language for model {info['model']}. Expected 'INPUT LANGUAGE-OUTPUT LANGUAGE'; got '{info['lang']}'.")
 
         # Load the model
         model, tokenizer, device = cfg.LoadModel("tr", i, AutoModelForSeq2SeqLM, AutoTokenizer)

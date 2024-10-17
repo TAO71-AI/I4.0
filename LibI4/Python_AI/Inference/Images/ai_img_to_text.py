@@ -14,7 +14,7 @@ def LoadModels() -> None:
 
         # Load the model and add it to the list of models
         model, _ = cfg.LoadPipeline("image-to-text", "img2text", i)
-        __models__.append(model[0])
+        __models__.append(model)
 
 def Inference(Index: int, Img: str | PIL.Image.Image) -> str:
     # Load the models

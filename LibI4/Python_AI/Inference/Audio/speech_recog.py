@@ -78,7 +78,7 @@ def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
         # Set the result
         result = {
             "text": result["text"],
-            "lang": result["language"],
+            "lang": "unknown"
         }
     
     # Return the result

@@ -46,7 +46,6 @@ namespace TAO71.I4.PythonManager
         public int RVC_FilterRadius = 3;
         public float RVC_Protect = 0.33f;
         public int RVC_F0 = 0;
-        public string RVC_Model = "";
 
         // Translator
         // Nothing to configure

@@ -1,0 +1,89 @@
+# I4.0
+## Create the file
+Create a new file in the **/etc/systemd/system/** directory. You can call it what you want, but for this example we will say it's called `I4.0.service`.
+
+Inside this file, write:
+```ini
+[Unit]
+Description=I4.0 Server
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=(I4.0 PYTHON_AI DIRECTORY)/
+ExecStart=(ENV PATH)/bin/python ai_server.py
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+Replacing **(I4.0 PYTHON_AI DIRECTORY)** with the path where you have the I4.0 Python AI directory.
+
+Also, replace **(ENV PATH)** with the path where you have the VENV.
+
+## Enable the service on system startup
+```sh
+systemctl enable I4.0.service
+```
+
+## Start the service
+```sh
+systemctl start I4.0.service
+```
+
+## Disable the service on system startup
+```sh
+systemctl disable I4.0.service
+```
+
+## Stop the service
+```sh
+systemctl stop I4.0.service
+```
+
+# I4.0 data share
+## Create the file
+Create a new file in the **/etc/systemd/system/** directory. You can call it what you want, but for this example we will say it's called `I4.0_ds.service`.
+
+Inside this file, write:
+```ini
+[Unit]
+Description=I4.0 Data Share Server
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=(I4.0 PYTHON_AI DIRECTORY)/
+ExecStart=(ENV PATH)/bin/python data_share.py -s
+KillSignal=SIGINT
+Restart=on-failure
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+Replacing **(I4.0 PYTHON_AI DIRECTORY)** with the path where you have the I4.0 Python AI directory.
+
+Also, replace **(ENV PATH)** with the path where you have the VENV.
+
+## Enable the service on system startup
+```sh
+systemctl enable I4.0_ds.service
+```
+
+## Start the service
+```sh
+systemctl start I4.0_ds.service
+```
+
+## Disable the service on system startup
+```sh
+systemctl disable I4.0_ds.service
+```
+
+## Stop the service
+```sh
+systemctl stop I4.0_ds.service
+```
