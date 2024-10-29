@@ -14,7 +14,11 @@ export class Config
 
     // Chatbot
     Chatbot_ExtraSystemPrompts: string = "";
-    Chatbot_AllowServerSystemPrompts: boolean | null = null;
+    Chatbot_AllowServerSystemPrompts: boolean[] =
+    [
+        // (I4.0 personality and tools, extra system prompts from the server's configuration)
+        true, true
+    ];
     Chatbot_Conversation: string = "Client";
     Chatbot_AIArgs: string | null = null;
 

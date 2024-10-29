@@ -13,7 +13,6 @@ import ai_config as cfg
 import ai_conversation as conv
 import ai_memory as memories
 import data_share as ds
-import rec_files as rfs
 
 # Variables
 max_buffer_length: int = 4096
@@ -27,7 +26,8 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 serverWS: websockets.WebSocketServerProtocol = None
-__version__: str = "v8.0.0"
+__version__: str = "v8.1.0"
+filesCreated: list[str] = []
 
 def CheckFiles() -> None:
     # Check if some files exists
@@ -78,9 +78,6 @@ def UpdateServer() -> None:
     # Save all the conversations and memories
     conv.SaveConversations()
     memories.SaveMemories()
-
-    # Update the banned IPs in other services
-    rfs.banned_ips = banned["ip"]
 
 def GetQueueForService(Service: str, Index: int) -> tuple[int, float]:
     # Get the users for the queue
@@ -190,7 +187,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         times[Service] = []
 
     # Wait for the queue to be valid
-    while (GetQueueForService(Service, Index)[0] > 1):
+    while (GetQueueForService(Service, Index)[0] >= 1):
         # Sleep 1s
         time.sleep(1)
 
@@ -224,6 +221,10 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     responseFiles = []
     am = False
 
+    # Add the files to the filesCreated
+    for i in fs:
+        filesCreated.append(i)
+
     # For every token, return it to the client
     for token in response:
         # Make sure the response is a string
@@ -243,6 +244,13 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
         # Yield the token
         yield token
+
+    # Remove all the generated files
+    for i in fs:
+        try:
+            filesCreated.remove(i)
+        except Exception as ex:
+            print(f"Could not delete temporal file '{i}': {ex}.")
 
     # Set the timer
     timer = time.time() - timer
@@ -284,13 +292,13 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     # For every client file
     for file in Files:
         if (file["type"] == "image"):
-            sdRFiles["images"].append(file["data"])
+            sdUFiles["images"].append(file["data"])
         elif (file["type"] == "audio"):
-            sdRFiles["audios"].append(file["data"])
+            sdUFiles["audios"].append(file["data"])
         elif (file["type"] == "document"):
-            sdRFiles["documents"].append(file["data"])
+            sdUFiles["documents"].append(file["data"])
         else:
-            sdRFiles["other"].append(file["data"])
+            sdUFiles["other"].append(file["data"])
 
     # Share the data (if allowed by the server)
     __share_data__(Prompt, sdUFiles, fullResponse, sdRFiles)
@@ -414,7 +422,7 @@ def GetAutoIndex(Service: str) -> int:
 
         # Check the length
         if (length == 0):
-            raise Exception()
+            raise Exception("Length of the services is 0.")
         
         # Check if the service exists in the queue
         if (Service not in list(queue.keys())):
@@ -471,6 +479,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     try:
         # Try to get extra system prompts
         systemPrompts = Prompt["SystemPrompts"]
+
+        # Check the type
+        if (type(systemPrompts) != list[str] and type(systemPrompts) != list):
+            systemPrompts = [str(systemPrompts)]
     except:
         # If an error occurs, set to default
         systemPrompts = []
@@ -538,6 +550,14 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Invalid API key
             yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True}
             return
+        
+        # Check if the key is an admin
+        if (key["admin"]):
+            # It is, apply admin system prompts to the extra messages
+            systemPrompts.append(cfg.current_data["custom_api_admin_system_messages"])
+        else:
+            # It isn't, apply not admin system prompts to the extra messages
+            systemPrompts.append(cfg.current_data["custom_api_nadmin_system_messages"])
         
         try:
             # Check files length and service
@@ -801,6 +821,10 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
     UpdateServer()
 
 async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
+    async def _run_task_():
+        task = asyncio.create_task(ExecuteServiceAndSendToClient(Client, prompt))
+        await task
+
     # Wait for receive
     received = await Client.recv()
 
@@ -832,8 +856,11 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
             "ended": True
         }).encode("utf-8"))
 
-    # Create thread
-    thread = threading.Thread(target = lambda: asyncio.run(ExecuteServiceAndSendToClient(Client, prompt)))
+    # Execute service and send data
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+    thread = threading.Thread(target = lambda: asyncio.run(_run_task_()))
     thread.start()
 
 async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
@@ -886,6 +913,7 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
             print("Error closing the connection. Ignoring...")
             return
 
+    # Receive
     await __receive_loop__(Client)
 
 def StartServer() -> None:
@@ -928,6 +956,13 @@ except KeyboardInterrupt:
 
     # Stop the DB
     sb.StopDB()
+
+    # Delete all the saved files
+    for f in filesCreated:
+        try:
+            os.remove(f)
+        except:
+            print(f"   Error deleting file '{f}'. Ignoring.")
 
     # Close
     started = False

@@ -1,5 +1,8 @@
 # This script is created to test I4.0's server
 # This SHOULD NOT be used as a client, it's a very basic implementation
+#
+# OLD AND DEPRECATED; WILL BE REMOVED SOON!
+# We're currently working on official Python bindings
 
 from collections.abc import AsyncIterator
 import asyncio

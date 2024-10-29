@@ -138,8 +138,8 @@ def GetAllKeys(UseMySQL: bool | None = None, Err: int = 0) -> list[dict]:
                 return GetAllKeys(True, 1)
 
     for key in os.listdir("API/"):
-        with open("API/" + key) as f:
-            content: dict = json.load(f)
+        with open(f"API/{key}", "r") as f:
+            content: dict = json.loads(f.read().strip())
             f.close()
 
             if (list(content.keys()).count("admin") == 0):

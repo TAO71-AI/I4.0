@@ -323,14 +323,14 @@ Set the models and services available in the server.
 {
     "service": "chatbot",
     "type": "(type of the chatbot)",
-    "ctx": 2048,
-    "threads": -1,
-    "ngl": -1,
-    "batch": 8,
+    "ctx": (context length),
+    "threads": (number of CPU threads to use),
+    "ngl": (number to layers to load in the GPU),
+    "batch": (tokens that will be processed in parallel),
     "model": (string for `g4a` and `hf`, list for `lcpp`),
-    "hf_load_mode": null,
-    "hf_low": false,
-    "temp": 0.5,
+    "hf_load_mode": (quantization mode for `hf`),
+    "hf_low": (use a small, low-memory version),
+    "temp": (temperature, recommended between 0 and 1),
     "device": "(device to use)",
     "allows_files": false,
     "price": (price)
@@ -426,7 +426,7 @@ For now set this to *false*, it doesn't work for now.
 {
     "service": "img2img",
     "model": "(model repository)",
-    "steps": 4,
+    "steps": (default steps),
     "device": "(device to use)",
     "price": (price)
 }
@@ -573,19 +573,56 @@ This is still under creation, so we don't have any models' name for now.
 ```json
 {
     "service": "text2img",
-    "model": "(model repository)",
-    "device": "(device to use)",
-    "steps": 8,
-    "guidance": 3,
-    "width": 1024,
-    "height": 1024,
+    "type": "(type)",
+    "model": (model),
+    "device": "(device to use, only works with `hf`)",
+    "steps": (default steps),
+    "guidance": (default guidance scale),
+    "width": (default image width),
+    "height": (default image height),
+    "threads": (threads of the CPU to use),
     "price": (price)
-}
+},
 ```
 
 **input**: text
 
 **output**: image
+
+##### Types
+**sdcpp-flux** - Use StableDiffusion-CPP-Python, recommended because of it's speed and GGUF support, ONLY for flux models.
+
+**sdcpp-sd** - Use StableDiffusion-CPP-Python, recommended because of it's speed and GGUF support, ONLY for StableDiffusion models.
+
+**hf** - Use HuggingFace Diffusers, recommended because of it's compatibility (being able to run most models) and speed. Can't quantize models, so it consumes a lot of memory and compute power.
+
+##### Model
+###### StableDiffusion-CPP-Python (for both -flux and -sd)
+```json
+[
+    "MODEL PATH (must be in your local storage)",
+    "VAE (for -flux) or CLIP_G (for -sd) PATH",
+    "CLIP_L PATH",
+    "T5XXL MODEL PATH"
+]
+```
+
+Alternatively, you can use a pre-defined model in the code.
+If you want to use a pre-defined model, set model to this:
+```json
+[
+    "MODEL NAME",
+    "MODEL QUANTIZATION",
+    "VAE / CLIP_G QUANTIZATION",
+    "CLIP_L QUANTIZATION",
+    "T5XXL QUANTIZATION"
+]
+```
+
+###### HuggingFace Diffusers
+```json
+"MODEL REPOSITORY"
+```
 
 ##### Steps
 The steps to use for inference.
@@ -602,6 +639,11 @@ Width of the image to generate.
 
 ##### Height
 Height of the image to generate.
+
+##### Threads
+Number of CPU threads to use.
+
+Set to **-1** to use all the threads of the CPU.
 
 #### Speech To Text (Speech2Text) template
 ```json

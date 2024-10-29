@@ -4,8 +4,8 @@ torch>=2.0.0
 torchtext
 torchvision
 torchaudio
-transformers~=4.45.1, >=4.45.1
-diffusers~=0.30.3, >=0.30.3
+transformers~=4.46.0
+diffusers~=0.31.0
 
 # Server requirements
 asyncio
@@ -33,8 +33,9 @@ psutil
 # Requirements for inference
 gpt4all~=2.8.2
 llama-cpp-python
+stable-diffusion-cpp-python
 SpeechRecognition~=3.10.4
-openai-whisper>=20231117
+openai-whisper>=20240930
 git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
 pySpeakNG~=0.1.2
 #styletts2~=0.1.6

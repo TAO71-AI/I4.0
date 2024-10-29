@@ -63,7 +63,7 @@ def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
     if (__models__[Index][1]["type"] == "whisper"):
         # Use whisper
         # Inference the model
-        result = __models__[Index][0].transcribe(audio_name, temperature = __models__[Index][1]["temp"])
+        result = __models__[Index][0].transcribe(audio_name, temperature = __models__[Index][1]["temp"], verbose = True)
 
         # Set the result
         result = {

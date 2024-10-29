@@ -1,8 +1,17 @@
+# Import the text to image systems
+import Inference.Images.TextToImage.hf as hf
+import Inference.Images.TextToImage.sdcpp as sdcpp
+
+# Import I4.0's utilities
 from diffusers import AutoPipelineForText2Image
-import os
+from stable_diffusion_cpp import StableDiffusion
 import ai_config as cfg
 
-__models__: list[tuple[AutoPipelineForText2Image, dict[str, any]]] = []
+# Import some libraries
+import os
+import psutil
+
+__models__: list[tuple[AutoPipelineForText2Image | StableDiffusion, dict[str, any]]] = []
 
 def LoadModels() -> None:
     # For each model of this service
@@ -11,9 +20,26 @@ def LoadModels() -> None:
         if (i < len(__models__)):
             continue
         
-        # Load the model and get the info
-        model, _ = cfg.LoadDiffusersPipeline("text2img", i, AutoPipelineForText2Image)
+        # Get info about the model
         info = cfg.GetInfoOfTask("text2img", i)
+
+        # Get threads and check if the number of threads are valid
+        if (list(info.keys()).count("threads") == 0 or info["threads"] == -1):
+            threads = psutil.cpu_count()
+        elif (info["threads"] <= 0 or info["threads"] > psutil.cpu_count()):
+            raise Exception("Invalid number of threads.")
+        else:
+            threads = info["threads"]
+
+        # Load the model
+        if (info["type"] == "hf"):
+            # Load the model using HuggingFace
+            model = hf.__load_model__(i)
+        elif (info["type"] == "sdcpp-flux" or info["type"] == "sdcpp-sd"):
+            # Load the model using Stable-Diffusion-CPP-Python
+            model = sdcpp.LoadModel(i, threads)
+        else:
+            raise Exception("Invalid text2img type.")
 
         # Add the model to the list of models
         __models__.append((model, info))
@@ -82,16 +108,19 @@ def __generate_images__(Index: int, Prompt: str, NegativePrompt: str, Width: int
     # Load the models
     LoadModels()
 
-    # Generate the images using the model pipeline
-    images_generated = __models__[Index][0](
-        Prompt,
-        num_inference_steps = Steps,
-        width = Width,
-        height = Height,
-        guidance_scale = Guidance,
-        output_type = "pil",
-        negative_prompt = NegativePrompt
-    ).images
+    # Get the info
+    info = cfg.GetInfoOfTask("text2img", Index)
+
+    # Generate the images
+    if (info["type"] == "hf"):
+        # Generate the images using HuggingFace
+        images_generated = hf.__inference__(__models__[Index][0], Prompt, NegativePrompt, Width, Height, Guidance, Steps)
+    elif (info["type"] == "sdcpp-flux" or info["type"] == "sdcpp-sd"):
+        # Generate the images using Stable-Diffusion-CPP-Python
+        images_generated = sdcpp.__inference__(__models__[Index][0], Prompt, NegativePrompt, Width, Height, Guidance, Steps)
+    else:
+        raise Exception("Invalid text2img type.")
+    
     images = []
 
     # For each image

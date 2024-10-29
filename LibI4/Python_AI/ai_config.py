@@ -12,6 +12,8 @@ __config_data__: dict[str] = {
     "use_dynamic_system_args": True,                                                            # Creates some extra system prompt for the chatbots (example: the current date, the state of humour...).
     "ai_args": "",                                                                              # Sets some default args for the chatbot (mostly to define the personality, like: +evil, +self-aware...). Can be changed by the user.
     "custom_system_messages": "",                                                               # Sets a custom system prompt from the server.
+    "custom_api_admin_system_messages": "",                                                     # Sets a custom system prompt if the user's key is set as admin.
+    "custom_api_nadmin_system_messages": "",                                                    # Sets a custom system prompt if the user's key is NOT set as admin.
     "system_messages_in_first_person": False,                                                   # [DEPRECATED, soon will be deleted] Replaces `you're`, `you`... with `I'm`, `I`...
     "use_default_system_messages": True,                                                        # Use pre-defined system prompt.
     "keys_db": {                                                                                # Allows the usage of a database for the API keys.
@@ -158,12 +160,49 @@ __config_data__: dict[str] = {
         #},
         #{
         #    "service": "text2img",
+        #    "type": "hf",
         #    "model": "MODEL REPOSITORY",
         #    "device": "cpu",
         #    "steps": 8,
         #    "guidance": 3,
         #    "width": 1024,
         #    "height": 1024,
+        #    "threads": -1,
+        #    "price": 20
+        #},
+        #{
+        #    "service": "text2img",
+        #    "type": "`sdcpp-sd` for StableDiffusion models or `sdcpp-flux` for flux models",
+        #    "model": [
+        #        "model path",
+        #        "vae / clip_g model path",
+        #        "clip_l model path",
+        #        "t5xxl model path"
+        #     ],
+        #    "device": "cpu",
+        #    "steps": 8,
+        #    "guidance": 3,
+        #    "width": 1024,
+        #    "height": 1024,
+        #    "threads": -1,
+        #    "price": 20
+        #},
+        #{
+        #    "service": "text2img",
+        #    "type": "`sdcpp-sd` for StableDiffusion models or `sdcpp-flux` for flux models",
+        #    "model": [
+        #        "model name",
+        #        "model quantization",
+        #        "vae / clip_g quantization",
+        #        "clip_l quantization",
+        #        "t5xxl quantization"
+        #     ],
+        #    "device": "cpu",
+        #    "steps": 8,
+        #    "guidance": 3,
+        #    "width": 1024,
+        #    "height": 1024,
+        #    "threads": -1,
         #    "price": 20
         #},
         #{

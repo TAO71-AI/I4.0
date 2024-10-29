@@ -31,7 +31,7 @@ namespace TAO71.I4
 
             for (int i = 0; i < Array.Length; i++)
             {
-                jsonArray += "\"" + Array[i].ToString().Replace("\"", "\'") + "\"";
+                jsonArray += "\"" + Array[i].ToString()?.Replace("\"", "\'") + "\"";
 
                 if (i < Array.Length - 1)
                 {

@@ -178,7 +178,7 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, System
     for token in modelResponse:
         yield token["response"]
 
-def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | None = None) -> Iterator[dict[str]]:
+def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[dict[str]]:
     # Define I4.0's personality
     if (AIArgs == None):
         AIArgs = cfg.current_data["ai_args"].split("+")
@@ -199,13 +199,25 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Set system prompts
     sp = []
 
+    # Define the use of the default system prompts
     if (UseDefaultSystemPrompts == None):
         UseDefaultSystemPrompts = cfg.current_data["use_default_system_messages"]
     
-    if (UseDefaultSystemPrompts):
+    if (type(UseDefaultSystemPrompts) == list or type(UseDefaultSystemPrompts) == list[bool] or type(UseDefaultSystemPrompts) == list[None]):
+        UseDefaultSystemPrompts = (UseDefaultSystemPrompts[0], UseDefaultSystemPrompts[1])  # Ignore any other values of the list
+    
+    if (type(UseDefaultSystemPrompts) == bool):
+        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts)
+    
+    if (UseDefaultSystemPrompts[0]):
         # Get default system prompts (for I4.0's personality and server's tools)
         sp += cbbasics.GetDefaultI4SystemMessages(AIArgs)
     
+    # Add the system prompts from the configuration
+    if (len(cfg.current_data["custom_system_messages"].strip()) > 0 and UseDefaultSystemPrompts[1]):
+        sp += cfg.current_data["custom_system_messages"].split("\n")
+    
+    # Add extra system prompts
     if ((type(ExtraSystemPrompts) == list or type(ExtraSystemPrompts) == list[str]) and len(ExtraSystemPrompts) > 0):
         sp += ExtraSystemPrompts
     elif (len(ExtraSystemPrompts) > 0):
@@ -215,7 +227,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     info = cfg.GetInfoOfTask(Service, Index)
 
     # Check if the info contains information about the model and it's not empty
-    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"])) > 0):
+    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"])) > 0 and UseDefaultSystemPrompts[1]):
         # Add the model info to the model
         sp.append("# More information about you:")
         sp.append(str(info["model_info"]))
@@ -232,7 +244,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
             f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
         ]
 
-        if (cDate.day == 16 and cDate.month == 9 and UseDefaultSystemPrompts):
+        if (cDate.day == 16 and cDate.month == 9 and UseDefaultSystemPrompts[0]):
             # I4.0's birthday!!!!
             sp.append("Today it's your birthday.")
     

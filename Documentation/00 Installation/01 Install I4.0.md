@@ -48,10 +48,24 @@ FORCE_CPU_LLAMA=1 sh install_requirements_auto.sh
 ```
 
 #### LLaMA-CPP-Python for Vulkan
-You can install LLaMA-CPP-Python for CPU support only, even if you have a GPU.
+You can install LLaMA-CPP-Python for Vulkan support only.
 To do this, run the following command:
 ```bash
 FORCE_VULKAN_LLAMA=1 sh install_requirements_auto.sh
+```
+
+#### StableDiffusion-CPP-Python for CPU only
+You can install StableDiffusion-CPP-Python for CPU support only, even if you have a GPU.
+To do this, run the following command:
+```bash
+FORCE_CPU_SD=1 sh install_requirements_auto.sh
+```
+
+#### StableDiffusion-CPP-Python for Vulkan
+You can install StableDiffusion-CPP-Python for Vulkan support only.
+To do this, run the following command:
+```bash
+FORCE_VULKAN_SD=1 sh install_requirements_auto.sh
 ```
 
 #### Extra PIP arguments
@@ -93,6 +107,19 @@ CMAKE_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip
 
 CMAKE_ARGS="-DGGML_VULKAN=on" pip install llama-cpp-python  # For Vulkan support (all GPUs, recommended)
 CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" pip install llama-cpp-python  # Without GPU support
+```
+
+### Install StableDiffusion-CPP-Python
+```bash
+CMAKE_ARGS="-DSD_CUBLAS=ON" pip install stable-diffusion-cpp-python  # For NVIDIA GPUs
+CMAKE_ARGS="-G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSD_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release -DAMDGPU_TARGETS=gfx1101" pip install stable-diffusion-cpp-python  # For AMD GPUs
+
+# For Intel GPUs
+source /opt/intel/oneapi/setvars.sh   
+CMAKE_ARGS="-DSD_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" pip install stable-diffusion-cpp-python
+
+CMAKE_ARGS="-DSD_VULKAN=ON" pip install stable-diffusion-cpp-python  # For Vulkan support (all GPUs, recommended)
+CMAKE_ARGS="-DGGML_OPENBLAS=ON" pip install stable-diffusion-cpp-python  # Without GPU support
 ```
 
 ### Install requirements

@@ -17,9 +17,13 @@ namespace TAO71.I4.PythonManager
 
         // Chatbot
         public string Chatbot_ExtraSystemPrompts = "";
-        public bool? Chatbot_AllowServerSystemPrompts = null;
+        public bool[] Chatbot_AllowServerSystemPrompts = new bool[2]
+        {
+            // (I4.0 personality and tools, extra system prompts from the server's configuration)
+            true, true
+        };
         public string Chatbot_Conversation = "Client";
-        public string Chatbot_AIArgs = null;
+        public string? Chatbot_AIArgs = null;
 
         // Text2Image
         public int Text2Image_Width = -1;

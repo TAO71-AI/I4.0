@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿// NOTE: Some functions are still under creation
+
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading;
@@ -10,9 +12,9 @@ namespace TAO71.I4
 {
     public static class Recorder
     {
-        public static byte[] GetMicData(int TimeToRecord)
+        public static byte[] GetMicData(double TimeToRecord)
         {
-            Timer timer = new Timer((double)TimeToRecord);
+            Timer? timer = new Timer(TimeToRecord);
             byte[] bytes = new byte[0];
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -41,14 +43,13 @@ namespace TAO71.I4
                 Process process = new Process();
 
                 process.StartInfo.FileName = "ffmpeg";
-                process.StartInfo.Arguments = "-f pulse -i default taud_mic.wav";
+                process.StartInfo.Arguments = "-f pulse -i default -af apad -ar 48000 -ac 1 taud_mic.wav";
                 process.StartInfo.RedirectStandardOutput = true;
                 process.StartInfo.RedirectStandardError = true;
                 process.StartInfo.UseShellExecute = false;
                 process.StartInfo.CreateNoWindow = true;
 
                 process.Start();
-
                 timer.Elapsed += (s, e) =>
                 {
                     process.Kill();
@@ -73,9 +74,9 @@ namespace TAO71.I4
             return bytes;
         }
 
-        public static byte[] GetSystemSoundData(int TimeToRecord)
+        public static byte[] GetSystemSoundData(double TimeToRecord)
         {
-            Timer timer = new Timer((double)TimeToRecord);
+            Timer? timer = new Timer(TimeToRecord);
             byte[] bytes = new byte[0];
 
             if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -104,14 +105,13 @@ namespace TAO71.I4
                 Process process = new Process();
 
                 process.StartInfo.FileName = "ffmpeg";
-                process.StartInfo.Arguments = "-f pulse -i default.monitor taud_sys.wav";
+                process.StartInfo.Arguments = "-f pulse -ar 16000 -af apad -ac 1 -i default.monitor taud_sys.wav";
                 process.StartInfo.RedirectStandardOutput = true;
                 process.StartInfo.RedirectStandardError = true;
                 process.StartInfo.UseShellExecute = false;
                 process.StartInfo.CreateNoWindow = true;
 
                 process.Start();
-
                 timer.Elapsed += (s, e) =>
                 {
                     process.Kill();

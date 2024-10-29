@@ -21,14 +21,14 @@ namespace TAO71.I4.PythonManager
         private static string Connected = "";
 
         // WebSocket variables
-        private static ClientWebSocket ClientSocket = null;
+        private static ClientWebSocket? ClientSocket = null;
 
         // Actions
-        public static Action<string> OnConnectingToServerAction = null;
-        public static Action<string> OnConnectedToServerAction = null;
-        public static Action OnDisconnectFromServerAction = null;
-        public static Action<byte[]> OnSendDataAction = null;
-        public static Action<byte[]> OnReceiveDataAction = null;
+        public static Action<string>? OnConnectingToServerAction = null;
+        public static Action<string>? OnConnectedToServerAction = null;
+        public static Action? OnDisconnectFromServerAction = null;
+        public static Action<byte[]>? OnSendDataAction = null;
+        public static Action<byte[]>? OnReceiveDataAction = null;
 
         // Other variables
         public static Config Conf = new Config();
@@ -146,7 +146,7 @@ namespace TAO71.I4.PythonManager
                 ArraySegment<byte> buffer = new ArraySegment<byte>(streamBytes);
 
                 // Write the result to the buffer, then to the stream
-                result = await ClientSocket.ReceiveAsync(buffer, CancellationToken.None);
+                result = await ClientSocket?.ReceiveAsync(buffer, CancellationToken.None);
                 stream.Write(buffer.Array, buffer.Offset, result.Count);
 
                 // Repeat until the end of message
@@ -176,7 +176,7 @@ namespace TAO71.I4.PythonManager
             }
 
             // Send the data
-            await ClientSocket.SendAsync(new ArraySegment<byte>(Data), WebSocketMessageType.Binary, true, CancellationToken.None);
+            await ClientSocket?.SendAsync(new ArraySegment<byte>(Data), WebSocketMessageType.Binary, true, CancellationToken.None);
 
             // Invoke the action
             if (OnSendDataAction != null)
@@ -318,7 +318,7 @@ namespace TAO71.I4.PythonManager
         public static bool IsConnected()
         {
             // Check if the user is connected to a server
-            return Connected.Trim().Length > 0 && ClientSocket.State == WebSocketState.Open;
+            return Connected.Trim().Length > 0 && ClientSocket?.State == WebSocketState.Open;
         }
 
         public static IEnumerable<Dictionary<string, object>> SendAndWaitForStreaming(string Data)
