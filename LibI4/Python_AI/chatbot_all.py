@@ -15,9 +15,10 @@ import Inference.Audio.tts as tts
 import Inference.Audio.ai_vocal_separator as uvr
 import Inference.Images.image_to_image as img2img
 import Inference.Text.ai_question_answering as qa
+import Inference.Mixed.multimodal_chatbot as mmcb
 import internet_connection as internet
 import ai_config as cfg
-import ai_conversation as conv
+import conversation_multimodal as conv
 import ai_memory as memories
 import chatbot_basics as cbbasics
 import PIL.Image as Image
@@ -115,6 +116,7 @@ def LoadAllModels() -> None:
     tts.LoadTTS()
     img2img.LoadModels()
     qa.LoadModels()
+    mmcb.LoadModels()
 
 def SearchOverInternet(Index: int, SearchPrompt: str, QuestionLength: int) -> str:
     # Set the limit
@@ -143,7 +145,7 @@ def SearchOverInternet(Index: int, SearchPrompt: str, QuestionLength: int) -> st
 
 def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, System: str, SearchOnInternet: bool = True) -> Iterator[str]:
     # Delete empty conversation
-    conv.ClearConversation("", "")
+    conv.GetConversationFromUser("", True).DeleteConversation("")
 
     # Search over internet
     internetResponse = SearchOverInternet(Index, SearchPrompt, len(Question)) if (SearchOnInternet) else SearchPrompt
@@ -300,28 +302,16 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     if (Service == "chatbot" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get chatbot response
         if (cfg.GetInfoOfTask(Service, Index)["allows_files"]):
-            # Use vision chatbot
-            pass        # TODO
+            # Use multimodal chatbot
+            textResponse = mmcb.Inference(Index, Prompt, Files, sp, Conversation)
         else:
             # Use normal chatbot
             textResponse = cb.Inference(Index, Prompt, sp, Conversation)
 
-        # Set the final response
-        finalResponse = ""
-
         # For every token
         for token in textResponse:
-            # Add to the final response
-            finalResponse += token
-
             # Return the token
             yield {"response": token, "files": []}
-
-        # Strip response and thinking
-        finalResponse = finalResponse.strip()
-
-        # Add the final response to the conversation
-        conv.AddToConversation(Conversation[0], Conversation[1], Prompt, finalResponse)
         
         # Return an empty response
         yield {"response": "", "files": []}

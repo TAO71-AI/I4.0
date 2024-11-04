@@ -7,12 +7,21 @@ import json
 import datetime
 import time
 import traceback
-import server_basics as sb
-import chatbot_all as cb
-import ai_config as cfg
-import ai_conversation as conv
-import ai_memory as memories
-import data_share as ds
+
+try:
+    # Try to import I4.0 utilities
+    import server_basics as sb
+    import chatbot_all as cb
+    import ai_config as cfg
+    import conversation_multimodal as conv
+    import ai_memory as memories
+    import data_share as ds
+except ImportError:
+    # Error importing utilities
+    traceback.print_exc()
+    print("Error importing I4.0 utilities, please make sure that your workdir is '/path/to/I4.0/LibI4/Python_AI/'.")
+
+    os._exit(1)
 
 # Variables
 max_buffer_length: int = 4096
@@ -26,7 +35,7 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 serverWS: websockets.WebSocketServerProtocol = None
-__version__: str = "v8.1.0"
+__version__: str = "v8.2.0"
 filesCreated: list[str] = []
 
 def CheckFiles() -> None:
@@ -223,7 +232,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
     # Add the files to the filesCreated
     for i in fs:
-        filesCreated.append(i)
+        filesCreated.append(i["data"])
 
     # For every token, return it to the client
     for token in response:
@@ -248,7 +257,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     # Remove all the generated files
     for i in fs:
         try:
-            filesCreated.remove(i)
+            filesCreated.remove(i["data"])
         except Exception as ex:
             print(f"Could not delete temporal file '{i}': {ex}.")
 
@@ -305,6 +314,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
     # Strip the full response
     fullResponse = fullResponse.strip()
+    convAssistantFiles = []
 
     # Search for commands for every line
     for line in fullResponse.split("\n"):
@@ -324,28 +334,34 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             cmd = line[6:].strip()
 
             # Generate the image and append it to the files
-            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, Files, AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, InternetMethod)
+            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, InternetMethod)
 
             # Append all the files
             for token in cmdResponse:
+                # Append the image to the convAssistantFiles
+                convAssistantFiles += token["files"]
+                
                 yield {"response": "\n[IMAGES]\n", "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse.replace(line, "")
+            fullResponse.replace(line, "[IMAGES]")
         elif (line.lower().startswith("(aga) ")):
             # Generate audio command
             # Get the prompt
             cmd = line[6:].strip()
 
             # Generate the audio and append it to the files
-            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, Files, AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, InternetMethod)
+            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, InternetMethod)
 
             # Append all the files
             for token in cmdResponse:
+                # Append the audio to the convAssistantFiles
+                convAssistantFiles += token["files"]
+
                 yield {"response": "\n[AUDIOS]\n", "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse.replace(line, "")
+            fullResponse.replace(line, "[AUDIOS]")
         elif (line.lower().startswith("(int) ")):
             # Internet search command
             # Get the prompt
@@ -372,10 +388,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 yield {"response": token, "files": [], "ended": False}
 
             # Remove the command from the response
-            fullResponse.replace(line, text)
-
-            # Add internet result to the conversation
-            conv.conversations[Key["key"]][Conversation][:-1]["content"] += "\n" + text
+            fullResponse.replace(line, line + "\n" + text)
         elif (line.lower().startswith("(mem) ")):
             # Save memory command
             # Get the prompt
@@ -383,9 +396,12 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
             # Save the memory
             memories.AddMemory(Key["key"], cmd)
+    
+    # Save messages in the conversation
+    conversation = conv.GetConversationFromUser(Key["key"] if (Key["key"] != None) else "", True)
 
-            # Remove the command from the response
-            fullResponse.replace(line, "")
+    conversation.AppendMessageToConversation_User(Conversation, Prompt, Files)
+    conversation.AppendMessageToConversation_Assistant(Conversation, fullResponse, convAssistantFiles)
 
 def CheckIfHasEnoughTokens(Service: str, Index: int, KeyTokens: float) -> bool:
     # Get price
@@ -605,6 +621,9 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 queue[service][index] = 0
             
             # Return the exception
+            print("Unknown exception found in a service.")
+            traceback.print_exc()
+
             yield {"response": f"ERROR: {ex}", "files": [], "ended": True}
     elif (service == "clear_my_history" or service == "clear_conversation"):
         # Clear the conversation
@@ -620,10 +639,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # The key is valid, delete the conversation
-            conv.ClearConversation(key["key"], conversation)
+            conv.GetConversationFromUser(key["key"], True).DeleteConversation(conversation)
         elif (not cfg.current_data["force_api_key"] or MinPriceForService("chatbot") <= 0):
             # The key is not valid, but the server says it's optional, so delete the conversation
-            conv.ClearConversation("", conversation)
+            conv.GetConversationFromUser("", True).DeleteConversation(conversation)
         else:
             # The key is invalid and it's required by the server, return an error
             yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True}
@@ -648,10 +667,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # Get the conversation of the key
-            cnv = conv.GetConversation(key["key"], conversation)
+            cnv = conv.GetConversationFromUser(key["key"], True).Conv[conversation]
         else:
             # Get the conversation from the empty key
-            cnv = conv.GetConversation("", conversation)
+            cnv = conv.GetConversationFromUser("", True).Conv[conversation]
 
         # Return the conversation
         yield {"response": json.dumps(cnv), "files": [], "ended": True}
@@ -669,10 +688,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # Get the conversations of the key
-            cnv = list(conv.conversations[key["key"]].keys())
+            cnv = list(conv.GetConversationFromUser(key["key"], True).Conv.keys())
         else:
             # Get the conversations from the empty key
-            cnv = list(conv.conversations[""].keys())
+            cnv = list(conv.GetConversationFromUser("", True).Conv.keys())
 
         # Return all the conversations
         yield {"response": json.dumps([cn for cn in cnv]), "files": [], "ended": True}
@@ -939,7 +958,7 @@ try:
         with open("BannedIPs.json", "r") as f:
             banned = cfg.JSONDeserializer(f.read())
             f.close()
-    
+
     # Load all the models
     cb.LoadAllModels()
 
@@ -953,6 +972,9 @@ except KeyboardInterrupt:
 
     # Save the configuration
     cfg.SaveConfig(cfg.current_data)
+
+    # Save the conversations
+    conv.SaveConversations()
 
     # Stop the DB
     sb.StopDB()

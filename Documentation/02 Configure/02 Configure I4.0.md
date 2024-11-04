@@ -328,11 +328,11 @@ Set the models and services available in the server.
     "ngl": (number to layers to load in the GPU),
     "batch": (tokens that will be processed in parallel),
     "model": (string for `g4a` and `hf`, list for `lcpp`),
-    "hf_load_mode": (quantization mode for `hf`),
+    "hf_dtype": (quantization mode for `hf`),
     "hf_low": (use a small, low-memory version),
     "temp": (temperature, recommended between 0 and 1),
     "device": "(device to use)",
-    "allows_files": false,
+    "allows_files": (true if the model is multimodal, false if not),
     "price": (price)
 }
 ```
@@ -385,8 +385,12 @@ Set the number of tokens to process in parallel.
 "MODEL REPOSITORY"
 ```
 
-##### HF load mode
-If set to *null* this will not quantize the model, if set to *false* this will use a 4-bit quantized version of the model, if set to *true* this will use a 8-bit quantized version of the model.
+##### HF dtype
+The precition to use with the model.
+Set to *null* to use default.
+
+The available precitions are: *fp64*, *fp32*, *fp16*, *bf16*, *i64*, *i32*, *i16*, *i8*.
+Recommended to use: *fp16* or *bf16*.
 
 This only works with the **hf** type.
 
@@ -403,7 +407,10 @@ More temperature will give more original responses, but the response might be ba
 Less temperature will give better responses, but they will be more repetitive.
 
 ##### Allows files
-Doesn't work for now, this is just a setting for future versions, where we will implement multimodal chatbots.
+Set to *true* if the model is multimodal; if it supports images, audios and/or videos as well as text.
+
+> [!WARNING]
+> Multimodal models are only supported if the chatbot type is *hf*.
 
 For now set this to *false*, it doesn't work for now.
 

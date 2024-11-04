@@ -1,6 +1,8 @@
 /*
  * REMEMBER: Both client-side code and server-side code can be updated and might not work with older versions.
  * TypeScript bindings have not been tested.
+ * 
+ * This bindings are now deprecated.
 */
 
 import WebSocket from "ws";
@@ -238,7 +240,8 @@ export async function *AutoGetResponseFromServer(Prompt: string, ServerService: 
     {
         const server = await FindFirstServer(ServerService);
         await ConnectByID(server);
-    } else if (!IsConnected())
+    }
+    else if (!IsConnected())
     {
         throw new Error("Please connect to a server first or set `ForceNoConnect` to false.");
     }
@@ -256,7 +259,8 @@ export async function *AutoGetResponseFromServer(Prompt: string, ServerService: 
             const fBase64 = (await proms.readFile(file)).toString('base64');
             files.push({ type: "image", data: fBase64 });
         }
-    } else if (ServerService == Service.SpeechToText)
+    }
+    else if (ServerService == Service.SpeechToText)
     {
         for (const file of Prompt.split(' ')) {
             if (!existsSync(file))
@@ -267,7 +271,8 @@ export async function *AutoGetResponseFromServer(Prompt: string, ServerService: 
             const fBase64 = (await proms.readFile(file)).toString('base64');
             files.push({ type: "audio", data: fBase64 });
         }
-    } else if (ServerService == Service.ImageGeneration)
+    }
+    else if (ServerService == Service.ImageGeneration)
     {
         let prompt: string;
         let nPrompt: string = "";
@@ -288,7 +293,8 @@ export async function *AutoGetResponseFromServer(Prompt: string, ServerService: 
             guidance: Conf.Text2Image_GuidanceScale,
             steps: Conf.Text2Image_Steps
         });
-    } else if (ServerService == Service.TTS)
+    }
+    else if (ServerService == Service.TTS)
     {
         Prompt = JSON.stringify({
             voice: Conf.TTS_Voice,
@@ -297,7 +303,8 @@ export async function *AutoGetResponseFromServer(Prompt: string, ServerService: 
             speed: Conf.TTS_Speed,
             text: Prompt
         });
-    } else if (ServerService == Service.RVC || ServerService == Service.UVR)
+    }
+    else if (ServerService == Service.RVC || ServerService == Service.UVR)
     {
         for (const file of Prompt.split(' '))
         {
@@ -317,20 +324,25 @@ export async function *AutoGetResponseFromServer(Prompt: string, ServerService: 
                 f0_up_key: Conf.RVC_F0,
                 protect: Conf.RVC_Protect
             });
-        } else
+        }
+        else
         {
             Prompt = JSON.stringify({
                 agg: Conf.UVR_Agg
             });
         }
-    } else if (ServerService == Service.Chatbot)
+    }
+    else if (ServerService == Service.Chatbot)
     {
         try
         {
             const jsonPrompt = JSON.parse(Prompt);
-            if (!jsonPrompt.prompt || !jsonPrompt.files) {
+
+            if (!jsonPrompt.prompt || !jsonPrompt.files)
+            {
                 throw new Error("Invalid keys.");
             }
+
             Prompt = jsonPrompt.prompt;
             files = jsonPrompt.files;
         } catch 

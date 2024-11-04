@@ -1,33 +1,27 @@
-# Import LLaMA-CPP-Python chatbot
-from llama_cpp import Llama
-import Inference.Text.Chatbot.lcpp as lcpp
-
-# Import GPT4All chatbot
-from gpt4all import GPT4All
-import Inference.Text.Chatbot.g4a as g4a
-
 # Import HuggingFace chatbot
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import Inference.Text.Chatbot.hf as hf
+from transformers import AutoModelForVision2Seq, AutoProcessor
+import Inference.Mixed.MultimodalChatbot.hf as hf
 
 # Import some other libraries
 from collections.abc import Iterator
 import psutil
+import os
+import base64
 
 # Import I4.0's utilities
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: list[tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str], dict[str, any]]] = []
+__models__: list[tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str], dict[str, any]]] = []
 
 def __load_model__(Index: int) -> None:
     info = cfg.GetInfoOfTask("chatbot", Index)
     device = cfg.GetAvailableGPUDeviceForTask("chatbot", Index) if (cfg.current_data["force_device_check"]) else info["device"]
-    tokenizer = None
+    processor = None
 
     # Check if the model allows files
-    if (info["allows_files"]):
-        # It does, return since this script doesn't allows files
+    if (not info["allows_files"]):
+        # It doesn't, return since this script ONLY allows files
         return
 
     # Get threads and check if the number of threads are valid
@@ -45,31 +39,17 @@ def __load_model__(Index: int) -> None:
         raise Exception("Invalid batch size.")
     
     # Set model
-    if (info["type"] == "gpt4all"):
-        # Use GPT4All
-        # Print loading message
-        print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
-
-        # Load the model
-        model = g4a.__load_model__(info, threads, device)
-    elif (info["type"] == "lcpp"):
-        # Use Llama-CPP-Python
-        # Print loading message
-        print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
-
-        # Load the model
-        model = lcpp.__load_model__(info, threads, device)
-    elif (info["type"] == "hf"):
+    if (info["type"] == "hf"):
         # Use Transformers
         # Load the model
-        model, tokenizer, dev = hf.__load_model__(info, Index)
+        model, processor, dev = hf.__load_model__(info, Index)
     else:
         raise Exception("Invalid chatbot type.")
     
     # Add the model to the list
-    if (tokenizer != None):
+    if (processor != None):
         # The model also includes a tokenizer, add it too
-        __models__.append(((model, tokenizer, dev), info))
+        __models__.append(((model, processor, dev), info))
     else:
         # Add the model only
         __models__.append((model, info))
@@ -84,48 +64,79 @@ def LoadModels() -> None:
         # Load the model and add it to the list of models
         __load_model__(i)
 
-def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: list[str] = ["", ""]) -> Iterator[str]:
+def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompts: list[str], Conversation: list[str] = ["", ""]) -> Iterator[str]:
     # Load the models
     LoadModels()
+
+    # Get the data from the files
+    files = []
+
+    for file in Files:
+        with open(file["data"], "rb") as f:
+            files.append({
+                "type": file["type"],
+                file["type"]: f"file://{os.getcwd()}/{file['data']}"
+                #file["type"]: f"data:{file['type']};base64,{base64.b64encode(f.read()).decode("utf-8")}"
+            })
 
     # Strip the prompt and set the system prompts
     Prompt = Prompt.strip()
     SystemPrompts = "".join(sp + "\n" for sp in SystemPrompts).strip()
 
     # Create the content for the model with the system prompts
-    contentForModel = [{"role": "system", "content": SystemPrompts}]
+    contentForModel = [{"role": "system", "content": [{"type": "text", "text": SystemPrompts}]}]
 
     # Get the conversation of the user
     conversation = conv.GetConversationFromUser(Conversation[0], True)
 
     # For each message in the conversation
     for msg in range(conversation.GetLengthOfConversation(Conversation[1])):
-        # Append the message in the old template to contentForModel
-        contentForModel.append(conversation.GetFromID_Old(Conversation[1], msg))
+        # Get the file data
+        msgFileData = conversation.GetFromID(Conversation[1], msg)
+        msgFiles = []
 
-    # Set the prompt that will be displayed (or passed to GPT4All)
-    contentToShow = f"### Conversation:\n"
+        for mF in msgFileData["content"]:
+            # Check if the file type
+            if (mF["type"] in ["audio", "image", "video"]):
+                # Add as a file
+                msgFiles.append({"type": mF["type"], mF["type"]: f"data:{mF['type']};base64,{mF[mF['type']][5:]}"})
+            else:
+                # Add as a text
+                msgFiles.append({"type": mF["type"], mF["type"]: mF[mF["type"]]})
+
+        # Append the message in the new template to contentForModel
+        contentForModel.append({
+            "role": msgFileData["role"],
+            "content": msgFiles
+        })
+
+    # Set the prompt that will be displayed
+    contentToShow = "### Conversation:\n"
 
     for msg in contentForModel:
+        # Find the text message in the conversation
+        textMsg = ""
+
+        # For each message in the content
+        for m in msg["content"]:
+            # Check if the type is text
+            if (m["type"] == "text"):
+                textMsg = m["text"]
+                break
+
         if (msg["role"] == "user"):
-            contentToShow += f"User: {msg['content']}\n"
+            contentToShow += f"User: {textMsg}\n"
         elif (msg["role"] == "assistant"):
-            contentToShow += f"Assistant: {msg['content']}\n"
-    
-    contentForModel.append({"role": "user", "content": Prompt})
+            contentToShow += f"Assistant: {textMsg}\n"
+
+    contentForModel.append({"role": "user", "content": [file for file in files] + [{"type": "text", "text": Prompt}]})
     contentToShow += f"\n\n### USER: {Prompt}"
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
     
     # Get the model type to use
-    if (type(__models__[Index][0]) == GPT4All):
-        # Use GPT4All
-        return g4a.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, contentToShow)
-    elif (type(__models__[Index][0]) == Llama):
-        # Use Llama-CPP-Python
-        return lcpp.__inference__(__models__[Index][0], __models__[Index][1], contentForModel)
-    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str]):
+    if (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForVision2Seq, AutoProcessor, str]):
         # Use HF
         return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][1], contentForModel)
     else:

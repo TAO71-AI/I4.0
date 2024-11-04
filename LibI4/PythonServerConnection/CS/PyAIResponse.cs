@@ -569,7 +569,7 @@ namespace TAO71.I4.PythonManager
                     Dictionary<string, object> jsonPrompt = JsonConvert.DeserializeObject<Dictionary<string, object>>(Prompt);
 
                     // Check keys
-                    if (!jsonPrompt.ContainsKey("prompt") || jsonPrompt.ContainsKey("files"))
+                    if (!jsonPrompt.ContainsKey("prompt") || !jsonPrompt.ContainsKey("files"))
                     {
                         // Return error
                         throw new Exception("Invalid keys.");
@@ -579,7 +579,7 @@ namespace TAO71.I4.PythonManager
                     Prompt = (string)jsonPrompt["prompt"];
 
                     // Set files
-                    files = (List<Dictionary<string, string>>)jsonPrompt["files"];
+                    files = JsonConvert.DeserializeObject<List<Dictionary<string, string>>>(JsonConvert.SerializeObject(jsonPrompt["files"]));
                 }
                 catch
                 {

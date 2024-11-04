@@ -20,6 +20,7 @@ def __load_model__(Config: dict[str, any], Threads: int, Device: str) -> Llama:
         verbose = False,
         n_gpu_layers = Config["ngl"] if (Device != "cpu") else 0,
         n_batch = Config["batch"],
+        n_ubatch = Config["batch"],
         chat_handler = hf_autotokenizer_to_chat_completion_handler(Config["model"][2]) if (len(Config["model"][2].strip()) > 0) else None,
         chat_format = Config["model"][3] if (len(Config["model"][2].strip()) == 0 and len(Config["model"][3].strip()) > 0) else None,
         logits_all = True,

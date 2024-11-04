@@ -36,6 +36,7 @@ llama-cpp-python
 stable-diffusion-cpp-python
 SpeechRecognition~=3.10.4
 openai-whisper>=20240930
+qwen-vl-utils
 git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
 pySpeakNG~=0.1.2
 #styletts2~=0.1.6

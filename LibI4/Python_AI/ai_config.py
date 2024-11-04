@@ -54,6 +54,7 @@ __config_data__: dict[str] = {
     },
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
+    "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
     "models": [                                                                                 # Models to be used.
         # Examples:
         #{
@@ -72,22 +73,35 @@ __config_data__: dict[str] = {
         #    ],
         #    "temp": 0.5,
         #    "device": "cpu",
-        #    "allows_files": false,
+        #    "allows_files": false,  # Doesn't support multimodal models
         #    "price": 20
         #},
         #{
         #    "service": "chatbot",
-        #    "type": "`gpt4all` or `hf`",
+        #    "type": "g4a",
         #    "ctx": 2048,
         #    "threads": -1,
         #    "ngl": -1,
         #    "batch": 8,
         #    "model": "MODEL REPOSITORY / MODEL PATH",
-        #    "hf_load_mode": None,          # False for 4-bit, True for 8-bit, None to deactivate this. Only works for the `hf` type.
+        #    "temp": 0.5,
+        #    "device": "cpu",
+        #    "allows_files": false,  # Doesn't support multimodal models
+        #    "price": 20
+        #},
+        #{
+        #    "service": "chatbot",
+        #    "type": "hf",
+        #    "ctx": 2048,
+        #    "threads": -1,
+        #    "ngl": -1,
+        #    "batch": 8,
+        #    "model": "MODEL REPOSITORY / MODEL PATH",
+        #    "hf_dtype": "",                # Set the torch.dtype to use (leave empty to set automatically).
         #    "hf_low": False,               # False loads the model normally, True if you have low specs.
         #    "temp": 0.5,
         #    "device": "cpu",
-        #    "allows_files": false,
+        #    "allows_files": (false or true),
         #    "price": 20
         #},
         #{
