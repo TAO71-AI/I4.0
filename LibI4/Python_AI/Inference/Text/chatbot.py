@@ -28,6 +28,7 @@ def __load_model__(Index: int) -> None:
     # Check if the model allows files
     if (info["allows_files"]):
         # It does, return since this script doesn't allows files
+        __models__.append(None)
         return
 
     # Get threads and check if the number of threads are valid
@@ -58,7 +59,7 @@ def __load_model__(Index: int) -> None:
         print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
 
         # Load the model
-        model = lcpp.__load_model__(info, threads, device)
+        model = lcpp.LoadModel(info, threads, device)
     elif (info["type"] == "hf"):
         # Use Transformers
         # Load the model

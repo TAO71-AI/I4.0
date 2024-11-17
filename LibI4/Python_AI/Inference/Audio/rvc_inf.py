@@ -10,6 +10,7 @@ import logging
 import os
 import requests
 import shutil
+import psutil
 
 # Import I4.0 utilities
 import ai_config as cfg
@@ -60,6 +61,7 @@ def __load_model__(ModelPath: str, ModelName: str, ModelIndex: str, ModelType: s
 
     # Get the available device for the model
     device = cfg.GetAvailableGPUDeviceForTask("rvc", Index)
+    info = cfg.GetInfoOfTask("rvc", Index)
 
     # Create the VC
     vc = VC()
@@ -78,6 +80,17 @@ def __load_model__(ModelPath: str, ModelName: str, ModelIndex: str, ModelType: s
 
     # Set the VC
     vc.get_vc(os.getcwd() + "/rvc_assets/" + ModelPath)
+
+    # Get threads and check if the number of threads are valid
+    if (info["threads"] == -1):
+        threads = psutil.cpu_count()
+    elif (info["threads"] <= 0 or info["threads"] > psutil.cpu_count()):
+        raise Exception("Invalid number of threads.")
+    else:
+        threads = info["threads"]
+    
+    # Set the threads number to use
+    vc.config.n_cpu = threads
 
     # Add to the models dict
     __models__[ModelName] = (vc, ModelIndex, ModelType)

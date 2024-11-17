@@ -51,6 +51,17 @@ img2img - Image to Image.
 qa - Question Answering.
 """
 
+__cache_files__: list[str] = []
+
+def EmptyCache() -> None:
+    # Delete all the cache files
+    for file in __cache_files__:
+        try:
+            os.remove(file)
+            __cache_files__.remove(file)
+        except:
+            print(f"Could not delete cache file '{file}'. Ignoring.")
+
 def __create_file__(FileType: str, FileData: bytes | str) -> str:
     # Set file extension
     if (FileType == "image"):
@@ -101,6 +112,7 @@ def GetServicesAndIndexes() -> dict[str, int]:
 def LoadAllModels() -> None:
     # Load all the models
     cb.LoadModels()
+    mmcb.LoadModels()
     tc.LoadModels()
     tns.LoadModels()
     tns.LoadClassifiers()
@@ -116,69 +128,50 @@ def LoadAllModels() -> None:
     tts.LoadTTS()
     img2img.LoadModels()
     qa.LoadModels()
-    mmcb.LoadModels()
 
-def SearchOverInternet(Index: int, SearchPrompt: str, QuestionLength: int) -> str:
-    # Set the limit
-    limit = cfg.GetInfoOfTask("chatbot", Index)["ctx"] - QuestionLength - 1
-    underLength = 12
-    maxResults = 5
-
-    # It's a search prompt
-    # Get first results
-    internetResults = internet.Search(SearchPrompt, maxResults)
-
-    # Read all websites
-    internetResponse = ""
-
-    for result in internetResults:
-        try:
-            internetResponse += internet.ReadTextFromWebsite(result, int(limit / maxResults), underLength) + "\n"
-        except:
-            print("Error reading a website.")
-        
-    # Apply limit
-    internetResponse = internet.__apply_limit_to_text__(internetResponse, limit, underLength)
-    
-    # Return the data
-    return internetResponse
-
-def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, System: str, SearchOnInternet: bool = True) -> Iterator[str]:
+def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str) -> Iterator[str]:
     # Delete empty conversation
     conv.GetConversationFromUser("", True).DeleteConversation("")
 
-    # Search over internet
-    internetResponse = SearchOverInternet(Index, SearchPrompt, len(Question)) if (SearchOnInternet) else SearchPrompt
-    response = ""
-    system2 = ""
+    # Get context size of the chatbot
+    results = 5
+    minLength = 10
+    maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]
+    maxLength = int(maxLength / 2) if (maxLength >= 8000) else maxLength - 1
 
-    # Check system
-    if (System == "qa" or System.startswith("qa-")):
-        # The system to use is the Question Answering only
-        modelResponse = MakePrompt(Index, json.dumps({
-            "context": internetResponse,
-            "question": Question
-        }), [], "qa", "", [], ["", ""], False)
-        system2 = System[2:]
-    elif (System == "chatbot" or System.startswith("chatbot-")):
-        # The system to use is the Chatbot only
-        modelResponse = MakePrompt(Index, "\nInternet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], False)
-        system2 = System[7:]
+    # Search over internet
+    if (SearchSystem == "websites" or SearchSystem == "website"):
+        # Search for websites
+        internetResults = internet.Search__Websites(SearchPrompt, results)
+        internetResponse = "".join([internet.ReadTextFromWebsite(result, maxLength, minLength) + "\n" for result in internetResults])
+    elif (SearchSystem == "answers" or SearchSystem == "answer"):
+        # Search for answers
+        internetResults = internet.Search__Answers(SearchPrompt, results)
+        internetResponse = "".join([res + "\n" for res in internetResults])
+
+        # Check if internet response length is 0
+        if (len(internetResponse.strip()) == 0):
+            # It is, get the response from the websites
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites")
+        else:
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
+    elif (SearchSystem == "news"):
+        # Search for news
+        internetResults = internet.Search__News(SearchPrompt, results)
+        internetResponse = "".join([res + "\n" for res in internetResults])
+
+        # Check if internet response length is 0
+        if (len(internetResponse.strip()) == 0):
+            # It is, get the response from the websites
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites")
+        else:
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
     else:
-        raise Exception("Invalid system.")
-    
-    if (system2.startswith("-")):
-        # Process again using the other system
-        system2 = system2[1:]
-        response = "".join([token["response"] for token in modelResponse])
-        
-        # Return the response
-        yield GetResponseFromInternet(response, Question, system2)
-        return
-    
-    # Yield every token
-    for token in modelResponse:
-        yield token["response"]
+        # Raise error
+        raise ValueError("Invalid SearchSystem. Use 'websites', 'answers' or 'news'.")
+
+    # Return the response
+    return MakePrompt(Index, "Internet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], [False, False])
 
 def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[dict[str]]:
     # Define I4.0's personality
@@ -285,6 +278,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
         # Replace from the list
         Files[Files.index(file)]["data"] = f
+        __cache_files__.append(f)
 
         # Check NSFW
         if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"):
@@ -491,6 +485,13 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     for file in Files:
         # Remove the file from the server
         os.remove(file["data"])
+        
+        try:
+            # Try to remove from the cache
+            __cache_files__.remove(file["data"])
+        except:
+            # Error removing the file
+            print(f"   Error removing from cache '{file['data']}'. Ignoring.")
 
 def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Get generated images

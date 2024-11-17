@@ -6,7 +6,6 @@ import Inference.Mixed.MultimodalChatbot.hf as hf
 from collections.abc import Iterator
 import psutil
 import os
-import base64
 
 # Import I4.0's utilities
 import ai_config as cfg
@@ -22,6 +21,7 @@ def __load_model__(Index: int) -> None:
     # Check if the model allows files
     if (not info["allows_files"]):
         # It doesn't, return since this script ONLY allows files
+        __models__.append(None)
         return
 
     # Get threads and check if the number of threads are valid

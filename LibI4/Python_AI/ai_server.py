@@ -35,8 +35,17 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 serverWS: websockets.WebSocketServerProtocol = None
-__version__: str = "v8.2.0"
-filesCreated: list[str] = []
+__version__: str = "v8.3.0"
+clearCacheTime: int = 300  # Every 5 minutes
+
+def __clear_cache_loop__() -> None:
+    # While the server in running
+    while (started):
+        # Wait the specified time
+        time.sleep(clearCacheTime)
+
+        # Clear the cache
+        cb.EmptyCache()
 
 def CheckFiles() -> None:
     # Check if some files exists
@@ -121,11 +130,6 @@ def __send_share_data__(Data: str | bytes) -> list[tuple[bool, str, websockets.W
     return results
 
 def __share_data__(UserPrompt: str, UserFiles: dict[str, list[str | bytes]], Response: str, ResponseFiles: dict[str, list[str | bytes]]) -> None:
-    # Check if the sharing of data is enabled
-    if (not cfg.current_data["allow_data_share"]):
-        # Stop if it's not
-        return
-    
     # Set some variables
     userFiles = []
     responseFiles = []
@@ -186,7 +190,7 @@ def __share_data__(UserPrompt: str, UserFiles: dict[str, list[str | bytes]], Res
     except Exception as ex:
         print(f"[DATA SHARE] Error sending to ALL servers. Info: {ex}")
 
-def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool, InternetMethod: str) -> Iterator[dict[str, any]]:
+def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool, AllowDataShare: bool) -> Iterator[dict[str, any]]:
     # Start timer
     timer = time.time()
 
@@ -228,23 +232,11 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts)
     fullResponse = ""
     responseFiles = []
-    am = False
-
-    # Add the files to the filesCreated
-    for i in fs:
-        filesCreated.append(i["data"])
 
     # For every token, return it to the client
     for token in response:
         # Make sure the response is a string
         token["response"] = str(token["response"])
-
-        # Remove some words from the response if the service is chatbot
-        if (Service == "chatbot" and (token["response"].strip().lower() == "assistant" or token["response"].strip().lower() == "assistant" or (token["response"].strip().lower() == ":" and am))):
-            am = True
-            continue
-        else:
-            am = False
 
         # Set the files, ending and full response
         fullResponse += str(token["response"])
@@ -253,13 +245,6 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
         # Yield the token
         yield token
-
-    # Remove all the generated files
-    for i in fs:
-        try:
-            filesCreated.remove(i["data"])
-        except Exception as ex:
-            print(f"Could not delete temporal file '{i}': {ex}.")
 
     # Set the timer
     timer = time.time() - timer
@@ -284,33 +269,34 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         "other": []
     }
 
-    sdUFiles = sdFilesTemplate.copy()
-    sdRFiles = sdFilesTemplate.copy()
+    if (AllowDataShare and cfg.current_data["allow_data_share"]):
+        sdUFiles = sdFilesTemplate.copy()
+        sdRFiles = sdFilesTemplate.copy()
 
-    # For every response file
-    for file in responseFiles:
-        if (file["type"] == "image"):
-            sdRFiles["images"].append(file["data"])
-        elif (file["type"] == "audio"):
-            sdRFiles["audios"].append(file["data"])
-        elif (file["type"] == "document"):
-            sdRFiles["documents"].append(file["data"])
-        else:
-            sdRFiles["other"].append(file["data"])
-            
-    # For every client file
-    for file in Files:
-        if (file["type"] == "image"):
-            sdUFiles["images"].append(file["data"])
-        elif (file["type"] == "audio"):
-            sdUFiles["audios"].append(file["data"])
-        elif (file["type"] == "document"):
-            sdUFiles["documents"].append(file["data"])
-        else:
-            sdUFiles["other"].append(file["data"])
+        # For every response file
+        for file in responseFiles:
+            if (file["type"] == "image"):
+                sdRFiles["images"].append(file["data"])
+            elif (file["type"] == "audio"):
+                sdRFiles["audios"].append(file["data"])
+            elif (file["type"] == "document"):
+                sdRFiles["documents"].append(file["data"])
+            else:
+                sdRFiles["other"].append(file["data"])
+                
+        # For every client file
+        for file in Files:
+            if (file["type"] == "image"):
+                sdUFiles["images"].append(file["data"])
+            elif (file["type"] == "audio"):
+                sdUFiles["audios"].append(file["data"])
+            elif (file["type"] == "document"):
+                sdUFiles["documents"].append(file["data"])
+            else:
+                sdUFiles["other"].append(file["data"])
 
-    # Share the data (if allowed by the server)
-    __share_data__(Prompt, sdUFiles, fullResponse, sdRFiles)
+        # Share the data (if allowed by the server)
+        __share_data__(Prompt, sdUFiles, fullResponse, sdRFiles)
 
     # Strip the full response
     fullResponse = fullResponse.strip()
@@ -334,7 +320,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             cmd = line[6:].strip()
 
             # Generate the image and append it to the files
-            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, InternetMethod)
+            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare)
 
             # Append all the files
             for token in cmdResponse:
@@ -344,14 +330,14 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 yield {"response": "\n[IMAGES]\n", "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse.replace(line, "[IMAGES]")
+            fullResponse = fullResponse.replace(line, "[IMAGES]")
         elif (line.lower().startswith("(aga) ")):
             # Generate audio command
             # Get the prompt
             cmd = line[6:].strip()
 
             # Generate the audio and append it to the files
-            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, InternetMethod)
+            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare)
 
             # Append all the files
             for token in cmdResponse:
@@ -361,7 +347,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 yield {"response": "\n[AUDIOS]\n", "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse.replace(line, "[AUDIOS]")
+            fullResponse = fullResponse.replace(line, "[AUDIOS]")
         elif (line.lower().startswith("(int) ")):
             # Internet search command
             # Get the prompt
@@ -370,25 +356,26 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             # Deserialize the prompt
             try:
                 cmd = cfg.JSONDeserializer(cmd)
+                cmdP = cmd["prompt"].strip()
                 cmdQ = cmd["question"].strip()
-                cmd = cmd["prompt"].strip()
+                cmdS = cmd["type"].strip()
             except:
                 # Could not deserialize the prompt, ignoring
                 continue
 
             # Generate the image and append it to the files
-            cmdResponse = cb.GetResponseFromInternet(Index, cmd, cmdQ, InternetMethod)
+            cmdResponse = cb.GetResponseFromInternet(Index, cmdP, cmdQ, cmdS)
             text = ""
 
             # Yield another line
             yield {"response": "\n", "files": [], "ended": False}
 
             for token in cmdResponse:
-                text += token
-                yield {"response": token, "files": [], "ended": False}
+                text += token["response"]
+                yield {"response": token["response"], "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse.replace(line, line + "\n" + text)
+            fullResponse = fullResponse.replace(line, line + "\n" + text)
         elif (line.lower().startswith("(mem) ")):
             # Save memory command
             # Get the prompt
@@ -397,11 +384,12 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             # Save the memory
             memories.AddMemory(Key["key"], cmd)
     
-    # Save messages in the conversation
-    conversation = conv.GetConversationFromUser(Key["key"] if (Key["key"] != None) else "", True)
+    # Save messages in the conversation if the service is a chatbot
+    if (Service == "chatbot"):
+        conversation = conv.GetConversationFromUser(Key["key"] if (Key["key"] != None) else "", True)
 
-    conversation.AppendMessageToConversation_User(Conversation, Prompt, Files)
-    conversation.AppendMessageToConversation_Assistant(Conversation, fullResponse, convAssistantFiles)
+        conversation.AppendMessageToConversation_User(Conversation, Prompt, Files)
+        conversation.AppendMessageToConversation_Assistant(Conversation, fullResponse, convAssistantFiles)
 
 def CheckIfHasEnoughTokens(Service: str, Index: int, KeyTokens: float) -> bool:
     # Get price
@@ -509,14 +497,14 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except:
         # If an error occurs, set to default
         useDefSystemPrompts = None
-        
+    
     try:
-        # Try to get the internet method
-        internetMethod = Prompt["Internet"]
+        # Try to get the data share
+        allowDataShare = Prompt["DataShare"]
     except:
         # If an error occurs, set to default
-        internetMethod = "qa"
-    
+        allowDataShare = True
+
     try:
         # Try to get the index of the model to use
         index = Prompt["Index"]
@@ -579,7 +567,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Check files length and service
             if (len(files) == 0 or service == "chatbot"):
                 # Execute the service with all the files
-                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, internetMethod)
+                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare)
 
                 # For each token
                 for inf_t in inf:
@@ -588,7 +576,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # For each file
                 for file in files:
                     # Execute the service with the current file
-                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, internetMethod)
+                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare)
 
                     # For each token
                     for inf_t in inf:
@@ -805,6 +793,12 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         else:
             # Does not contain a description, send an empty message
             yield {"response": "", "files": [], "ended": True}
+    elif (service == "is_chatbot_multimodal"):
+        # Check if the chatbot is multimodal
+        try:
+            yield {"response": str(cfg.GetInfoOfTask("chatbot", index)["allows_files"]), "files": [], "ended": True}
+        except Exception as ex:
+            {"response": f"ERROR: {ex}", "files": [], "ended": True}
     else:
         yield {"response": "ERROR: Invalid command.", "files": [], "ended": True}
 
@@ -835,15 +829,22 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
             
         # Substract 1 to the queue
         queue[Prompt["Service"]][index] -= 1
+
+        try:
+            # Try to send the closed message
+            await Client.send(json.dumps({
+                "response": "",
+                "files": [],
+                "ended": True
+            }).encode("utf-8"))
+        except:
+            # Error, ignore
+            pass
     
     # Update the server
     UpdateServer()
 
 async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
-    async def _run_task_():
-        task = asyncio.create_task(ExecuteServiceAndSendToClient(Client, prompt))
-        await task
-
     # Wait for receive
     received = await Client.recv()
 
@@ -876,10 +877,7 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
         }).encode("utf-8"))
 
     # Execute service and send data
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-
-    thread = threading.Thread(target = lambda: asyncio.run(_run_task_()))
+    thread = threading.Thread(target = lambda: asyncio.run(ExecuteServiceAndSendToClient(Client, prompt)))
     thread.start()
 
 async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
@@ -938,6 +936,10 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
 def StartServer() -> None:
     global serverWS
 
+    # Create thread for the cache cleanup
+    cacheThread = threading.Thread(target = __clear_cache_loop__)
+    cacheThread.start()
+
     # Set the IP
     ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
 
@@ -979,12 +981,8 @@ except KeyboardInterrupt:
     # Stop the DB
     sb.StopDB()
 
-    # Delete all the saved files
-    for f in filesCreated:
-        try:
-            os.remove(f)
-        except:
-            print(f"   Error deleting file '{f}'. Ignoring.")
+    # Delete the cache
+    cb.EmptyCache()
 
     # Close
     started = False

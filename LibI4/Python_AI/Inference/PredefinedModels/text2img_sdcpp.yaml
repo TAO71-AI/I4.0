@@ -1,0 +1,78 @@
+flux.1-schnell:
+    # License: Apache 2.0
+    type: sdcpp-flux
+    repo: second-state/FLUX.1-schnell-GGUF
+    model:
+        repo: city96/FLUX.1-schnell-gguf
+        q2_k: flux1-schnell-Q2_K.gguf      # 4.01 GB (very bad quality)
+        q3_k_s: flux1-schnell-Q3_K_S.gguf  # 5.21 GB (bad quality)
+        q4_0: flux1-schnell-Q4_0.gguf      # 6.77 GB (good for low RAM)
+        q4_1: flux1-schnell-Q4_1.gguf      # 7.51 GB (good for low RAM)
+        q4_k_s: flux1-schnell-Q4_K_S.gguf  # 6.78 GB (good for low RAM, better than Q4_0 and Q4_1)
+        q5_0: flux1-schnell-Q5_0.gguf      # 8.25 GB (high quality, recommended)
+        q5_1: flux1-schnell-Q5_1.gguf      # 8.99 GB (high quality, recommended)
+        q5_k_s: flux1-schnell-Q5_K_S.gguf  # 8.26 GB (high quality, recommended, better than Q5_0 and Q5_1)
+        q6_k: flux1-schnell-Q6_K.gguf      # 9.83 GB (very high quality, recommended)
+        q8_0: flux1-schnell-Q8_0.gguf      # 12.7 GB (similar quality to F16, recommended)
+        f16: flux1-schnell-F16.gguf        # 23.8 GB (best quality, recommended)
+        default: f16
+    vae:
+        repo: null
+        f32: ae.safetensors                # 0.34 GB (recommended)
+        f16: ae-f16.gguf                   # 0.17 GB (good for low RAM)
+        default: f32
+    clip_l:
+        repo: null
+        q8_0: clip_l-Q8_0.gguf             # 0.13 GB (good for low RAM)
+        f16: clip_l.safetensors            # 0.25 GB (recommended)
+        default: f16
+    t5xxl:
+        repo: null
+        q2_k: t5xxl-Q2_K.gguf              # 1.61 GB (very bad quality)
+        q3_k: t5xxl-Q3_K.gguf              # 2.10 GB (bad quality)
+        q4_0: t5xxl-Q4_0.gguf              # 2.75 GB (good for low RAM)
+        q4_k: t5xxl-Q4_K.gguf              # 2.75 GB (recommended, better than Q4_0)
+        q5_0: t5xxl-Q5_0.gguf              # 3.36 GB (high quality, recommended)
+        q5_1: t5xxl-Q5_1.gguf              # 3.67 GB (high quality, recommended)
+        q8_0: t5xxl-Q8_0.gguf              # 5.20 GB (similar quality to F16, recommended)
+        f16: t5xxl_fp16.safetensors        # 9.79 GB (best quality, recommended)
+        default: f16
+
+flux.1-dev:
+    # License: Flux-1-dev-non-commercial-license
+    type: sdcpp-flux
+    repo: second-state/FLUX.1-dev-GGUF
+    model:
+        repo: city96/FLUX.1-dev-gguf
+        q2_k: flux1-dev-Q2_K.gguf          # 4.03 GB (very bad quality)
+        q3_k_s: flux1-dev-Q3_K_S.gguf      # 5.23 GB (bad quality)
+        q4_0: flux1-dev-Q4_0.gguf          # 6.79 GB (good for low RAM)
+        q4_1: flux1-dev-Q4_1.gguf          # 7.53 GB (good for low RAM)
+        q4_k_s: flux1-dev-Q4_K_S.gguf      # 6.81 GB (good for low RAM, better than Q4_0 and Q4_1)
+        q5_0: flux1-dev-Q5_0.gguf          # 8.27 GB (high quality, recommended)
+        q5_1: flux1-dev-Q5_1.gguf          # 9.01 GB (high quality, recommended)
+        q5_k_s: flux1-dev-Q5_K_S.gguf      # 8.29 GB (high quality, recommended, better than Q5_0 and Q5_1)
+        q6_k: flux1-dev-Q6_K.gguf          # 9.86 GB (very high quality, recommended)
+        q8_0: flux1-dev-Q8_0.gguf          # 12.7 GB (similar quality to F16, recommended)
+        f16: flux1-dev-F16.gguf            # 23.8 GB (best quality, recommended)
+        default: f16
+    vae:
+        repo: null
+        f32: ae.safetensors                # 0.34 GB (recommended)
+        default: f32
+    clip_l:
+        repo: null
+        q8_0: clip_l-Q8_0.gguf             # 0.13 GB (good for low RAM)
+        f16: clip_l.safetensors            # 0.25 GB (recommended)
+        default: f16
+    t5xxl:
+        repo: null
+        q2_k: t5xxl-Q2_K.gguf              # 1.61 GB (very bad quality)
+        q3_k: t5xxl-Q3_K.gguf              # 2.10 GB (bad quality)
+        q4_0: t5xxl-Q4_0.gguf              # 2.75 GB (good for low RAM)
+        q4_k: t5xxl-Q4_K.gguf              # 2.75 GB (recommended, better than Q4_0)
+        q5_0: t5xxl-Q5_0.gguf              # 3.36 GB (high quality, recommended)
+        q5_1: t5xxl-Q5_1.gguf              # 3.67 GB (high quality, recommended)
+        q8_0: t5xxl-Q8_0.gguf              # 5.20 GB (similar quality to F16, recommended)
+        f16: t5xxl_fp16.safetensors        # 9.79 GB (best quality, recommended)
+        default: f16

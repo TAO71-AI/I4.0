@@ -89,11 +89,11 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         plugins_available = True
 
     if (cfg.current_data["enabled_plugins"].count("internet") > 0):
-        msg += "To search over the internet, write `(int) {\"prompt\": \"PROMPT\", \"question\": \"QUESTION\"}` and follow these steps:\n"
-        msg += "> Replace `PROMPT` with what you want to search on Google, examples of prompts: \"cats\", \"AI\", \"[SONG NAME HERE] lyrics\", \"[VIDEOGAME TITLE HERE]\", etc.\n"
-        msg += "> Replace `QUESTION` with the question to respond, examples of questions: \"what are cats?\", \"what's AI?\", \"what are the lyrics of the song?\", \"what's this game about?\", etc.\n"
+        msg += "To search something on the internet, write `(int) {\"prompt\": \"PROMPT\", \"question\": \"QUESTION\", \"type\": \"TYPE\"}` and follow these steps:\n"
+        msg += "> Replace `PROMPT` with what you want to search.\n"
+        msg += "> Replace `QUESTION` with the question to respond.\n"
+        msg += "> Replace `TYPE` with the type of content to search. The available types are: 'websites', 'answers', 'news'.\n"
         msg += "> You can use this tool to search information in real time and to search something you're not sure about or don't know about.\n"
-        msg += "> The `(int)` command MUST be in a single line and MUST be in the JSON format.\n"
         plugins_available = True
 
     if (cfg.current_data["enabled_plugins"].count("memory") > 0):
@@ -103,7 +103,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         plugins_available = True
     
     if (plugins_available):
-        msg += "\nThese tools only works if you write the commands in an empty line.\nYou can use the same tool multiple times.\nYou can use multiple tools at the same time.\n"
+        msg += "\nThese commands must be written using only one new, empty, line.\n"
     else:
         msg = msg[:-9]
     

@@ -223,61 +223,6 @@ The maximum time to connect to each server of the **data_share_servers**.
 ### Parameter type
 float
 
-## Discord bot
-> [!WARNING]
-> This is still under creation, this doesn't work for now.
-
-### Description
-```json
-"discord_bot": {
-    "token": "",
-    "server_api_key": "",
-    "allow_rfiles": true,
-    "allow_sfiles": true,
-    "welcome": {
-        "preprogrammed": true,
-        "preprogrammed_messages": [
-            "Hello $USER! How are you?",
-            "Welcome, $USER! Tell me about you!"
-        ],
-        "enabled": true,
-    },
-    "auto_mod": false,
-    "mods_role": "",
-    "allow_vc": true,
-    "prefix": "!i4",
-}
-```
-This is the configuration for the I4.0's discord bot.
-
-Set the API key of the discord bot at the **token** string.
-
-Set the API key of the I4.0 server at the **server_api_key** string.
-
-Allow receive files from discord by setting **allow_rfiles** to true.
-
-Allow sending files to discord by setting **allow_sfiles** to true.
-
-Allow sending pre-programmed welcome messages to new users without processing them by setting **welcome > preprogrammed** to true.
-
-Set the pre-programmed messages you want to send to the new users at **welcome > preprogrammed_messages**. This will choose a random message from that list.
-
-Allow sending welcome messages to new users by setting **welcome > enabled** to true.
-
-Allow the AI to read and moderate the messages of the server by setting **auto_mod** to true.
-
-Set the moderators role for contact with moderators at the **mods_role** string.
-
-Allow the AI to join to voice chats by setting **allow_vc** to true.
-
-Set the command prefix to chat with I4.0 at the **prefix** string.
-
-> [!NOTE]
-> Most of this parameters can be changed for a specific server by the server owner or moderators.
-
-### Parameter type
-dictionary
-
 ## Force device check
 ### Description
 ```json
@@ -306,6 +251,9 @@ integer
 "models": []
 ```
 Set the models and services available in the server.
+
+### Parameter type
+list
 
 ### Examples
 #### General template
@@ -342,7 +290,7 @@ Set the models and services available in the server.
 **output**: text
 
 ##### Types
-**lcpp** - Use LLaMA-CPP-Python, recommended because of it's speed and GGUF support, but may give bad results.
+**lcpp** - Use LLaMA-CPP-Python, recommended because of it's speed and GGUF support.
 
 **g4a** - Use GPT4All, recommended because of it's good results and GGUF support, but may be slow, specially with long conversations.
 
@@ -370,8 +318,15 @@ Set the number of tokens to process in parallel.
 [
     "MODEL REPOSITORY (leave empty if you want to use a local file)",
     "MODEL FILE NAME (if you're using a repository) or MODEL PATH (if you want to use a local file)",
-    "TEMPLATE REPOSITORY (to use the chat template of a tokenizer, leave empty if you want to set a custom chat template)",
-    "CHAT FORMAT (to use a custom chat template, leave empty if you're using the `TEMPLATE REPOSITORY` of if you want to use the model's tokenizer chat template, but this might fail in most old GGUF models)"
+    "CHAT FORMAT (chat template, optional but recommended)"
+]
+```
+
+Alternatively, you can specify a predefined model and quant to use.
+```json
+[
+    "MODEL NAME (from LibI4/Python_AI/Inference/PredefinedModels/chatbot_nf_lcpp.yaml)",
+    "QUANT TO USE"
 ]
 ```
 
@@ -384,15 +339,6 @@ Set the number of tokens to process in parallel.
 ```json
 "MODEL REPOSITORY"
 ```
-
-##### HF dtype
-The precition to use with the model.
-Set to *null* to use default.
-
-The available precitions are: *fp64*, *fp32*, *fp16*, *bf16*, *i64*, *i32*, *i16*, *i8*.
-Recommended to use: *fp16* or *bf16*.
-
-This only works with the **hf** type.
 
 ##### HF low
 Set to *true* if you want the model to use less CPU and RAM, not recommended unless you have a VERY limited device.
@@ -658,8 +604,8 @@ Set to **-1** to use all the threads of the CPU.
     "service": "speech2text",
     "type": "(type to use)",
     "model": "(model name [for whisper only] or model repository [for hf only])",
-    "batch": 8,
-    "temp": 0.5,
+    "batch": (batch size),
+    "temp": (temperature),
     "device": "(device to use)",
     "price": (price)
 }
@@ -752,10 +698,8 @@ Set the language of the model, both the language that the input text must be and
 ```json
 "description": "(description of the model and service that the user can see)",
 "model_info": "(extra information about the model that will be applied to the system prompts of the model)"
+"dtype": "(dtype for the model, works for all the templates, except for: chatbots that aren't of the `hf` type, RVC, UVR, speech2text that aren't of the `hf` type)"
 ```
 
 > [!NOTE]
-> This parameters are optional.
-
-### Parameter type
-list
+> These parameters are optional.

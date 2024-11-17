@@ -5,95 +5,7 @@ from PIL.Image import Image
 
 # Import I4.0's utilities
 import ai_config as cfg
-
-PretrainedModels = {
-    "flux.1-schnell": {
-        "type": "sdcpp-flux",
-        "repo": "second-state/FLUX.1-schnell-GGUF",
-        "model": {
-            "repo": "city96/FLUX.1-schnell-gguf",
-            "q2_k": "flux1-schnell-Q2_K.gguf",
-            "q3_k_s": "flux1-schnell-Q3_K_S.gguf",
-            "q4_0": "flux1-schnell-Q4_0.gguf",
-            "q4_1": "flux1-schnell-Q4_1.gguf",
-            "q4_k_s": "flux1-schnell-Q4_K_S.gguf",
-            "q5_0": "flux1-schnell-Q5_0.gguf",
-            "q5_1": "flux1-schnell-Q5_1.gguf",
-            "q5_k_s": "flux1-schnell-Q5_K_S.gguf",
-            "q6_k": "flux1-schnell-Q6_K.gguf",
-            "q8_0": "flux1-schnell-Q8_0.gguf",
-            "f16": "flux1-schnell-F16.gguf",
-            "default": "f16"
-        },
-        "vae": {
-            "repo": None,
-            "f32": "ae.safetensors",
-            "f16": "ae-f16.gguf",
-            "default": "f32"
-        },
-        "clip_l": {
-            "repo": None,
-            "q8_0": "clip_l-Q8_0.gguf",
-            "f16": "clip_l.safetensors",
-            "default": "f16"
-        },
-        "t5xxl": {
-            "repo": None,
-            "q2_k": "t5xxl-Q2_K.gguf",
-            "q3_k": "t5xxl-Q3_K.gguf",
-            "q4_0": "t5xxl-Q4_0.gguf",
-            "q4_k": "t5xxl-Q4_K.gguf",
-            "q5_0": "t5xxl-Q5_0.gguf",
-            "q5_1": "t5xxl-Q5_1.gguf",
-            "q8_0": "t5xxl-Q8_0.gguf",
-            "f16": "t5xxl_fp16.safetensors",
-            "default": "f16"
-        }
-    },
-    "flux.1-dev": {
-        "type": "sdcpp-flux",
-        "repo": "second-state/FLUX.1-dev-GGUF",
-        "model": {
-            "repo": "city96/FLUX.1-dev-gguf",
-            "q2_k": "flux1-dev-Q2_K.gguf",
-            "q3_k_s": "flux1-dev-Q3_K_S.gguf",
-            "q4_0": "flux1-dev-Q4_0.gguf",
-            "q4_1": "flux1-dev-Q4_1.gguf",
-            "q4_k_s": "flux1-dev-Q4_K_S.gguf",
-            "q5_0": "flux1-dev-Q5_0.gguf",
-            "q5_1": "flux1-dev-Q5_1.gguf",
-            "q5_k_s": "flux1-dev-Q5_K_S.gguf",
-            "q6_k": "flux1-dev-Q6_K.gguf",
-            "q8_0": "flux1-dev-Q8_0.gguf",
-            "f16": "flux1-dev-F16.gguf",
-            "default": "f16"
-        },
-        "vae": {
-            "repo": None,
-            "f32": "ae.safetensors",
-            "f16": "ae-f16.gguf",
-            "default": "f32"
-        },
-        "clip_l": {
-            "repo": None,
-            "q8_0": "clip_l-Q8_0.gguf",
-            "f16": "clip_l.safetensors",
-            "default": "f16"
-        },
-        "t5xxl": {
-            "repo": None,
-            "q2_k": "t5xxl-Q2_K.gguf",
-            "q3_k": "t5xxl-Q3_K.gguf",
-            "q4_0": "t5xxl-Q4_0.gguf",
-            "q4_k": "t5xxl-Q4_K.gguf",
-            "q5_0": "t5xxl-Q5_0.gguf",
-            "q5_1": "t5xxl-Q5_1.gguf",
-            "q8_0": "t5xxl-Q8_0.gguf",
-            "f16": "t5xxl_fp16.safetensors",
-            "default": "f16"
-        }
-    }
-}
+import Inference.PredefinedModels.models as models
 
 def __load_model__(Type: str, DiffusionModel: str, VAE: str, ClipL: str, T5XXL: str, Threads: int) -> StableDiffusion:
     # Print loading message
@@ -151,7 +63,7 @@ def __get_quantization_and_repo_from_dict__(Dict: dict[str, any], DesiredQuantiz
         # Check that the quantization exists
         if (list(Dict.keys()).count(quantization) == 0):
             # It doesn't exists
-            raise ValueError(f"Invalid quantization '{DesiredQuantization}'; '{quantization}'. Available quantizations are: {[i for i in list(Dict.keys()) if i != 'repo' and i != 'default']}.")
+            raise ValueError(f"Invalid quantization '{DesiredQuantization}'; '{quantization}'. Available quantizations are: {[i for i in list(Dict.keys()) if (i != 'repo' and i != 'default')]}.")
     else:
         # Use the desired quantization
         quantization = Dict[DesiredQuantization]
@@ -167,20 +79,20 @@ def __get_model_from_pretrained__(Name: str, ModelQuantization: str, VaeQuantiza
     T5XXLQuanization = T5XXLQuanization.lower().strip()
 
     # Check if the model exists in the list
-    if (list(PretrainedModels.keys()).count(Name) == 0):
-        raise ValueError(f"Invalid model name. Available models are: {list(PretrainedModels.keys())}.")
+    if (list(models.Text2Image_SDCPP.keys()).count(Name) == 0):
+        raise ValueError(f"Invalid model name. Available models are: {list(models.Text2Image_SDCPP.keys())}.")
     
     # Model
-    modelQ, modelR = __get_quantization_and_repo_from_dict__(PretrainedModels[Name]["model"], ModelQuantization, PretrainedModels[Name]["repo"])
+    modelQ, modelR = __get_quantization_and_repo_from_dict__(models.Text2Image_SDCPP[Name]["model"], ModelQuantization, models.Text2Image_SDCPP[Name]["repo"])
 
     # VAE
-    vaeQ, vaeR = __get_quantization_and_repo_from_dict__(PretrainedModels[Name]["vae"], VaeQuantization, PretrainedModels[Name]["repo"])
+    vaeQ, vaeR = __get_quantization_and_repo_from_dict__(models.Text2Image_SDCPP[Name]["vae"], VaeQuantization, models.Text2Image_SDCPP[Name]["repo"])
 
     # Clip L
-    cliplQ, cliplR = __get_quantization_and_repo_from_dict__(PretrainedModels[Name]["clip_l"], ClipLQuanization, PretrainedModels[Name]["repo"])
+    cliplQ, cliplR = __get_quantization_and_repo_from_dict__(models.Text2Image_SDCPP[Name]["clip_l"], ClipLQuanization, models.Text2Image_SDCPP[Name]["repo"])
 
     # T5XXL
-    t5xxlQ, t5xxlR = __get_quantization_and_repo_from_dict__(PretrainedModels[Name]["t5xxl"], T5XXLQuanization, PretrainedModels[Name]["repo"])
+    t5xxlQ, t5xxlR = __get_quantization_and_repo_from_dict__(models.Text2Image_SDCPP[Name]["t5xxl"], T5XXLQuanization, models.Text2Image_SDCPP[Name]["repo"])
 
     # Download everything
     modelPath = hf_hub_download(modelR, modelQ)
@@ -189,7 +101,7 @@ def __get_model_from_pretrained__(Name: str, ModelQuantization: str, VaeQuantiza
     t5xxlPath = hf_hub_download(t5xxlR, t5xxlQ)
 
     # Return the data
-    return (PretrainedModels[Name]["type"], modelPath, vaePath, cliplPath, t5xxlPath)
+    return (models.Text2Image_SDCPP[Name]["type"], modelPath, vaePath, cliplPath, t5xxlPath)
 
 def __load_predefined_model__(Index: int, Threads: int) -> StableDiffusion:
     # Get the model path

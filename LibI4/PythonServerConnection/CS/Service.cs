@@ -25,14 +25,6 @@ namespace TAO71.I4.PythonManager
         None = -1
     }
 
-    public enum InternetSearchOptions
-    {
-        QuestionAnswering = 0,                  // Fast, but worst results.
-        Chatbot = 1,                            // Slow, but better results.
-        QuestionAnswering_Chatbot = 2,          // Very slow, uses the question answering, returning a "worse" response, but makes it better using the chatbot later.
-        Chatbot_QuestionAnswering = 3           // Very slow, uses the chatbot, returning a "better" response, and the question answering responses with the important info.
-    }
-
     public static class ServiceManager
     {
         public static Service FromString(string ServiceName)
@@ -135,9 +127,9 @@ namespace TAO71.I4.PythonManager
             }
         }
 
-        public static int ToInt(Service ServiceName)
+        public static int ToInt(Service Serv)
         {
-            return (int)ServiceName;
+            return (int)Serv;
         }
 
         public static Service AutoConvert(string ServiceName)
@@ -157,87 +149,9 @@ namespace TAO71.I4.PythonManager
             return FromInt(ServiceID);
         }
 
-        public static string AutoConvert(Service ServiceName)
+        public static string AutoConvert(Service Serv)
         {
-            return ToString(ServiceName);
-        }
-    }
-
-    public static class InternetSearchManager
-    {
-        public static InternetSearchOptions FromString(string TypeName)
-        {
-            TypeName = TypeName.ToLower();
-
-            switch (TypeName)
-            {
-                case "qa":
-                    return InternetSearchOptions.QuestionAnswering;
-                case "chatbot":
-                    return InternetSearchOptions.Chatbot;
-                case "qa-chatbot":
-                    return InternetSearchOptions.QuestionAnswering_Chatbot;
-                case "chatbot-qa":
-                    return InternetSearchOptions.Chatbot_QuestionAnswering;
-            }
-
-            throw new Exception("Could not parse internet search options.");
-        }
-
-        public static string ToString(InternetSearchOptions TypeName)
-        {
-            switch (TypeName)
-            {
-                case InternetSearchOptions.QuestionAnswering:
-                    return "qa";
-                case InternetSearchOptions.Chatbot:
-                    return "chatbot";
-                case InternetSearchOptions.QuestionAnswering_Chatbot:
-                    return "qa-chatbot";
-                case InternetSearchOptions.Chatbot_QuestionAnswering:
-                    return "chatbot-qa";
-            }
-
-            throw new Exception("Could not parse internet search options.");
-        }
-
-        public static InternetSearchOptions FromInt(int ServiceID)
-        {
-            try
-            {
-                return (InternetSearchOptions)ServiceID;
-            }
-            catch
-            {
-                throw new Exception("Could not fing internet search option with the ID '" + ServiceID.ToString() + "'.");
-            }
-        }
-
-        public static int ToInt(InternetSearchOptions ServiceName)
-        {
-            return (int)ServiceName;
-        }
-
-        public static InternetSearchOptions AutoConvert(string ServiceName)
-        {
-            try
-            {
-                return FromInt(Convert.ToInt32(ServiceName));
-            }
-            catch
-            {
-                return FromString(ServiceName);
-            }
-        }
-
-        public static InternetSearchOptions AutoConvert(int ServiceID)
-        {
-            return FromInt(ServiceID);
-        }
-
-        public static string AutoConvert(InternetSearchOptions ServiceName)
-        {
-            return ToString(ServiceName);
+            return ToString(Serv);
         }
     }
 }

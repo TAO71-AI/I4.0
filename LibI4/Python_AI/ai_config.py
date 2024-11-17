@@ -34,24 +34,6 @@ __config_data__: dict[str] = {
     "allow_data_share": True,                                                                   # Allows data sharing to TAO71's servers to make a better dataset for I4.0 and train AI models on that dataset (shares the user's prompt [files included], service used and the server's response and it's 100% anonymous).
     "data_share_servers": ["tao71.sytes.net"],                                                  # List of servers to share the data.
     "data_share_timeout": 2.5,                                                                  # Seconds to wait per server response on data share.
-    "discord_bot": {                                                                            # Discord bot configuration. Most of this settings are server-configurable by ONLY the server's owner. This is just the default settings if not configured.
-        "token": "",                                                                                # Discord's API key.
-        "server_api_key": "",                                                                       # I4.0 server's API key.
-        "allow_rfiles": True,                                                                       # Allows the Discord bot to receive files (required for file2any services).
-        "allow_sfiles": True,                                                                       # Allows the Discord bot to send files (required for any2file) services.
-        "welcome": {                                                                                # The Discord bot will send a welcome message for any new user.
-            "preprogrammed": True,                                                                      # The bot will send a random-selected pre-programmed message instead of processing a prompt.
-            "preprogrammed_messages": [                                                                 # Preprogrammed welcome messages.
-                "Hello $USER! How are you?",
-                "Welcome, $USER! Tell me about you!"
-            ],
-            "enabled": True,                                                                            # Enables the welcome message.
-        },
-        "auto_mod": False,                                                                          # The bot will check for NSFW texts & images (if the services are available). If found something NSFW, it will automatically isolate the user from the server and contact mods.
-        "mods_role": "",                                                                            # The role of the mods I4.0 will contact (empty to disable).
-        "allow_vc": True,                                                                           # Allows the bot to connect to a voice chat, talk and listen.
-        "prefix": "!i4",                                                                            # Command prefix.
-    },
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
     "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
@@ -65,11 +47,9 @@ __config_data__: dict[str] = {
         #    "ngl": -1,
         #    "batch": 8,
         #    "model": [
-        #        "MODEL REPOSITORY (leave empty if you're going to use a path)",
-        #        "MODEL FILE NAME / MODEL PATH",
-        #        "TEMPLATE REPOSITORY",
-        #        "CHAT TEMPLATE"  # Set if you're going to leave the template repository empty!
-        #        # ^-- If `TEMPLATE REPOSITORY` and `CHAT TEMPLATE` are both empty, LLaMA-CPP-Python will use the tokenizer's chat template. Might fail in most of old GGUF models.
+        #        "MODEL REPOSITORY (leave empty if you're going to use a path) / MODEL NAME",
+        #        "MODEL FILE NAME / MODEL PATH / MODEL QUANTIZATION",
+        #        "CHAT TEMPLATE (optional, but recommended)"
         #    ],
         #    "temp": 0.5,
         #    "device": "cpu",
@@ -97,8 +77,7 @@ __config_data__: dict[str] = {
         #    "ngl": -1,
         #    "batch": 8,
         #    "model": "MODEL REPOSITORY / MODEL PATH",
-        #    "hf_dtype": "",                # Set the torch.dtype to use (leave empty to set automatically).
-        #    "hf_low": False,               # False loads the model normally, True if you have low specs.
+        #    "hf_low": False,  # False loads the model normally, True if you have low specs.
         #    "temp": 0.5,
         #    "device": "cpu",
         #    "allows_files": (false or true),
@@ -131,6 +110,7 @@ __config_data__: dict[str] = {
         #        "INDEX PATH",
         #        "MODEL TYPE (rmvpe, harvest, pm, etc.)"
         #    ],
+        #    "threads": -1,
         #    "device": "cpu",
         #    "price": 15
         #},
@@ -261,6 +241,7 @@ __config_data__: dict[str] = {
         #    "price": 1.5,
         #    "description": "DESCRIPTION HERE",
         #    "model_info": ""  # This is some extra info about the model that will be sent to the model when inference via System Prompts.
+        #    "dtype": "fp16"
         #}
     ]
 }
@@ -354,9 +335,38 @@ def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
     # The device is not available, return the cpu
     return "cpu"
 
+def __get_dtype_from_str__(Dtype: str) -> torch.dtype | None:
+    if (Dtype == "fp64"):
+        return torch.float64
+    elif (Dtype == "fp32"):
+        return torch.float32
+    elif (Dtype == "fp16"):
+        return torch.float16
+    elif (Dtype == "bf16"):
+        return torch.bfloat16
+    elif (Dtype == "i64"):
+        return torch.int64
+    elif (Dtype == "i32"):
+        return torch.int32
+    elif (Dtype == "i16"):
+        return torch.int16
+    elif (Dtype == "i8"):
+        return torch.int8
+    elif (Dtype == "u64"):
+        return torch.uint64
+    elif (Dtype == "u32"):
+        return torch.uint32
+    elif (Dtype == "u16"):
+        return torch.uint16
+    elif (Dtype == "u8"):
+        return torch.uint8
+
+    return None
+
 def LoadPipeline(PipeTask: str, Task: str, Index: int, ExtraKWargs: dict[str, any] | None = None) -> tuple[Pipeline, str]:
     # Get the device to use
     dev = GetAvailableGPUDeviceForTask(Task, Index)
+    info = GetInfoOfTask(Task, Index)
 
     # Print the loading message
     print(f"Loading (transformers) pipeline for the service '{Task.upper()} [INDEX {Index}]' on the device '{dev}'...")
@@ -369,9 +379,15 @@ def LoadPipeline(PipeTask: str, Task: str, Index: int, ExtraKWargs: dict[str, an
         # It is, copy to the args
         args = ExtraKWargs.copy()
     
+    # Set dtype
+    try:
+        args["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
+    except:
+        pass
+
     # Set the required args
     args["task"] = PipeTask
-    args["model"] = GetInfoOfTask(Task, Index)["model"]
+    args["model"] = info["model"]
     args["device"] = dev
 
     # Load the pipeline using the specified args
@@ -391,6 +407,7 @@ def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None
     
     # Get the device to use
     dev = GetAvailableGPUDeviceForTask(Task, Index)
+    info = GetInfoOfTask(Task, Index)
 
     # Print loading message
     print(f"Loading (diffusers) pipeline for the service '{Task.upper()} [INDEX {Index}]' on the device '{dev}'...")
@@ -403,8 +420,14 @@ def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None
         # It is, copy to the args
         args = ExtraKWargs.copy()
     
+    # Set dtype
+    try:
+        args["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
+    except:
+        pass
+    
     # Set the required args
-    args["pretrained_model_or_path"] = GetInfoOfTask(Task, Index)["model"]
+    args["pretrained_model_or_path"] = info["model"]
     args["device"] = dev
 
     # Check the pipeline type
@@ -435,6 +458,7 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
 
     # Get the available GPU to use for this model
     dev = GetAvailableGPUDeviceForTask(Task, Index)
+    info = GetInfoOfTask(Task, Index)
 
     # Set args dicts
     argsModel = {}
@@ -450,9 +474,15 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
         # It is, copy to the args
         argsTokenizer = ExtraKWargsTokenizer.copy()
     
+    # Set dtype
+    try:
+        argsModel["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
+    except:
+        pass
+    
     # Set the model and tokenizer
-    argsModel["pretrained_model_name_or_path"] = GetInfoOfTask(Task, Index)["model"]
-    argsTokenizer["pretrained_model_name_or_path"] = GetInfoOfTask(Task, Index)["model"]
+    argsModel["pretrained_model_name_or_path"] = info["model"]
+    argsTokenizer["pretrained_model_name_or_path"] = info["model"]
 
     # Print loading message
     print(f"Loading model for '{Task.upper()} [INDEX {Index}]' on the device '{dev}'...")

@@ -43,7 +43,7 @@ namespace TAO71.I4.PythonManager
         {
             /*
              * This will connect the user to a server.
-             * If the user is alredy connected to a server, this will disconnect it first.            
+             * If the user is alredy connected to a server, this will disconnect it first.
             */
 
             // Disconnect from any other server
@@ -138,7 +138,7 @@ namespace TAO71.I4.PythonManager
             // Result variables
             WebSocketReceiveResult result;
             MemoryStream stream = new MemoryStream();
-            byte[] streamBytes = new byte[314572800];  // Max receive size: 314 MB
+            byte[] streamBytes = new byte[1024];
 
             do
             {
@@ -166,7 +166,7 @@ namespace TAO71.I4.PythonManager
         {
             /*
              * This will send a message to the server and wait for it's response.
-             * The user must be connected to a server before using this.            
+             * The user must be connected to a server before using this.
             */
 
             // Check if you're connected
@@ -367,19 +367,253 @@ namespace TAO71.I4.PythonManager
                 {"Service", Service},
                 {"Prompt", Prompt},
                 {"Conversation", Conf.Chatbot_Conversation},
-                {"Index", Index}
+                {"Index", Index},
+                {"DataShare", Conf.AllowDataShare}
             });
 
             // Return the response (probably serialized)
             return SendAndWaitForStreaming(jsonData);
         }
 
-        public static IEnumerable<Dictionary<string, object>> AutoGetResponseFromServer(string Prompt, Service ServerService, int Index = -1, bool ForceNoConnect = false)
+        public static IEnumerable<Dictionary<string, object>> AutoGetResponseFromServer(string Prompt, List<Dictionary<string, string>> Files, Service ServerService, int Index = -1, bool ForceNoConnect = false, bool FilesPath = true)
         {
             /*
              * This will automatically get a response a server.
              * If the service requires it, this will serialize your prompt.
-             * This will also do other thing before and after I4.0's response to your prompt.
+             * This will also do other things before and after I4.0's response to your prompt.
+             * 
+             * Index == -1 automatically gets the model with the smallest queue size.
+             * If FilesPath is false, the Files list MUST have the bytes of the files, in base64.
+             * If ForceNoConnect is true, this will not connect to any server, so you must be connected to one first.
+            */
+
+            // Copy the files list to a new one
+            List<Dictionary<string, string>> files = new List<Dictionary<string, string>>();
+            string systemPrompt = (string)Conf.Chatbot_ExtraSystemPrompts.Clone();
+            
+            foreach (Dictionary<string, string> file in Files)
+            {
+                if (FilesPath)
+                {
+                    // Check if the file exists
+                    if (!File.Exists(file["data"]))
+                    {
+                        // Return an error
+                        throw new Exception("File doesn't exists!");
+                    }
+
+                    // Read the file and convert it to base64
+                    files.Add(new Dictionary<string, string>()
+                    {
+                        {"type", file["type"]},
+                        {"data", Convert.ToBase64String(File.ReadAllBytes(file["data"]))}
+                    });
+                }
+                else
+                {
+                    // Add the file as it is
+                    files.Add(file);
+                }
+            }
+
+            // Serialize the data to send to the server (in some services)
+            if (ServerService == Service.ImageGeneration)
+            {
+                // Template: text2img
+                // Set variables
+                string prompt;
+                string nPrompt;
+
+                if (Prompt.Contains(" [NEGATIVE] "))
+                {
+                    // Contains negative prompt, set prompt and negative prompt
+                    prompt = Prompt.Substring(0, Prompt.IndexOf(" [NEGATIVE] ", StringComparison.InvariantCulture));
+                    nPrompt = Prompt.Substring(Prompt.IndexOf(" [NEGATIVE] ", StringComparison.InvariantCulture) + 12);
+                }
+                else
+                {
+                    // Doesn't contains negative prompt, set prompt
+                    prompt = Prompt;
+                    nPrompt = "";
+                }
+
+                // Set prompt to the Text2Image template
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"prompt", prompt},
+                    {"negative_prompt", nPrompt},
+                    {"width", Conf.Text2Image_Width},
+                    {"height", Conf.Text2Image_Height},
+                    {"guidance", Conf.Text2Image_GuidanceScale},
+                    {"steps", Conf.Text2Image_Steps}
+                });
+            }
+            else if (ServerService == Service.TTS)
+            {
+                // Template: text2audio (for TTS)
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"voice", Conf.TTS_Voice},
+                    {"language", Conf.TTS_Language},
+                    {"pitch", Conf.TTS_Pitch},
+                    {"speed", Conf.TTS_Speed},
+                    {"text", Prompt}
+                });
+            }
+            else if (ServerService == Service.RVC)
+            {
+                // Template: RVC
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"filter_radius", Conf.RVC_FilterRadius},
+                    {"f0_up_key", Conf.RVC_F0},
+                    {"protect", Conf.RVC_Protect}
+                });
+            }
+            else if (ServerService == Service.UVR)
+            {
+                // Template: UVR
+                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+                {
+                    {"agg", Conf.UVR_Agg}
+                });
+            }
+            else if (ServerService == Service.Chatbot)
+            {
+                // Check if the chatbot is multimodal
+                bool? chatbotMultimodal = null;
+
+                foreach (Dictionary<string, object> token in ExecuteCommand("is_chatbot_multimodal", "", Index))
+                {
+                    // Check if the response is an error
+                    if (((string)token["response"]).ToLower().StartsWith("error", StringComparison.CurrentCultureIgnoreCase))
+                    {
+                        // Error, break the loop
+                        break;
+                    }
+
+                    // Not an error, set boolean
+                    chatbotMultimodal = ((string)token["response"]).Equals("true", StringComparison.CurrentCultureIgnoreCase);
+                }
+
+                if (chatbotMultimodal != null && !chatbotMultimodal.Value && files.Count > 0)
+                {
+                    // Is not multimodal and files length is > 0, apply simulated vision template
+                    string[] sVisionPrompts = new string[files.Count];
+
+                    // Get resonse from Img2Text
+                    if (Conf.Chatbot_SimulatedVision_Image2Text)
+                    {
+                        try
+                        {
+                            // Try to send the message
+                            IEnumerable<Dictionary<string, object>> res = AutoGetResponseFromServer("", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, FilesPath);
+                            int img = 0;
+
+                            // For each response
+                            foreach (Dictionary<string, object> token in res)
+                            {
+                                // Check if the response ended
+                                if ((bool)token["ended"])
+                                {
+                                    // Break the loop
+                                    break;
+                                }
+
+                                // Get the response from Img2Text
+                                sVisionPrompts[img] += "### Image " + (img + 1).ToString() + " (description): " + (string)token["response"] + "\n";
+                                img++;
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore error
+                        }
+                    }
+
+                    // Get resonse from ObjectDetection
+                    if (Conf.Chatbot_SimulatedVision_ObjectDetection)
+                    {
+                        try
+                        {
+                            // Try to send the message
+                            IEnumerable<Dictionary<string, object>> res = AutoGetResponseFromServer("", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, FilesPath);
+                            int img = 0;
+
+                            // For each response
+                            foreach (Dictionary<string, object> token in res)
+                            {
+                                // Check if the response ended
+                                if ((bool)token["ended"])
+                                {
+                                    // Break the loop
+                                    break;
+                                }
+
+                                // Get the response from Img2Text
+                                sVisionPrompts[img] += "### Image " + (img + 1).ToString() + " (objects detected with position, in JSON format): " + (string)token["response"] + "\n";
+                                img++;
+                            }
+                        }
+                        catch
+                        {
+                            // Ignore error
+                        }
+                    }
+
+                    // Save the user's prompt
+                    string simulatedVisionPrompt = "";
+
+                    // For each prompt
+                    foreach (string sVP in sVisionPrompts)
+                    {
+                        // Add to the prompt
+                        simulatedVisionPrompt += sVP;
+                    }
+
+                    // Replace the system prompts
+                    systemPrompt += "\n" + simulatedVisionPrompt;
+                }
+            }
+
+            if (!ForceNoConnect)
+            {
+                // Connect to the first server for the service
+                int server = FindFirstServer(ServerService).Result;
+                Connect(server).Wait();
+            }
+            else if (!IsConnected())
+            {
+                throw new Exception("Please connect to a server first or set `ForceNoConnect` to false.");
+            }
+
+            // Set prompt
+            Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
+            {
+                {"Service", ServiceManager.ToString(ServerService)},
+                {"Prompt", Prompt},
+                {"Files", files.ToArray()},
+                {"APIKey", Conf.ServerAPIKey},
+                {"Conversation", Conf.Chatbot_Conversation},
+                {"AIArgs", Conf.Chatbot_AIArgs},
+                {"SystemPrompts", systemPrompt.TrimStart().TrimEnd()},
+                {"UseDefaultSystemPrompts", Conf.Chatbot_AllowServerSystemPrompts},
+                {"Index", Index},
+                {"DataShare", Conf.AllowDataShare}
+            });
+
+            // Return the response
+            return SendAndWaitForStreaming(Prompt);
+        }
+
+        public static IEnumerable<Dictionary<string, object>> OLD_AutoGetResponseFromServer(string Prompt, Service ServerService, int Index = -1, bool ForceNoConnect = false)
+        {
+            /*
+             * Old, replaced with the new one.
+             * 
+             * This will automatically get a response a server.
+             * If the service requires it, this will serialize your prompt.
+             * This will also do other things before and after I4.0's response to your prompt.
              * 
              * Index == -1 automatically gets the model with the smallest queue size.
             */
@@ -598,7 +832,7 @@ namespace TAO71.I4.PythonManager
                 {"AIArgs", Conf.Chatbot_AIArgs},
                 {"SystemPrompts", Conf.Chatbot_ExtraSystemPrompts},
                 {"UseDefaultSystemPrompts", Conf.Chatbot_AllowServerSystemPrompts},
-                {"Internet", InternetSearchManager.ToString(Conf.InternetOptions)},
+                {"DataShare", Conf.AllowDataShare},
                 {"Index", Index}
             });
 
@@ -622,11 +856,11 @@ namespace TAO71.I4.PythonManager
             {
                 if (!(bool)response["ended"])
                 {
-                    // Continue ignoring this message
+                    // Continue, ignoring this message
                     continue;
                 }
 
-                // Deserialize the received JSON response to a Dictionary and return the users and the time
+                // Deserialize the received JSON response to a dictionary and return the users and the time
                 Dictionary<string, float> queue = JsonConvert.DeserializeObject<Dictionary<string, float>>((string)response["response"]);
                 return ((int)queue["users"], queue["time"]);
             }
@@ -660,7 +894,7 @@ namespace TAO71.I4.PythonManager
             {
                 if (!(bool)response["ended"])
                 {
-                    // Continue ignoring this message
+                    // Continue, ignoring this message
                     continue;
                 }
 
@@ -709,7 +943,7 @@ namespace TAO71.I4.PythonManager
             {
                 if (!(bool)response["ended"])
                 {
-                    // Continue ignoring this message
+                    // Continue, ignoring this message
                     continue;
                 }
 
@@ -746,7 +980,7 @@ namespace TAO71.I4.PythonManager
                 // Check if it ended
                 if (!(bool)res["ended"])
                 {
-                    // Continue ignoring this message
+                    // Continue, ignoring this message
                     continue;
                 }
 

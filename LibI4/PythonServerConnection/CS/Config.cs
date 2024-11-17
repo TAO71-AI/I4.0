@@ -12,8 +12,8 @@ namespace TAO71.I4.PythonManager
         };
         public string DefaultImagesProgram = "";         // Leave empty to use the system's default
         public string DefaultAudiosProgram = "";         // Leave empty to use the system's default
-        public InternetSearchOptions InternetOptions = InternetSearchOptions.QuestionAnswering;
         public string ServerAPIKey = "";
+        public bool AllowDataShare = true;
 
         // Chatbot
         public string Chatbot_ExtraSystemPrompts = "";
@@ -24,6 +24,10 @@ namespace TAO71.I4.PythonManager
         };
         public string Chatbot_Conversation = "Client";
         public string? Chatbot_AIArgs = null;
+        public bool Chatbot_SimulatedVision_Image2Text = true;
+        public int Chatbot_SimulatedVision_Image2Text_Index = -1;
+        public bool Chatbot_SimulatedVision_ObjectDetection = true;
+        public int Chatbot_SimulatedVision_ObjectDetection_Index = -1;
 
         // Text2Image
         public int Text2Image_Width = -1;

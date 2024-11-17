@@ -18,36 +18,6 @@ def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVisi
     }
 
     try:
-        # Try to check load mode
-        if (Config["hf_dtype"] != None):
-            # Get the dtype
-            if (Config["hf_dtype"] == "fp64"):
-                dt = torch.float64
-            elif (Config["hf_dtype"] == "fp32"):
-                dt = torch.float32
-            elif (Config["hf_dtype"] == "fp16"):
-                dt = torch.float16
-            elif (Config["hf_dtype"] == "bf16"):
-                dt = torch.bfloat16
-            elif (Config["hf_dtype"] == "i64"):
-                dt = torch.int64
-            elif (Config["hf_dtype"] == "i32"):
-                dt = torch.int32
-            elif (Config["hf_dtype"] == "i16"):
-                dt = torch.int16
-            elif (Config["hf_dtype"] == "i8"):
-                dt = torch.int8
-            else:
-                print("Invalid or no dtype specified. Using default dtype.")
-                raise ValueError("Invalid dtype specified.")
-
-            # Set the dtype of the model
-            modelExtraKWargs["torch_dtype"] = dt
-    except:
-        # Ignore
-        pass
-
-    try:
         # Set the specs to use
         modelExtraKWargs["low_cpu_mem_usage"] = Config["hf_low"] != None and Config["hf_low"]
     except:

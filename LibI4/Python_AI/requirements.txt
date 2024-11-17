@@ -15,7 +15,7 @@ pymysql~=1.1.0
 # Other requirements
 requests
 beautifulsoup4
-google
+duckduckgo-search
 soundfile
 scipy
 opencv-python
@@ -29,6 +29,7 @@ git+https://github.com/Tps-F/fairseq.git@main
 bitsandbytes
 #huggingface-hub>=0.19.0,<0.20.0
 psutil
+pyyaml
 
 # Requirements for inference
 gpt4all~=2.8.2
@@ -38,6 +39,7 @@ SpeechRecognition~=3.10.4
 openai-whisper>=20240930
 qwen-vl-utils
 git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
+#git+https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git@intel_support
 pySpeakNG~=0.1.2
 #styletts2~=0.1.6
 

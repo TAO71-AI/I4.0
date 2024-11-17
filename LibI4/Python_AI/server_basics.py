@@ -53,18 +53,16 @@ def GenerateKey(tokens: int = -1, daily_key: bool = False) -> dict:
     if (tokens < 0):
         tokens = default_tokens
     
-    char_list = "abcdefghijklmnopqrstuvwxyz0123456789"
+    char_list = "abcdefghijklmnopqrstuvwxyz"
+    char_list += char_list.upper() + "0123456789!·$%&()=?@#¬[]-_.:,;"
     key = ""
     key_data = {}
-    i = 0
 
-    while (i < 15):
+    for _ in range(15):
         try:
-            key += char_list[random.randint(0, len(char_list))]
+            key += char_list[random.randint(0, len(char_list) - 1)]
         except:
             key += "0"
-        
-        i += 1
     
     if (os.path.exists("API/" + key + ".key")):
         return GenerateKey(tokens, daily_key)
