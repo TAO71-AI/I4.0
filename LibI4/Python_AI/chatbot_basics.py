@@ -74,32 +74,33 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     msg += "# Tools:\n"
 
     if (cfg.current_data["enabled_plugins"].count("image_generation") > 0 and cfg.current_data["models"].count("text2img") > 0):
-        msg += "To generate an image, write `(agi) {\"prompt\": \"PROMPT\", \"negative_prompt\": \"NEGATIVE PROMPT\"}` and follow these steps:\n"
-        msg += "> Replace `PROMPT` with what you want in the image and \"NEGATIVE PROMPT\" with that you don't want in the image.\n"
-        msg += "> The JSON must be in only 1 line.\n"
-        msg += f"> The prompt and negative prompt must be in the language `{cfg.current_data['server_language']}`.\n"
-        msg += "> Use this tool in special cases, as it costs a lot of computational power.\n"
+        msg += "To generate an image, write `/agi {\"prompt\": \"PROMPT\", \"negative_prompt\": \"NEGATIVE PROMPT\"}` and follow these steps:\n"
+        msg += "- Replace `PROMPT` with what you want in the image and \"NEGATIVE PROMPT\" with that you don't want in the image.\n"
+        msg += "- The JSON must be in only 1 line.\n"
+        msg += f"- The prompt and negative prompt must be in the language `{cfg.current_data['server_language']}`.\n"
+        msg += "- Use this tool in special cases, as it costs a lot of computational power.\n"
         plugins_available = True
 
     if (cfg.current_data["enabled_plugins"].count("audio_generation") > 0 and cfg.current_data["models"].count("text2audio") > 0):
-        msg += "To generate an audio, write `(aga) PROMPT` and follow these steps:\n"
-        msg += "> Replace `PROMPT` with what you want in the audio.\n"
-        msg += f"> The prompt must be in the language `{cfg.current_data['server_language']}`.\n"
-        msg += "> Use this tool in special cases, as it costs a lot of computational power.\n"
+        msg += "To generate an audio, write `/aga PROMPT` and follow these steps:\n"
+        msg += "- Replace `PROMPT` with what you want in the audio.\n"
+        msg += f"- The prompt must be in the language `{cfg.current_data['server_language']}`.\n"
+        msg += "- Use this tool in special cases, as it costs a lot of computational power.\n"
         plugins_available = True
 
     if (cfg.current_data["enabled_plugins"].count("internet") > 0):
-        msg += "To search something on the internet, write `(int) {\"prompt\": \"PROMPT\", \"question\": \"QUESTION\", \"type\": \"TYPE\"}` and follow these steps:\n"
-        msg += "> Replace `PROMPT` with what you want to search.\n"
-        msg += "> Replace `QUESTION` with the question to respond.\n"
-        msg += "> Replace `TYPE` with the type of content to search. The available types are: 'websites', 'answers', 'news'.\n"
-        msg += "> You can use this tool to search information in real time and to search something you're not sure about or don't know about.\n"
+        msg += "To search over the internet, write `/int {\"prompt\": \"PROMPT\", \"question\": \"QUESTION\", \"type\": \"TYPE\", \"count\": COUNT}` and follow these rules:\n"
+        msg += "- Replace `PROMPT` with what you want to search.\n"
+        msg += "- Replace `QUESTION` with the question to respond.\n"
+        msg += "- Replace `TYPE` with the type of information you want to search. The available types are: `answers` and `news`."
+        msg += "- Replace `COUNT` with the number of websites to search. The max limit is 8 and the default is 5.\n"
+        msg += "- You can use this tool to search information in real time and to search something you're not sure about or don't know about.\n"
         plugins_available = True
 
     if (cfg.current_data["enabled_plugins"].count("memory") > 0):
-        msg += "To save a memory, write `(mem) MEMORY` and follow these steps:\n"
-        msg += "> Replace `MEMORY` with what you want to save.\n"
-        msg += "> Save only important information about the user that you want to remember across conversations.\n"
+        msg += "To save a memory, write `/mem MEMORY` and follow these steps:\n"
+        msg += "- Replace `MEMORY` with what you want to save.\n"
+        msg += "- Save only important information about the user that you want to remember across conversations.\n"
         plugins_available = True
     
     if (plugins_available):

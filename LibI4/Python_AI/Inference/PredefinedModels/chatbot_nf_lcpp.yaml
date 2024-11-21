@@ -1,3 +1,9 @@
+# NOTE:
+# Every quant under Q4_K_S should not be used, the results are very bad.
+# Also, prefer L (or XL for Q3_K) quants if the file size is similar, it will give you better results since it uses the Q8_0 for embed and output weights.
+# We recommend to use Q6_K, Q6_K_L and Q8_0 quants instead of the f16/f32 quants, since the results are very good and requires less compute power.
+# ^--- For small models (<=3B parameters) we recommend only using Q8_0, f16 or f32, since this gives pretty good results and, due to the small size of the model, doesn't require a lot of compute power. Using a smaller quant may give bad results.
+
 qwen2.5-0.5b-instruct:
     # License: Apache 2.0
     repo: "bartowski/Qwen2.5-0.5B-Instruct-GGUF"

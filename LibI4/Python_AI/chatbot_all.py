@@ -85,7 +85,6 @@ def __create_file__(FileType: str, FileData: bytes | str) -> str:
     # Add the bytes to the file
     with open(fName, "wb") as f:
         f.write(FileData)
-        f.close()
 
     # Return the file name
     return fName
@@ -129,12 +128,11 @@ def LoadAllModels() -> None:
     img2img.LoadModels()
     qa.LoadModels()
 
-def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str) -> Iterator[str]:
+def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int) -> Iterator[str]:
     # Delete empty conversation
     conv.GetConversationFromUser("", True).DeleteConversation("")
 
     # Get context size of the chatbot
-    results = 5
     minLength = 10
     maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]
     maxLength = int(maxLength / 2) if (maxLength >= 8000) else maxLength - 1
@@ -142,30 +140,30 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
     # Search over internet
     if (SearchSystem == "websites" or SearchSystem == "website"):
         # Search for websites
-        internetResults = internet.Search__Websites(SearchPrompt, results)
+        internetResults = internet.Search__Websites(SearchPrompt, Count)
         internetResponse = "".join([internet.ReadTextFromWebsite(result, maxLength, minLength) + "\n" for result in internetResults])
     elif (SearchSystem == "answers" or SearchSystem == "answer"):
         # Search for answers
-        internetResults = internet.Search__Answers(SearchPrompt, results)
+        internetResults = internet.Search__Answers(SearchPrompt, Count)
         internetResponse = "".join([res + "\n" for res in internetResults])
 
         # Check if internet response length is 0
         if (len(internetResponse.strip()) == 0):
             # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites")
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
         else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
     elif (SearchSystem == "news"):
         # Search for news
-        internetResults = internet.Search__News(SearchPrompt, results)
+        internetResults = internet.Search__News(SearchPrompt, Count)
         internetResponse = "".join([res + "\n" for res in internetResults])
 
         # Check if internet response length is 0
         if (len(internetResponse.strip()) == 0):
             # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites")
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
         else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
     else:
         # Raise error
         raise ValueError("Invalid SearchSystem. Use 'websites', 'answers' or 'news'.")

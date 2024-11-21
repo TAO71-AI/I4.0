@@ -35,10 +35,15 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 serverWS: websockets.WebSocketServerProtocol = None
-__version__: str = "v8.3.0"
-clearCacheTime: int = 300  # Every 5 minutes
+clearCacheTime: int = 300  # Every 5 minutes, set to -1 for no cache clearing
+clearQueueTime: int = 600  # Every 10 minutes, set to -1 for no queue clearing
 
 def __clear_cache_loop__() -> None:
+    # Check if cache clear time is less or equal to 0
+    if (clearCacheTime <= 0):
+        # Do not clear the cache
+        return
+
     # While the server in running
     while (started):
         # Wait the specified time
@@ -46,6 +51,21 @@ def __clear_cache_loop__() -> None:
 
         # Clear the cache
         cb.EmptyCache()
+
+def __clear_queue_loop__() -> None:
+    # Check if queue clear time is less or equal to 0
+    if (clearQueueTime <= 0):
+        # Do not clear the queue
+        return
+
+    # While the server in running
+    while (started):
+        # Wait the specified time
+        time.sleep(clearQueueTime)
+
+        # Clear the queue
+        queue.clear()
+        times.clear()
 
 def CheckFiles() -> None:
     # Check if some files exists
@@ -58,7 +78,6 @@ def CheckFiles() -> None:
     if (not os.path.exists("TOS.txt")):
         with open("TOS.txt", "w") as f:
             f.write("")
-            f.close()
 
 def UpdateServer() -> None:
     # Check the files
@@ -100,6 +119,9 @@ def UpdateServer() -> None:
 def GetQueueForService(Service: str, Index: int) -> tuple[int, float]:
     # Get the users for the queue
     try:
+        if (queue[Service][Index] < 0):
+            queue[Service][Index] = 0
+
         users = queue[Service][Index]
     except:
         users = 0
@@ -314,10 +336,10 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         # Strip the line
         line = line.strip()
 
-        if (line.lower().startswith("(agi) ")):
+        if (line.lower().startswith("/agi ")):
             # Generate image command
             # Get the prompt
-            cmd = line[6:].strip()
+            cmd = line[5:].strip()
 
             # Generate the image and append it to the files
             cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare)
@@ -331,10 +353,10 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
             # Remove the command from the response
             fullResponse = fullResponse.replace(line, "[IMAGES]")
-        elif (line.lower().startswith("(aga) ")):
+        elif (line.lower().startswith("/aga ")):
             # Generate audio command
             # Get the prompt
-            cmd = line[6:].strip()
+            cmd = line[5:].strip()
 
             # Generate the audio and append it to the files
             cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare)
@@ -348,10 +370,10 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
             # Remove the command from the response
             fullResponse = fullResponse.replace(line, "[AUDIOS]")
-        elif (line.lower().startswith("(int) ")):
-            # Internet search command
+        elif (line.lower().startswith("/int ")):
+            # Internet (websites, answers and news) search command
             # Get the prompt
-            cmd = line[6:].strip()
+            cmd = line[5:].strip()
                     
             # Deserialize the prompt
             try:
@@ -359,12 +381,22 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 cmdP = cmd["prompt"].strip()
                 cmdQ = cmd["question"].strip()
                 cmdS = cmd["type"].strip()
+                
+                try:
+                    cmdC = int(cmd["count"])
+
+                    if (cmdC > 8):
+                        cmdC = 8
+                    elif (cmdC <= 0):
+                        cmdC = 1
+                except:
+                    cmdC = 5
             except:
                 # Could not deserialize the prompt, ignoring
                 continue
 
             # Generate the image and append it to the files
-            cmdResponse = cb.GetResponseFromInternet(Index, cmdP, cmdQ, cmdS)
+            cmdResponse = cb.GetResponseFromInternet(Index, cmdP, cmdQ, cmdS, cmdC)
             text = ""
 
             # Yield another line
@@ -375,11 +407,11 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 yield {"response": token["response"], "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse = fullResponse.replace(line, line + "\n" + text)
-        elif (line.lower().startswith("(mem) ")):
+            fullResponse = fullResponse.replace(line, f"(Searching for {cmdS} over the internet):\n{text}")
+        elif (line.lower().startswith("/mem ")):
             # Save memory command
             # Get the prompt
-            cmd = line[6:].strip()
+            cmd = line[5:].strip()
 
             # Save the memory
             memories.AddMemory(Key["key"], cmd)
@@ -767,8 +799,9 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     elif (service == "get_tos"):
         # Get the Terms of Service of the server
         with open("TOS.txt", "r") as f:
-            yield {"response": f.read(), "files": [], "ended": True}
-            f.close()
+            tos = f.read()
+        
+        yield {"response": tos, "files": [], "ended": True}
     elif (service == "create_key" and key["admin"]):
         # Create a new API key
         keyData = cfg.JSONDeserializer(Prompt)
@@ -908,7 +941,6 @@ async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
         # Save the banned IP addresses and keys
         with open("BannedIPs.json", "w+") as f:
             f.write(json.dumps(banned))
-            f.close()
 
 async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
     print(f"'{Client.remote_address[0]}' has connected.")
@@ -959,7 +991,6 @@ try:
     if (os.path.exists("BannedIPs.json")):
         with open("BannedIPs.json", "r") as f:
             banned = cfg.JSONDeserializer(f.read())
-            f.close()
 
     # Load all the models
     cb.LoadAllModels()
