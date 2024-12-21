@@ -4,20 +4,32 @@ import os
 import json
 import ai_config as cfg
 
-__models__: list[tuple[AutoPipelineForImage2Image, dict[str, any]]] = []
+__models__: dict[int, tuple[AutoPipelineForImage2Image, dict[str, any]]] = {}
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("img2img"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Load the model
         model, _ = cfg.LoadDiffusersPipeline("img2img", i, AutoPipelineForImage2Image)
 
         # Add the model and info to the list of models
-        __models__.append((model, cfg.GetInfoOfTask("img2img", i)))
+        __models__[i] = (model, cfg.GetInfoOfTask("img2img", i))
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     # Check the type of the prompt

@@ -18,7 +18,7 @@ import psutil
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: list[tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str], dict[str, any]]] = []
+__models__: dict[int, tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     info = cfg.GetInfoOfTask("chatbot", Index)
@@ -28,7 +28,7 @@ def __load_model__(Index: int) -> None:
     # Check if the model allows files
     if (info["allows_files"]):
         # It does, return since this script doesn't allows files
-        __models__.append(None)
+        __models__[Index] = None
         return
 
     # Get threads and check if the number of threads are valid
@@ -70,16 +70,33 @@ def __load_model__(Index: int) -> None:
     # Add the model to the list
     if (tokenizer != None):
         # The model also includes a tokenizer, add it too
-        __models__.append(((model, tokenizer, dev), info))
+        __models__[Index] = ((model, tokenizer, dev), info)
     else:
         # Add the model only
-        __models__.append((model, info))
+        __models__[Index] = (model, info)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    if (type(__models__[Index][0]) == GPT4All):
+        __models__[Index][0].close()
+    elif (type(__models__[Index][0]) == Llama):
+        __models__[Index][0].close()
+    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str]):
+        __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("chatbot"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Load the model and add it to the list of models
@@ -116,6 +133,19 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: l
     contentForModel.append({"role": "user", "content": Prompt})
     contentToShow += f"\n\n### USER: {Prompt}"
 
+    # Set the seed
+    try:
+        # Get the seed
+        seed = __models__[Index][1]["seed"]
+
+        # Check the seed
+        if (seed < 0):
+            # Invalid seed, set to None
+            seed = None
+    except:
+        # Error; probably `seed` is not configured. Set to None
+        seed = None
+
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
     
@@ -125,7 +155,7 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: l
         return g4a.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, contentToShow)
     elif (type(__models__[Index][0]) == Llama):
         # Use Llama-CPP-Python
-        return lcpp.__inference__(__models__[Index][0], __models__[Index][1], contentForModel)
+        return lcpp.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, seed)
     elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str]):
         # Use HF
         return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][1], contentForModel)

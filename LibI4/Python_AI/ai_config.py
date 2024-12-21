@@ -25,7 +25,7 @@ __config_data__: dict[str] = {
         "table": "keys"                                                                             # Database table.
     },
     "enabled_plugins": "sing vtuber discord_bot twitch gaming image_generation audio_generation internet",
-    # ^-- I4.0 plugins that creates more system prompts.
+    # ^-- I4.0 plugins. Creates more system prompts.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
     "ban_if_nsfw": True,                                                                        # Bans the API key if a NSFW prompt is detected (requires `force_api_key` to be true).
@@ -37,6 +37,10 @@ __config_data__: dict[str] = {
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
     "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
+    "internet_chat": "mixtral-8x7b",                                                            # Chatbot model to use (NOT LOCALLY) if I4.0 uses the internet chatbot command.
+    "offload_time": 3600,                                                                       # Time (in seconds) to wait before offloading a model that has not been used. Set to 0 to disable.
+    "clear_cache_time": 300,                                                                    # Time (in seconds) to wait before clearing the cache. Set to 0 to disable.
+    "clear_queue_time": 600,                                                                    # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
     "models": [                                                                                 # Models to be used.
         # Examples:
         #{
@@ -52,6 +56,8 @@ __config_data__: dict[str] = {
         #        "CHAT TEMPLATE (optional, but recommended)"
         #    ],
         #    "temp": 0.5,
+        #    "seed": -1,
+        #    "split_mode": "(layer, row or none; default: layer)",
         #    "device": "cpu",
         #    "allows_files": false,  # Doesn't support multimodal models
         #    "price": 20
@@ -63,7 +69,7 @@ __config_data__: dict[str] = {
         #    "threads": -1,
         #    "ngl": -1,
         #    "batch": 8,
-        #    "model": "MODEL REPOSITORY / MODEL PATH",
+        #    "model": "MODEL PATH",
         #    "temp": 0.5,
         #    "device": "cpu",
         #    "allows_files": false,  # Doesn't support multimodal models
@@ -226,22 +232,19 @@ __config_data__: dict[str] = {
         #    "model": "MODEL REPOSITORY",
         #    "device": "cpu",
         #    "price": 1.5
-        #},
-        #{
-        #    "service": "tts",
-        #    "price": 1
         #}
         #
         #
-        # NOTE: You can also add a description and information of the model for each model, expample:
+        # NOTE: You can also add some optional parameters for each model, expample:
         #{
         #    "service": "sc",
         #    "model": "MODEL REPOSITORY",
         #    "device": "cpu",
         #    "price": 1.5,
         #    "description": "DESCRIPTION HERE",
-        #    "model_info": ""  # This is some extra info about the model that will be sent to the model when inference via System Prompts.
-        #    "dtype": "fp16"
+        #    "model_info": "",  # This is some extra info about the model that will be sent to the model when inference via System Prompts.
+        #    "dtype": "fp16",
+        #    "allow_offloading": (`true` or `false`)
         #}
     ]
 }
@@ -267,7 +270,6 @@ def ReadConfig() -> dict[str]:
     # Read the config file
     with open("config.json", "r") as f:
         data: dict[str, any] = json.loads(f.read())
-        f.close()
     
     # For each option in the data
     for dkey in list(data.keys()):
@@ -310,7 +312,6 @@ def SaveConfig(Config: dict[str] = {}) -> None:
     # Save the config into the config file
     with open("config.json", "w") as f:
         f.write(text)
-        f.close()
 
 def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
     # Get the device set for the task
@@ -330,7 +331,7 @@ def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
         return device
     elif (device != "cpu"):
         # Print message
-        print(f"WARNING! Tryed to use the device '{device}', but torch doesn't support it. Returning 'cpu' instead.")
+        print(f"WARNING! Tried to use the device '{device}', but torch doesn't support it. Returning 'cpu' instead.")
     
     # The device is not available, return the cpu
     return "cpu"
@@ -344,6 +345,14 @@ def __get_dtype_from_str__(Dtype: str) -> torch.dtype | None:
         return torch.float16
     elif (Dtype == "bf16"):
         return torch.bfloat16
+    elif (Dtype == "fp8_e4m3fn"):
+        return torch.float8_e4m3fn
+    elif (Dtype == "fp8_e4m3fnuz"):
+        return torch.float8_e4m3fnuz
+    elif (Dtype == "fp8_e5m2"):
+        return torch.float8_e5m2
+    elif (Dtype == "fp8_e5m2fnuz"):
+        return torch.float8_e5m2fnuz
     elif (Dtype == "i64"):
         return torch.int64
     elif (Dtype == "i32"):
@@ -520,13 +529,14 @@ def GetAllTasks() -> dict[str, list[dict[str, any]]]:
     tasks = {}
 
     # For each task
-    for task in GetAllInfosOfATask():
+    for model in current_data["models"]:
+        # Set the task
         try:
             # Try to append the task to the dictionary
-            tasks[task["service"]].append(task)
+            tasks[model["service"]].append(model)
         except:
             # Could not append it, probably the list doesn't exists, create it
-            tasks[task["service"]] = [task]
+            tasks[model["service"]] = [model]
     
     # Return the tasks
     return tasks

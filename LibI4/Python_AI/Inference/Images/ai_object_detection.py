@@ -6,7 +6,7 @@ import os
 import random
 import ai_config as cfg
 
-__models__: list[tuple[AutoModelForObjectDetection, AutoImageProcessor, str]] = []
+__models__: dict[int, tuple[AutoModelForObjectDetection, AutoImageProcessor, str]] = {}
 
 def __get_random_color__() -> tuple[int, int, int]:
     # Get a random color (RGB)
@@ -16,14 +16,26 @@ def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("od"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Load the model and get the info
         model, processor, device = cfg.LoadModel("od", i, AutoModelForObjectDetection, AutoImageProcessor)
 
         # Add the model to the list of models
-        __models__.append((model, processor, device))
+        __models__[i] = (model, processor, device)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str]:
     # Load the models

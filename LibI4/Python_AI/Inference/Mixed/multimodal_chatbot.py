@@ -11,7 +11,7 @@ import os
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: list[tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str], dict[str, any]]] = []
+__models__: dict[int, tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     info = cfg.GetInfoOfTask("chatbot", Index)
@@ -21,7 +21,7 @@ def __load_model__(Index: int) -> None:
     # Check if the model allows files
     if (not info["allows_files"]):
         # It doesn't, return since this script ONLY allows files
-        __models__.append(None)
+        __models__[Index] = None
         return
 
     # Get threads and check if the number of threads are valid
@@ -49,16 +49,29 @@ def __load_model__(Index: int) -> None:
     # Add the model to the list
     if (processor != None):
         # The model also includes a tokenizer, add it too
-        __models__.append(((model, processor, dev), info))
+        __models__[Index] = ((model, processor, dev), info)
     else:
         # Add the model only
-        __models__.append((model, info))
+        __models__[Index] = (model, info)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    if (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForVision2Seq, AutoProcessor, str]):
+        __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("chatbot"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Load the model and add it to the list of models

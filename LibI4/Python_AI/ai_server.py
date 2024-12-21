@@ -7,6 +7,7 @@ import json
 import datetime
 import time
 import traceback
+import gc
 
 try:
     # Try to import I4.0 utilities
@@ -24,48 +25,65 @@ except ImportError:
     os._exit(1)
 
 # Variables
-max_buffer_length: int = 4096
-max_users: int = 1000
 queue: dict[str, list[int]] = {}
-args: list[str] = []
-times: dict[str, list[list[float]]] = {}
+times: dict[str, list[list[int]]] = {}
 banned: dict[str, list[str]] = {
     "ip": [],
     "key": []
 }
 started: bool = False
 serverWS: websockets.WebSocketServerProtocol = None
-clearCacheTime: int = 300  # Every 5 minutes, set to -1 for no cache clearing
-clearQueueTime: int = 600  # Every 10 minutes, set to -1 for no queue clearing
+modelsUsed: dict[str, list[int]] = {}
 
 def __clear_cache_loop__() -> None:
     # Check if cache clear time is less or equal to 0
-    if (clearCacheTime <= 0):
+    if (cfg.current_data["clear_cache_time"] <= 0):
         # Do not clear the cache
         return
 
     # While the server in running
     while (started):
         # Wait the specified time
-        time.sleep(clearCacheTime)
+        time.sleep(cfg.current_data["clear_cache_time"])
 
         # Clear the cache
         cb.EmptyCache()
 
 def __clear_queue_loop__() -> None:
     # Check if queue clear time is less or equal to 0
-    if (clearQueueTime <= 0):
+    if (cfg.current_data["clear_queue_time"] <= 0):
         # Do not clear the queue
         return
 
     # While the server in running
     while (started):
         # Wait the specified time
-        time.sleep(clearQueueTime)
+        time.sleep(cfg.current_data["clear_queue_time"])
 
         # Clear the queue
         queue.clear()
         times.clear()
+
+def __offload_loop__() -> None:
+    # Check if the offload time is less or equal to 0
+    if (cfg.current_data["offload_time"] <= 0):
+        # Do not offload the models
+        return
+    
+    # While the server is running
+    while (started):
+        # Wait the specified time
+        time.sleep(cfg.current_data["offload_time"])
+
+        # Offload the models
+        cb.OffloadAll(modelsUsed)
+        modelsUsed.clear()
+
+        # IMPORTANT!!! Make sure that the offload_time is greater than the time that takes the model to generate a token.
+        # Otherwise, the server may freeze and crash.
+
+        # Run the garbage collector
+        gc.collect()
 
 def CheckFiles() -> None:
     # Check if some files exists
@@ -116,7 +134,7 @@ def UpdateServer() -> None:
     conv.SaveConversations()
     memories.SaveMemories()
 
-def GetQueueForService(Service: str, Index: int) -> tuple[int, float]:
+def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     # Get the users for the queue
     try:
         if (queue[Service][Index] < 0):
@@ -133,8 +151,7 @@ def GetQueueForService(Service: str, Index: int) -> tuple[int, float]:
         for ti in times[Service][Index]:
             t += ti
         
-        t = t / len(times[Service][Index])
-        t = t * (users + 1)
+        t = int(t / len(times[Service][Index]))
     except:
         t = -1
     
@@ -213,9 +230,6 @@ def __share_data__(UserPrompt: str, UserFiles: dict[str, list[str | bytes]], Res
         print(f"[DATA SHARE] Error sending to ALL servers. Info: {ex}")
 
 def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool, AllowDataShare: bool) -> Iterator[dict[str, any]]:
-    # Start timer
-    timer = time.time()
-
     # Make sure the key of the service exists
     if (Service not in list(queue.keys())):
         queue[Service] = []
@@ -250,13 +264,29 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     Key["tokens"] -= cfg.GetInfoOfTask(Service, Index)["price"]
     sb.SaveKey(Key, None)
 
+    # Add the index to the models used
+    try:
+        modelsUsed[Service].append(Index)
+    except:
+        modelsUsed[Service] = [Index]
+
     # Process the prompt and get a response
     response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts)
     fullResponse = ""
     responseFiles = []
 
+    # Start timer
+    timer = time.time()
+
     # For every token, return it to the client
     for token in response:
+        # Add the index to the models used (if not there already)
+        if (Service not in list(modelsUsed.keys()) or Index not in modelsUsed[Service]):
+            try:
+                modelsUsed[Service].append(Index)
+            except:
+                modelsUsed[Service] = [Index]
+
         # Make sure the response is a string
         token["response"] = str(token["response"])
 
@@ -265,17 +295,20 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         responseFiles += token["files"]
         token["ended"] = False
 
+        # Set the timer and transform to milliseconds
+        timer = int((time.time() - timer) * 1000)
+
+        # Add the timer to the service
+        try:
+            times[Service][Index].append(timer)
+        except:
+            times[Service][Index] = [timer]
+        
+        # Restart the timer
+        timer = time.time()
+
         # Yield the token
         yield token
-
-    # Set the timer
-    timer = time.time() - timer
-
-    # Add the timer to the service
-    try:
-        times[Service][Index].append(timer)
-    except:
-        times[Service][Index] = [timer]
 
     # Remove the user from the queue
     queue[Service][Index] -= 1
@@ -336,7 +369,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         # Strip the line
         line = line.strip()
 
-        if (line.lower().startswith("/agi ")):
+        if (line.lower().startswith("/img ")):
             # Generate image command
             # Get the prompt
             cmd = line[5:].strip()
@@ -353,7 +386,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
             # Remove the command from the response
             fullResponse = fullResponse.replace(line, "[IMAGES]")
-        elif (line.lower().startswith("/aga ")):
+        elif (line.lower().startswith("/aud ")):
             # Generate audio command
             # Get the prompt
             cmd = line[5:].strip()
@@ -371,7 +404,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             # Remove the command from the response
             fullResponse = fullResponse.replace(line, "[AUDIOS]")
         elif (line.lower().startswith("/int ")):
-            # Internet (websites, answers and news) search command
+            # Internet (websites, answers, news, chat and maps) search command
             # Get the prompt
             cmd = line[5:].strip()
                     
@@ -407,7 +440,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 yield {"response": token["response"], "files": token["files"], "ended": False}
 
             # Remove the command from the response
-            fullResponse = fullResponse.replace(line, f"(Searching for {cmdS} over the internet):\n{text}")
+            fullResponse = fullResponse.replace(line, f"[You used the command '{line}' and got this response]:\n```text\n{text}\n```")
         elif (line.lower().startswith("/mem ")):
             # Save memory command
             # Get the prompt
@@ -794,7 +827,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         if (len(prompt) > 0):
             queueUsers, queueTime = GetQueueForService(prompt, index)
 
-            print(f"Queue for service '{prompt}' and index '{index}': {queueUsers} users, ~{queueTime}s for full response.")
+            print(f"Queue for service '{prompt}:{index}' ==> {queueUsers} users, ~{queueTime}ms/token.")
             yield {"response": json.dumps({"users": queueUsers, "time": queueTime}), "files": [], "ended": True}
     elif (service == "get_tos"):
         # Get the Terms of Service of the server
@@ -829,6 +862,11 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     elif (service == "is_chatbot_multimodal"):
         # Check if the chatbot is multimodal
         try:
+            # Check index
+            if (index < 0):
+                # Set index
+                index = GetAutoIndex("chatbot")
+
             yield {"response": str(cfg.GetInfoOfTask("chatbot", index)["allows_files"]), "files": [], "ended": True}
         except Exception as ex:
             {"response": f"ERROR: {ex}", "files": [], "ended": True}
@@ -861,7 +899,10 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
             index = GetAutoIndex(Prompt["Service"])
             
         # Substract 1 to the queue
-        queue[Prompt["Service"]][index] -= 1
+        try:
+            queue[Prompt["Service"]][index] -= 1
+        except:
+            pass
 
         try:
             # Try to send the closed message
@@ -876,6 +917,16 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
     
     # Update the server
     UpdateServer()
+
+def __exec_serv__(Client: websockets.WebSocketClientProtocol, Prompt: dict) -> None:
+    # Create loop
+    loop = asyncio.new_event_loop()
+
+    # Run the loop
+    loop.run_until_complete(ExecuteServiceAndSendToClient(Client, Prompt))
+
+    # Close the loop
+    loop.close()
 
 async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
     # Wait for receive
@@ -910,7 +961,7 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
         }).encode("utf-8"))
 
     # Execute service and send data
-    thread = threading.Thread(target = lambda: asyncio.run(ExecuteServiceAndSendToClient(Client, prompt)))
+    thread = threading.Thread(target = __exec_serv__, args = (Client, prompt))
     thread.start()
 
 async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
@@ -971,6 +1022,14 @@ def StartServer() -> None:
     # Create thread for the cache cleanup
     cacheThread = threading.Thread(target = __clear_cache_loop__)
     cacheThread.start()
+
+    # Create thread for the queue cleanup
+    queueThread = threading.Thread(target = __clear_queue_loop__)
+    queueThread.start()
+
+    # Create thread for the model offloading
+    offloadThread = threading.Thread(target = __offload_loop__)
+    offloadThread.start()
 
     # Set the IP
     ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"

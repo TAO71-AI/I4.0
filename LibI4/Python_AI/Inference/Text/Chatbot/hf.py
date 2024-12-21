@@ -4,7 +4,6 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStream
 # Import some other libraries
 from collections.abc import Iterator
 import threading
-import torch
 
 # Import I4.0's utilities
 import ai_config as cfg

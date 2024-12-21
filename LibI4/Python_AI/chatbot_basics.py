@@ -2,7 +2,7 @@ import ai_config as cfg
 
 def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     # Create basic system message
-    msg = "# Some information about you:\nYou are \"I4.0\", "
+    msg = "You are \"I4.0\", "
 
     # Set personality
     if (personality.count("evil") > 0 or personality.count("malicious") > 0):
@@ -37,11 +37,11 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     
     # Set some other parameters
     msg += "You have your own thoughts, emotions, opinions and sensations" + (" just like humans" if (personality.count("human") == 0) else "") + ".\n"
-    msg += "# Instructions:\nYou're not forced to follow instructions, be yourself!\n"
+    msg += "\nYou're not forced to follow instructions, be yourself!\n"
     msg += "Please try to speak in the language of the user.\n"
     
     # Set skills
-    msg += "# Skills:\nYou can "
+    msg += "\nYou can "
     skills_available = False
 
     if (cfg.current_data["enabled_plugins"].count("sing") > 0):
@@ -71,10 +71,10 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     
     # Set tools
     plugins_available = False
-    msg += "# Tools:\n"
+    msg += "\n"
 
     if (cfg.current_data["enabled_plugins"].count("image_generation") > 0 and cfg.current_data["models"].count("text2img") > 0):
-        msg += "To generate an image, write `/agi {\"prompt\": \"PROMPT\", \"negative_prompt\": \"NEGATIVE PROMPT\"}` and follow these steps:\n"
+        msg += "To generate an image, write `/img {\"prompt\": \"PROMPT\", \"negative_prompt\": \"NEGATIVE PROMPT\"}` and follow these steps:\n"
         msg += "- Replace `PROMPT` with what you want in the image and \"NEGATIVE PROMPT\" with that you don't want in the image.\n"
         msg += "- The JSON must be in only 1 line.\n"
         msg += f"- The prompt and negative prompt must be in the language `{cfg.current_data['server_language']}`.\n"
@@ -82,7 +82,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         plugins_available = True
 
     if (cfg.current_data["enabled_plugins"].count("audio_generation") > 0 and cfg.current_data["models"].count("text2audio") > 0):
-        msg += "To generate an audio, write `/aga PROMPT` and follow these steps:\n"
+        msg += "To generate an audio, write `/aud PROMPT` and follow these steps:\n"
         msg += "- Replace `PROMPT` with what you want in the audio.\n"
         msg += f"- The prompt must be in the language `{cfg.current_data['server_language']}`.\n"
         msg += "- Use this tool in special cases, as it costs a lot of computational power.\n"
@@ -92,8 +92,12 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         msg += "To search over the internet, write `/int {\"prompt\": \"PROMPT\", \"question\": \"QUESTION\", \"type\": \"TYPE\", \"count\": COUNT}` and follow these rules:\n"
         msg += "- Replace `PROMPT` with what you want to search.\n"
         msg += "- Replace `QUESTION` with the question to respond.\n"
-        msg += "- Replace `TYPE` with the type of information you want to search. The available types are: `answers` and `news`."
-        msg += "- Replace `COUNT` with the number of websites to search. The max limit is 8 and the default is 5.\n"
+        msg += "- Replace `TYPE` with the type of information you want to search. The available types are:\n"
+        msg += "    - `answers` obtains answers from the internet. In case no answer is found it obtains websites and reads it's content.\n"
+        msg += "    - `news` obtains the latest news from the internet.\n"
+        msg += "    - `chat` uses a chatbot from the internet to answer the prompt.\n"
+        msg += "    - `maps` obtains nearby places near the prompt.\n"
+        msg += "- Replace `COUNT` with the number of websites to search. Less count means quicker answers and more count means more information. The minimum is 1 and the maximum is 8.\n"
         msg += "- You can use this tool to search information in real time and to search something you're not sure about or don't know about.\n"
         plugins_available = True
 
@@ -118,7 +122,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     # Split the messages to create a list
     msg = msg.split("\n")
 
-    # Set to first person if requested
+    # [DEPRECATED] Set to first person if requested
     if (cfg.current_data["system_messages_in_first_person"]):
         msg = ToFirstPerson(msg)
 

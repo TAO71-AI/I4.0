@@ -11,7 +11,6 @@ import Inference.Images.ai_depth_estimation as de
 import Inference.Images.ai_object_detection as od
 import Inference.Audio.speech_recog as sr
 import Inference.Audio.rvc_inf as rvc
-import Inference.Audio.tts as tts
 import Inference.Audio.ai_vocal_separator as uvr
 import Inference.Images.image_to_image as img2img
 import Inference.Text.ai_question_answering as qa
@@ -46,7 +45,6 @@ de - Depth Estimation.
 od - Object Detection.
 rvc - Uses RVC on an audio file.
 uvr - Uses UVR on an audio file.
-tts - Text to Speech.
 img2img - Image to Image.
 qa - Question Answering.
 """
@@ -123,10 +121,76 @@ def LoadAllModels() -> None:
     de.LoadModels()
     od.LoadModels()
     rvc.LoadModels()
-    #uvr.LoadModels()                # TODO
-    tts.LoadTTS()
+    #uvr.LoadModels() # TODO
     img2img.LoadModels()
     qa.LoadModels()
+
+def __offload_model__(Service: str, Index: int) -> None:
+    # Call the function to offload of the model
+    if (Service == "chatbot"):
+        # Check if the chatbot is multimodal or not
+        if (cfg.GetInfoOfTask("chatbot", Index)["allows_files"]):
+            # It is
+            mmcb.__offload_model__(Index)
+            pass
+        else:
+            # It isn't
+            cb.__offload_model__(Index)
+    elif (Service == "sc"):
+        tc.__offload_model__(Index)
+    elif (Service == "tr"):
+        tns.__offload_model__(Index)
+    elif (Service == "ld"):
+        tns.__offload_classifier__(Index)
+    elif (Service == "text2img"):
+        agi.__offload_model__(Index)
+    elif (Service == "img2text"):
+        itt.__offload_model__(Index)
+    elif (Service == "speech2text"):
+        sr.__offload_model__(Index)
+    elif (Service == "text2audio"):
+        aga.__offload_model__(Index)
+    elif (Service == "nsfw_filter-text"):
+        filters.__offload_text__(Index)
+    elif (Service == "nsfw_filter-image"):
+        filters.__offload_image__(Index)
+    elif (Service == "de"):
+        de.__offload_model__(Index)
+    elif (Service == "od"):
+        od.__offload_model__(Index)
+    elif (Service == "rvc"):
+        rvc.__offload_model__(Index)
+    elif (Service == "img2img"):
+        img2img.__offload_model__(Index)
+    elif (Service == "qa"):
+        qa.__offload_model__(Index)
+    else:
+        print(f"Invalid offload service '{Service}'; ignoring...")
+
+def OffloadAll(Exclude: dict[str, list[int]]) -> None:
+    # Get tasks
+    tasks = cfg.GetAllTasks()
+
+    # For each task
+    for task in list(tasks.keys()):
+        # For each index
+        for index in range(len(tasks[task])):
+            aOffloading = True
+
+            try:
+                # Get offloading from the config
+                aOffloading = tasks[task][index]["allow_offloading"]
+            except:
+                # Error getting the offloading from the config; probable not specified. Default to True.
+                pass
+
+            # Check if the task and index is in the exclude list or if it doesn't allow offloading
+            if ((task in list(Exclude.keys()) and index in Exclude[task]) or not aOffloading):
+                # It is, continue
+                continue
+
+            # It isn't, offload
+            __offload_model__(task, index)
 
 def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int) -> Iterator[str]:
     # Delete empty conversation
@@ -141,7 +205,16 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
     if (SearchSystem == "websites" or SearchSystem == "website"):
         # Search for websites
         internetResults = internet.Search__Websites(SearchPrompt, Count)
-        internetResponse = "".join([internet.ReadTextFromWebsite(result, maxLength, minLength) + "\n" for result in internetResults])
+        internetResponse = ""
+
+        # For each result
+        for result in internetResults:
+            try:
+                # Try to append it to the internet response
+                internetResponse += internet.ReadTextFromWebsite(result, maxLength, minLength) + "\n"
+            except:
+                # Ignore error
+                continue
     elif (SearchSystem == "answers" or SearchSystem == "answer"):
         # Search for answers
         internetResults = internet.Search__Answers(SearchPrompt, Count)
@@ -164,9 +237,24 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
             return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
         else:
             internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
+    elif (SearchSystem == "chat"):
+        # Obtain the response from the chat
+        internetResponse = internet.Search__Chat(f"{SearchPrompt}\n{Question}", cfg.current_data["internet_chat"])
+        internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
+    elif (SearchSystem == "maps"):
+        # Search for nearby places
+        internetResults = internet.Search__Maps(SearchPrompt, 15, Count)
+        internetResponse = "".join([res + "\n" for res in internetResults])
+        
+        # Check if internet response length is 0
+        if (len(internetResponse.strip()) == 0):
+            # It is, get the response from the websites
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
+        else:
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
     else:
         # Raise error
-        raise ValueError("Invalid SearchSystem. Use 'websites', 'answers' or 'news'.")
+        raise ValueError("Invalid SearchSystem. Use 'websites', 'answers', 'news', 'chat' or 'maps'.")
 
     # Return the response
     return MakePrompt(Index, "Internet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], [False, False])
@@ -220,9 +308,8 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     info = cfg.GetInfoOfTask(Service, Index)
 
     # Check if the info contains information about the model and it's not empty
-    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"])) > 0 and UseDefaultSystemPrompts[1]):
+    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"]).strip()) > 0 and UseDefaultSystemPrompts[1]):
         # Add the model info to the model
-        sp.append("# More information about you:")
         sp.append(str(info["model_info"]))
     
     if (cfg.current_data["use_dynamic_system_args"]):
@@ -232,7 +319,6 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
         # Add sprompts
         sp += [
-            "# Extra information:\n"
             f"The current date is {cDate.day} of {calendar.month_name[cDate.month]}, {cDate.year}.",
             f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
         ]
@@ -247,9 +333,8 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Check if the length of the memories is higher than 0
     if (len(mems) > 0):
         # It is
-        # Add a memories category
-        sp.append("# Memories:")
-        
+        sp.append("")
+
         # For each memory
         for mem in range(len(mems)):
             # Add the memory
@@ -257,8 +342,11 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     
     # Check NSFW in prompt
     if ((Service == "chatbot" or Service == "sc" or Service == "tr" or Service == "text2img" or Service == "text2audio" or Service == "tts" or Service == "qa") and not cfg.current_data["allow_processing_if_nsfw"][0] and Service != "nsfw_filter-text"):
+        # Pick random text NSFW filter
+        filterIdx = random.randint(0, len(cfg.GetAllInfosOfATask("nsfw_filter-text")) - 1)
+        
         # Check if the prompt is NSFW
-        isNSFW = IsTextNSFW(Prompt)
+        isNSFW = IsTextNSFW(Prompt, filterIdx)
 
         # Return error if it's NSFW
         if (isNSFW):
@@ -280,8 +368,11 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
         # Check NSFW
         if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"):
+            # Pick random image NSFW filter
+            filterIdx = random.randint(0, len(cfg.GetAllInfosOfATask("nsfw_filter-image")) - 1)
+
             # The file is an image
-            isNSFW = IsImageNSFW(f)
+            isNSFW = IsImageNSFW(f, filterIdx)
 
             # Return error if it's NSFW
             if (isNSFW):
@@ -439,12 +530,6 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         
         # Return the response
         yield {"response": "", "files": []}"""
-    elif (Service == "tts" and len(cfg.GetAllInfosOfATask(Service)) > 0):
-        # Generate TTS
-        response = DoTTS(Index, Prompt)
-
-        # Return the response
-        yield {"response": "", "files": [{"type": "audio", "data": response}]}
     elif (Service == "img2img" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Check file 0 type
         if (Files[0]["type"] != "image"):
@@ -575,7 +660,7 @@ def DetectLanguage(Index: int, Prompt: str) -> str:
     # Return unknown language
     return "unknown"
 
-def IsTextNSFW(Prompt: str, Index: int = -1) -> bool:
+def IsTextNSFW(Prompt: str, Index: int) -> bool:
     # If the model is loaded, check NSFW
     if (len(cfg.GetAllInfosOfATask("nsfw_filter-text")) > 0):
         return filters.InferenceText(Prompt, Index)
@@ -584,25 +669,13 @@ def IsTextNSFW(Prompt: str, Index: int = -1) -> bool:
     return None
 
 # Check if an image prompt is NSFW
-def IsImageNSFW(Image: str | Image.Image, Index: int = -1) -> bool:
+def IsImageNSFW(Image: str | Image.Image, Index: int) -> bool:
     # If the model is loaded, check NSFW
     if (len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0):
         return filters.InferenceImage(Image, Index)
     
     # If not, return none
     return None
-
-def DoTTS(Index: int, Prompt: str):
-    # Convert audio data to json
-    Prompt = cfg.JSONDeserializer(Prompt)
-
-    # Get TTS audio response
-    data = tts.MakeTTS(Index, Prompt)
-    # Encode the audio into base64
-    audio = base64.b64encode(data).decode("utf-8")
-
-    # Return the data
-    return audio
 
 def DoUVR(Index: int, AudioData: str) -> list[str]:
     # Convert audio data to json

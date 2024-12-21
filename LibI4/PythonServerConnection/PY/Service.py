@@ -14,12 +14,11 @@ class Service(Enum):
     TextClassification = 10
     NSFWFilterText = 11
     NSFWFilterImage = 12
-    TTS = 13
-    UVR = 14
-    ImageToImage = 15
-    QuestionAnswering = 16
-    LanguageDetection = 17
-    None = -1
+    UVR = 13
+    ImageToImage = 14
+    QuestionAnswering = 15
+    LanguageDetection = 16
+    NONE = -1
 
 class ServiceManager:
     @staticmethod
@@ -39,10 +38,9 @@ class ServiceManager:
             "sc": Service.TextClassification,
             "nsfw_filter-text": Service.NSFWFilterText,
             "nsfw_filter-image": Service.NSFWFilterImage,
-            "tts": Service.TTS,
             "uvr": Service.UVR,
             "img2img": Service.ImageToImage,
-            "qa": Service.QuestionAnswering,
+            "qa": Service.QuestionAnswering
         }
 
         if (ServiceName in mappings):
@@ -52,10 +50,28 @@ class ServiceManager:
 
     @staticmethod
     def ToString(ServiceName: Service) -> str:
-        for key, value in ServiceManager.FromString.__annotations__.items():
-            if (value == ServiceName):
-                return key
-        
+        mappings = {
+            Service.Chatbot: "chatbot",
+            Service.ImageGeneration: "text2img",
+            Service.ImageToText: "img2text",
+            Service.DepthEstimation: "de",
+            Service.Audio: "text2audio",
+            Service.SpeechToText: "speech2text",
+            Service.ObjectDetection: "od",
+            Service.RVC: "rvc",
+            Service.Translator: "tr",
+            Service.LanguageDetection: "ld",
+            Service.TextClassification: "sc",
+            Service.NSFWFilterText: "nsfw_filter-text",
+            Service.NSFWFilterImage: "nsfw_filter-image",
+            Service.UVR: "uvr",
+            Service.ImageToImage: "img2img",
+            Service.QuestionAnswering: "qa"
+        }
+
+        if (ServiceName in mappings):
+            return mappings[ServiceName]
+
         raise ValueError("Could not parse service.")
 
     @staticmethod

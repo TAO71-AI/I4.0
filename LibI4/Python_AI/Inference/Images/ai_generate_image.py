@@ -11,13 +11,13 @@ import ai_config as cfg
 import os
 import psutil
 
-__models__: list[tuple[AutoPipelineForText2Image | StableDiffusion, dict[str, any]]] = []
+__models__: dict[int, tuple[AutoPipelineForText2Image | StableDiffusion, dict[str, any]]] = {}
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("text2img"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Get info about the model
@@ -42,7 +42,22 @@ def LoadModels() -> None:
             raise Exception("Invalid text2img type.")
 
         # Add the model to the list of models
-        __models__.append((model, info))
+        __models__[i] = (model, info)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    if (type(__models__[Index][0]) == StableDiffusion):
+        __models__[Index][0].close()
+    else:
+        __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     # Set some variables

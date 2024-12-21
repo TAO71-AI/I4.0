@@ -3,18 +3,30 @@ import soundfile as sf
 import os
 import ai_config as cfg
 
-__models__: list[tuple[AutoModelForTextToWaveform, AutoProcessor, str]] = []
+__models__: dict[int, tuple[AutoModelForTextToWaveform, AutoProcessor, str]] = {}
 
 def LoadModels() -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("text2audio"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Load the model and add it to the list of models
         model, processor, device = cfg.LoadModel("text2audio", i, AutoModelForTextToWaveform, AutoProcessor)
-        __models__.append((model, processor, device))
+        __models__[i] = (model, processor, device)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def GenerateAudio(Index: int, Prompt: str) -> bytes:
     # Load the models

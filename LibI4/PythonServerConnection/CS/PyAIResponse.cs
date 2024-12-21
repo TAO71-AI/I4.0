@@ -11,6 +11,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Text;
 using Newtonsoft.Json;
+using System.Diagnostics.Contracts;
 
 namespace TAO71.I4.PythonManager
 {
@@ -375,6 +376,28 @@ namespace TAO71.I4.PythonManager
             return SendAndWaitForStreaming(jsonData);
         }
 
+        private static void ExecuteSimulatedVision(string Template, List<Dictionary<string, string>> Files, Service VisionService, int Index, bool ForceNoConnect, out string[] SVisionPrompts)
+        {
+            // Try to send the message
+            IEnumerable<Dictionary<string, object>> res = AutoGetResponseFromServer("", Files, VisionService, Index, ForceNoConnect, false);
+            int img = 0;
+
+            // For each response
+            foreach (Dictionary<string, object> token in res)
+            {
+                // Check if the response ended
+                if ((bool)token["ended"])
+                {
+                    // Break the loop
+                    break;
+                }
+
+                // Get the response from the service
+                SVisionPrompts[img] += Template.Replace("[IMAGE_ID]", (img + 1).ToString()).Replace("[RESPONSE]", (string)token["response"]);
+                img++;
+            }
+        }
+
         public static IEnumerable<Dictionary<string, object>> AutoGetResponseFromServer(string Prompt, List<Dictionary<string, string>> Files, Service ServerService, int Index = -1, bool ForceNoConnect = false, bool FilesPath = true)
         {
             /*
@@ -448,18 +471,6 @@ namespace TAO71.I4.PythonManager
                     {"steps", Conf.Text2Image_Steps}
                 });
             }
-            else if (ServerService == Service.TTS)
-            {
-                // Template: text2audio (for TTS)
-                Prompt = JsonConvert.SerializeObject(new Dictionary<string, object>()
-                {
-                    {"voice", Conf.TTS_Voice},
-                    {"language", Conf.TTS_Language},
-                    {"pitch", Conf.TTS_Pitch},
-                    {"speed", Conf.TTS_Speed},
-                    {"text", Prompt}
-                });
-            }
             else if (ServerService == Service.RVC)
             {
                 // Template: RVC
@@ -467,7 +478,9 @@ namespace TAO71.I4.PythonManager
                 {
                     {"filter_radius", Conf.RVC_FilterRadius},
                     {"f0_up_key", Conf.RVC_F0},
-                    {"protect", Conf.RVC_Protect}
+                    {"protect", Conf.RVC_Protect},
+                    {"index_rate", Conf.RVC_IndexRate},
+                    {"mix_rate", Conf.RVC_MixRate}
                 });
             }
             else if (ServerService == Service.UVR)
@@ -506,24 +519,8 @@ namespace TAO71.I4.PythonManager
                     {
                         try
                         {
-                            // Try to send the message
-                            IEnumerable<Dictionary<string, object>> res = AutoGetResponseFromServer("", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, FilesPath);
-                            int img = 0;
-
-                            // For each response
-                            foreach (Dictionary<string, object> token in res)
-                            {
-                                // Check if the response ended
-                                if ((bool)token["ended"])
-                                {
-                                    // Break the loop
-                                    break;
-                                }
-
-                                // Get the response from Img2Text
-                                sVisionPrompts[img] += "### Image " + (img + 1).ToString() + " (description): " + (string)token["response"] + "\n";
-                                img++;
-                            }
+                            // Execute the simulated vision
+                            ExecuteSimulatedVision("### Image [IMAGE_ID] (description): [RESPONSE]\n", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, out sVisionPrompts);
                         }
                         catch
                         {
@@ -536,24 +533,8 @@ namespace TAO71.I4.PythonManager
                     {
                         try
                         {
-                            // Try to send the message
-                            IEnumerable<Dictionary<string, object>> res = AutoGetResponseFromServer("", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, FilesPath);
-                            int img = 0;
-
-                            // For each response
-                            foreach (Dictionary<string, object> token in res)
-                            {
-                                // Check if the response ended
-                                if ((bool)token["ended"])
-                                {
-                                    // Break the loop
-                                    break;
-                                }
-
-                                // Get the response from Img2Text
-                                sVisionPrompts[img] += "### Image " + (img + 1).ToString() + " (objects detected with position, in JSON format): " + (string)token["response"] + "\n";
-                                img++;
-                            }
+                            // Execute the simulated vision
+                            ExecuteSimulatedVision("### Image [IMAGE_ID] (objects detected with position, in JSON format): [RESPONSE]\n", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, out sVisionPrompts);
                         }
                         catch
                         {
@@ -840,7 +821,7 @@ namespace TAO71.I4.PythonManager
             return SendAndWaitForStreaming(Prompt);
         }
 
-        public static (int, float) GetQueueForService(Service QueueService, int Index = -1)
+        public static (int, int) GetQueueForService(Service QueueService, int Index = -1)
         {
             /*
              * This will send a prompt to the connected server asking for the queue size and time.
@@ -862,7 +843,7 @@ namespace TAO71.I4.PythonManager
 
                 // Deserialize the received JSON response to a dictionary and return the users and the time
                 Dictionary<string, float> queue = JsonConvert.DeserializeObject<Dictionary<string, float>>((string)response["response"]);
-                return ((int)queue["users"], queue["time"]);
+                return ((int)queue["users"], (int)queue["time"]);
             }
 
             // Throw an error

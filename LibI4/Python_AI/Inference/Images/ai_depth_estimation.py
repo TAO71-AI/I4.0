@@ -6,24 +6,36 @@ import numpy as np
 import os
 import ai_config as cfg
 
-__models__: list[tuple[AutoModelForDepthEstimation, AutoImageProcessor, str]] = []
+__models__: dict[int, tuple[AutoModelForDepthEstimation, AutoImageProcessor, str]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
-    if (Index < len(__models__)):
+    if (Index in list(__models__.keys())):
         return
 
     # Load the model
     model, processor, device = cfg.LoadModel("de", Index, AutoModelForDepthEstimation, AutoImageProcessor)
 
     # Add the model to the list of models
-    __models__.append((model, processor, device))
+    __models__[Index] = (model, processor, device)
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("de"))):
         # Load the model
         __load_model__(i)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
     # Load the models

@@ -1,7 +1,9 @@
 # Import libraries
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
+from duckduckgo_search.exceptions import RatelimitException
 import requests
+import json
 
 def __find_and_get_all_items__(BSContent: BeautifulSoup, Item: str) -> str:
     # Find all the items of the specified type
@@ -75,9 +77,15 @@ def ReadTextFromWebsite(URL: str, Limit: int = 0, RemoveUnderLength: int = 0) ->
     return text.strip()
 
 def Search__Websites(Prompt: str, MaxResults: int) -> list[str]:
-    # Search the prompt in DuckDuckGo
-    searchResults = DDGS().text(Prompt, max_results = MaxResults)
+    # Create results list
     results = []
+
+    try:
+        # Try to search the prompt using the API
+        searchResults = DDGS().text(Prompt, max_results = MaxResults)
+    except RatelimitException:
+        # Rate limit error, try again using DuckDuckGoLite
+        searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
 
     # For each result
     for result in searchResults:
@@ -88,7 +96,7 @@ def Search__Websites(Prompt: str, MaxResults: int) -> list[str]:
     return results
 
 def Search__Answers(Prompt: str, MaxResults: int) -> list[str]:
-    # Search the prompt in DuckDuckGo
+    # Search the prompt in DuckDuckGo (answers) and create the results list
     searchResults = DDGS().answers(Prompt)
     results = []
 
@@ -106,7 +114,7 @@ def Search__Answers(Prompt: str, MaxResults: int) -> list[str]:
     return results
 
 def Search__News(Prompt: str, MaxResults: int) -> list[str]:
-    # Search the prompt in DuckDuckGo
+    # Search the prompt in DuckDuckGo (news) and create the results list
     searchResults = DDGS().news(Prompt, max_results = MaxResults)
     results = []
     
@@ -114,6 +122,49 @@ def Search__News(Prompt: str, MaxResults: int) -> list[str]:
     for result in searchResults:
         # Append the result text to the results list
         results.append(f"NEWS #{searchResults.index(result) + 1}:\n> Title: {result['title']}\n> Body: {result['body']}\n> Source: {result['source']}")
+    
+    # Return the results list
+    return results
+
+def Search__Chat(Prompt: str, Model: str) -> str:
+    # Check the model
+    availableModels = [
+        "gpt-4o-mini",      # Not Open-Source
+        "claude-3-haiku",   # Not Open-Source
+        "llama-3.1-70b",    # Open-Source
+        "mixtral-8x7b"      # Open-Source
+    ]
+
+    if (Model not in availableModels):
+        # Invalid model, print and use mixtral-8x7b
+        print(f"Invalid model. Available models are: {', '.join(availableModels)[2:-2]}.\nUsing Mixtral-8x7B.")
+        Model = "mixtral-8x7b"
+
+    # Use a chatbot from DuckDuckGo
+    response = DDGS().chat(Prompt, Model)
+
+    # Return the chatbot response
+    return response
+
+def Search__Maps(Prompt: str, Radius: int, MaxResults: int) -> list[str]:
+    # Search the prompt in DuckDuckGo (maps) and create the results list
+    try:
+        searchResults = DDGS().maps(Prompt, max_results = MaxResults, radius = Radius)
+    except Exception as ex:
+        print("Error obtaining map. Returning empty list.")
+        return []
+
+    results = []
+
+    # Check the length of the results
+    if (len(searchResults) == 0):
+        # Return empty list
+        return []
+    
+    # For each result
+    for result in searchResults:
+        # Append the result text to the results list
+        results.append(f"LOCATION #{searchResults.index(result) + 1}:\n> Details: {json.dumps(result)}")
     
     # Return the results list
     return results
