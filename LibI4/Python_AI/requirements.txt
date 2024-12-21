@@ -12,7 +12,7 @@ diffusers>=0.31.0
 # Server requirements
 asyncio
 websockets==13.1
-pymysql==1.1.0
+pymysql==1.1.1
 
 # Other requirements
 requests
