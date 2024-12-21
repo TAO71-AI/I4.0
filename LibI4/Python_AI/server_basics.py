@@ -1,15 +1,18 @@
 import os
 import random
+import time
 import json
 import datetime
 import pymysql as mysql
 import pymysql.cursors as mysql_c
 import ai_config as cfg
 
-default_tokens: int = 5000
-use_mysql: bool = cfg.current_data["keys_db"]["use"] if (type(cfg.current_data["keys_db"]["user"]) == bool) else (str(cfg.current_data["keys_db"]["user"]).lower() == "true")
+default_tokens: int = 2000
+use_mysql: bool = cfg.current_data["keys_db"]["use"] if (type(cfg.current_data["keys_db"]["use"]) == bool) else (str(cfg.current_data["keys_db"]["use"]).lower() == "true")
 mysql_connection = None
 mysql_cursor = None
+saving: bool = False
+reading: bool = False
 
 if (not os.path.exists("API/")):
     os.mkdir("API/")
@@ -82,6 +85,8 @@ def GenerateKey(tokens: int = -1, daily_key: bool = False) -> dict:
     return key_data
 
 def SaveKey(key_data: dict, UseMySQL: bool | None = None, Err: int = 0) -> None:
+    global saving
+
     if (UseMySQL and use_mysql):
         try:
             mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
@@ -95,16 +100,25 @@ def SaveKey(key_data: dict, UseMySQL: bool | None = None, Err: int = 0) -> None:
         if (key_data["user_id"] > 0 and use_mysql):
             raise Exception()
 
+        while (saving):
+            time.sleep(0.05)
+
+        saving = True
+
         with open("API/" + key_data["key"] + ".key", "w+") as f:
             f.write(json.dumps(key_data))
             f.close()
+
+        saving = False
         
         if (UseMySQL == None):
             SaveKey(key_data, True)
     except:
-        pass
+        saving = False
 
 def GetAllKeys(UseMySQL: bool | None = None, Err: int = 0) -> list[dict]:
+    global reading
+
     Init()
     keys = []
 
@@ -135,16 +149,26 @@ def GetAllKeys(UseMySQL: bool | None = None, Err: int = 0) -> list[dict]:
                 ReloadDB()
                 return GetAllKeys(True, 1)
 
-    for key in os.listdir("API/"):
-        with open(f"API/{key}", "r") as f:
-            content: dict = json.loads(f.read().strip())
-            f.close()
+    while (reading):
+        time.sleep(0.05)
 
-            if (list(content.keys()).count("admin") == 0):
-                content["admin"] = False
+    reading = True
 
-            keys.append(content)
-    
+    try:
+        for key in os.listdir("API/"):
+            with open(f"API/{key}", "r") as f:
+                content: dict = json.loads(f.read())
+                f.close()
+
+                if (list(content.keys()).count("admin") == 0):
+                    content["admin"] = False
+
+                keys.append(content)
+        
+        reading = False
+    except:
+        reading = False
+
     if (UseMySQL == None):
         keys += GetAllKeys(True)
     

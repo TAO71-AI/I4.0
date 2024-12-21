@@ -131,7 +131,7 @@ async def SendAndReceive(Data: bytes) -> bytes:
         raise Exception("Connect to a server first.")
     
     # Send the data
-    ClientSocket.send(Data)
+    await ClientSocket.send(Data)
 
     # Invoke the action
     if (OnSendDataAction != None):
@@ -272,6 +272,7 @@ def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Iterator[
     # Serialize a very basic, minimum, data to send to the server
     jsonData = json.dumps({
         "APIKey": Conf.ServerAPIKey,
+        "Prompt": Prompt,
         "Files": {},
         "Service": Service,
         "Conversation": Conf.Chatbot_Conversation,
@@ -281,6 +282,22 @@ def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Iterator[
 
     # Return the response (probably serialized)
     return SendAndWaitForStreaming(jsonData)
+
+def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], VisionService: Service, Index: int, ForceNoConnect: bool, SVisionPrompts: list[str]) -> None:
+    # Try to send the message
+    res = AutoGetResponseFromServer("", Files, VisionService, Index, ForceNoConnect, False)
+    img = 0
+
+    # For each response
+    for token in res:
+        # Check if the response ended
+        if (token["ended"]):
+            # Break the loop
+            break
+
+        # Get the response from the service
+        SVisionPrompts[img] += Template.replace("[IMAGE_ID]", str(img + 1)).replace("[RESPONSE]", str(token["response"]))
+        img += 1
 
 def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerService: Service, Index: int = -1, ForceNoConnect: bool = False, FilesPath: bool = True) -> Iterator[dict[str, any]]:
     """
@@ -338,21 +355,14 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
             "guidance": Conf.Text2Image_GuidanceScale,
             "steps": Conf.Text2Image_Steps
         })
-    elif (ServerService == Service.TTS):
-        # Template: text2audio (for TTS)
-        Prompt = json.dumps({
-            "voice": Conf.TTS_Voice,
-            "language": Conf.TTS_Language,
-            "pitch": Conf.TTS_Pitch,
-            "speed": Conf.TTS_Speed,
-            "text": Prompt
-        })
     elif (ServerService == Service.RVC):
         # Template: RVC
         Prompt = json.dumps({
             "filter_radius": Conf.RVC_FilterRadius,
             "f0_up_key": Conf.RVC_f0,
-            "protect": Conf.RVC_Protect
+            "protect": Conf.RVC_Protect,
+            "index_rate": Conf.RVC_IndexRate,
+            "mix_rate": Conf.RVC_MixRate
         })
     elif (ServerService == ServerService.UVR):
         # Template: UVR
@@ -380,19 +390,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
             if (Conf.Chatbot_SimulatedVision_Image2Text):
                 try:
                     # Try to send the message
-                    res = AutoGetResponseFromServer("", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, FilesPath)
-                    img = 0
-
-                    # For each response
-                    for token in res:
-                        # Check if the response ended
-                        if (token["ended"]):
-                            # Break the loop
-                            break
-
-                        # Get the response from Img2Text
-                        sVisionPrompts[img] += f"### Image {img + 1} (description): {token['response']}\n"
-                        img += 1
+                    __execute_simulated_vision__("### Image [IMAGE_ID] (description): [RESPONSE]\n", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, sVisionPrompts)
                 except:
                     # Ignore error
                     pass
@@ -401,19 +399,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
             if (Conf.Chatbot_SimulatedVision_ObjectDetection):
                 try:
                     # Try to send the message
-                    res = AutoGetResponseFromServer("", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, FilesPath)
-                    img = 0
-
-                    # For each response
-                    for token in res:
-                        # Check if the response ended
-                        if (token["ended"]):
-                            # Break the loop
-                            break
-
-                        # Get the response from Img2Text
-                        sVisionPrompts[img] += f"### Image {img + 1} (objects detected with position, in JSON format): {token['response']}\n"
-                        img += 1
+                    __execute_simulated_vision__("### Image [IMAGE_ID] (objects detected with position, in JSON format): [RESPONSE]\n", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, sVisionPrompts)
                 except:
                     # Ignore error
                     pass
@@ -448,7 +434,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
     # Return the response
     return SendAndWaitForStreaming(Prompt)
 
-def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, float]:
+def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, int]:
     """
     This will send a prompt to the connected server asking for the queue size and time.
     Once received, it will return it.

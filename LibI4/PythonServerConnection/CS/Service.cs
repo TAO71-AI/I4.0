@@ -17,11 +17,10 @@ namespace TAO71.I4.PythonManager
         TextClassification = 10,
         NSFWFilterText = 11,
         NSFWFilterImage = 12,
-        TTS = 13,
-        UVR = 14,
-        ImageToImage = 15,
-        QuestionAnswering = 16,
-        LanguageDetection = 17,
+        UVR = 13,
+        ImageToImage = 14,
+        QuestionAnswering = 15,
+        LanguageDetection = 16,
         None = -1
     }
 
@@ -59,8 +58,6 @@ namespace TAO71.I4.PythonManager
                     return Service.NSFWFilterText;
                 case "nsfw_filter-image":
                     return Service.NSFWFilterImage;
-                case "tts":
-                    return Service.TTS;
                 case "uvr":
                     return Service.UVR;
                 case "img2img":
@@ -102,8 +99,6 @@ namespace TAO71.I4.PythonManager
                     return "nsfw_filter-text";
                 case Service.NSFWFilterImage:
                     return "nsfw_filter-image";
-                case Service.TTS:
-                    return "tts";
                 case Service.UVR:
                     return "uvr";
                 case Service.ImageToImage:

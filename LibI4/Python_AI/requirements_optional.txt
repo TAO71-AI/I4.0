@@ -2,9 +2,5 @@
 sacremoses
 timm
 einops
-invisible_watermark
-optimum[openvino]
-optimum[onnxruntime]
 ctranslate2
 datasets
-flash_attn

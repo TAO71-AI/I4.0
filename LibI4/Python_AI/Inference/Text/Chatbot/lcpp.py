@@ -1,5 +1,5 @@
 # Import LLaMA-CPP-Python
-from llama_cpp import Llama
+from llama_cpp import Llama, LLAMA_SPLIT_MODE_LAYER, LLAMA_SPLIT_MODE_ROW, LLAMA_SPLIT_MODE_NONE
 
 # Import some other libraries
 from huggingface_hub import hf_hub_download
@@ -11,6 +11,32 @@ import Inference.PredefinedModels.models as models
 import ai_config as cfg
 
 def __load_model__(Config: dict[str, any], Repo: str, Model: str, ChatTemplate: str | None, Threads: int, Device: str) -> Llama:
+    # Set split mode
+    try:
+        # Get the split mode
+        splitMode = Config["split_mode"].lower()
+
+        # Check if the split mode is valid
+        if (splitMode != "layer" and splitMode != "row" and splitMode != "none"):
+            # Invalid split mode, set to default (layer)
+            splitMode = "layer"
+    except:
+        # Error; probably `split_mode` is not configured, set to default (layer)
+        splitMode = "layer"
+    
+    if (splitMode == "layer"):
+        # Set split mode to layer
+        splitMode = LLAMA_SPLIT_MODE_LAYER
+    elif (splitMode == "row"):
+        # Set split mode to row
+        splitMode = LLAMA_SPLIT_MODE_ROW
+    elif (splitMode == "none"):
+        # Set split mode to none
+        splitMode = LLAMA_SPLIT_MODE_NONE
+    else:
+        # Invalid split mode, set to default (layer)
+        splitMode = LLAMA_SPLIT_MODE_LAYER
+
     # Set args
     args = dict(
         n_ctx = Config["ctx"],
@@ -18,6 +44,7 @@ def __load_model__(Config: dict[str, any], Repo: str, Model: str, ChatTemplate: 
         n_gpu_layers = Config["ngl"] if (Device != "cpu") else 0,
         n_batch = Config["batch"],
         n_ubatch = Config["batch"],
+        split_mode = splitMode,
         chat_format = ChatTemplate if (ChatTemplate != None and len(ChatTemplate) > 0) else None,
         logits_all = True,
         n_threads = Threads,
@@ -115,12 +142,13 @@ def LoadModel(Config: dict[str, any], Threads: int, Device: str) -> Llama:
         # Load as a custom one
         return __load_custom_model__(Config, Threads, Device)
 
-def __inference__(Model: Llama, Config: dict[str, any], ContentForModel: list[dict[str, str]]) -> Iterator[str]:
+def __inference__(Model: Llama, Config: dict[str, any], ContentForModel: list[dict[str, str]], Seed: int | None) -> Iterator[str]:
     # Get a response from the model
     response = Model.create_chat_completion(
         messages = ContentForModel,
         temperature = Config["temp"],
         max_tokens = cfg.current_data["max_length"],
+        seed = Seed,
         stream = True
     )
 

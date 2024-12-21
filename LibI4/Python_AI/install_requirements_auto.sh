@@ -90,7 +90,7 @@ elif echo "$GPU_INFO" | grep -i amd; then
 
     if [ $FORCE_CPU_PT -ne 1 ]; then
         echo "   Building PyTorch with ROCm support..."
-        PYTORCH_WHL="--extra-index-url https://download.pytorch.org/whl/rocm6.1"
+        PYTORCH_WHL="--extra-index-url https://download.pytorch.org/whl/rocm6.2"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
@@ -163,7 +163,22 @@ fi
 
 # 2. Update PIP and install pre-requirements.
 echo -e "\e[1m > Updating PIP... \e[0m"
-"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS pip setuptools
+"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS "pip<24.1" setuptools
+
+rm -rf fairseq/
+git clone --branch main --single-branch https://github.com/Tps-F/fairseq.git ./fairseq
+cd fairseq
+pip install . --verbose --upgrade --index-url "$PYTORCH_WHL" --extra-index-url https://pypi.org/simple
+cd ..
+rm -rf fairseq/
+
+rm -rf RVC/
+git clone --branch intel_support --single-branch https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git ./RVC     # TAO71-AI's fork; NVIDIA, AMD and Intel GPUs support.
+#git clone --branch develop --single-branch https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git ./RVC       # Original repository; NVIDIA and AMD GPUs support only.
+cd RVC
+pip install . --verbose --upgrade
+cd ..
+rm -rf RVC/
 
 # 3. Install PyTorch.
 echo -e "\e[1m > Installing PyTorch... \e[0m"
@@ -194,7 +209,7 @@ fi
 
 # 6. Install I4.0 requirements.
 echo -e "\e[1m > Installing I4.0's requirements... \e[0m"
-"$PIP_CMD" install -r requirements.txt
+"$PIP_CMD" install -r requirements.txt --index-url "$PYTORCH_WHL" --extra-index-url https://pypi.org/simple
 
 if [ $? != 0 ]; then
     echo -e "\e[1m > Requirements installation failed. \e[0m"

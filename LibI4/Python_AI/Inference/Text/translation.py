@@ -3,14 +3,14 @@ import emoji
 import random
 import ai_config as cfg
 
-__models__: list[tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str, dict[str, any]]] = []
-__classifiers__: list[Pipeline] = []
+__models__: dict[int, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str, dict[str, any]]] = {}
+__classifiers__: dict[int, Pipeline] = {}
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("tr"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
         
         # Get the info of the model
@@ -25,27 +25,51 @@ def LoadModels() -> None:
         model, tokenizer, device = cfg.LoadModel("tr", i, AutoModelForSeq2SeqLM, AutoTokenizer)
 
         # Add the model to the list of models
-        __models__.append((model, tokenizer, device, info))
+        __models__[i] = (model, tokenizer, device, info)
 
 def LoadClassifiers() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("ld"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__classifiers__.keys())):
             continue
         
         # Load the model
         model, _ = cfg.LoadPipeline("text-classification", "ld", i)
 
         # Add the model to the list of models
-        __classifiers__.append(model)
+        __classifiers__[i] = model
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
+
+def __offload_classifier__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__classifiers__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __classifiers__[Index] = None
+    
+    # Delete from the models list
+    __classifiers__.pop(Index)
 
 def GetAvailableLanguages() -> list[str]:
     # Create list
     langs = []
 
     # For each model
-    for model in __models__:
+    for _, model in __models__.items():
         # Get the language and add it to the list
         langs.append(model[3]["lang"])
     
@@ -151,14 +175,14 @@ def AutoTranslate(Prompt: str, InputLanguage: str = "unknown", OutputLanguage: s
     models = []
 
     # For each model
-    for model in __models__:
+    for index, model in __models__.items():
         # Get the info of the model
         info = model[3]
 
         # Check if the desired input and output languages are available
         if (info["lang"].lower().strip() == InputLanguage + "-" + OutputLanguage):
             # They are, add the model index to the list
-            models.append(__models__.index(model))
+            models.append(index)
     
     # Inference the model with the desired index and return the result
     return InferenceModel(models[IndexModel], Prompt)

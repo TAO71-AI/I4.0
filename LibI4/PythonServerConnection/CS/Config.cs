@@ -54,6 +54,8 @@ namespace TAO71.I4.PythonManager
         public int RVC_FilterRadius = 3;
         public float RVC_Protect = 0.33f;
         public int RVC_F0 = 0;
+        public float RVC_IndexRate = 0.75f;
+        public float RVC_MixRate = 0.25f;
 
         // Translator
         // Nothing to configure

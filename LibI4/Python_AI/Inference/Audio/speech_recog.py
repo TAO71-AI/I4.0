@@ -1,16 +1,18 @@
 from transformers import Pipeline
+from pydub import AudioSegment
 import speech_recognition as sr
+import torch
 import whisper
 import os
 import ai_config as cfg
 
-__models__: list[tuple[whisper.Whisper | Pipeline, dict[str, any]]] = []
+__models__: dict[int, tuple[whisper.Whisper | Pipeline, dict[str, any]]] = {}
 
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("speech2text"))):
         # Check if the model is already loaded
-        if (i < len(__models__)):
+        if (i in list(__models__.keys())):
             continue
 
         # Get the model info
@@ -32,6 +34,30 @@ def LoadModels() -> None:
                 in_memory = True
             )
 
+            # Set dtype
+            try:
+                # Get the desired dtype
+                dt = cfg.__get_dtype_from_str__(info["dtype"])
+
+                # Check dtype
+                #if (dt == torch.float16 or dt == torch.bfloat16 or dt == torch.int16 or dt == torch.uint16):
+                #    print("Invalid quantization.")
+                #    raise Exception()
+                #elif (dt == torch.float32 or dt == torch.int32 or dt == torch.uint32):
+                #    dt = torch.qint32
+                #elif (dt == torch.int8):
+                #    dt = torch.qint8
+                #elif (dt == torch.uint8):
+                #    dt = torch.quint8
+
+                # Quantize the model, encoder and decoder to the desired dtype
+                model = torch.quantization.quantize_dynamic(model, {torch.nn.Linear}, dtype = dt)
+                model.encoder = torch.quantization.quantize_dynamic(model.encoder, {torch.nn.Linear}, dtype = dt)
+                model.decoder = torch.quantization.quantize_dynamic(model.decoder, {torch.nn.Linear}, dtype = dt)
+            except:
+                # Ignore
+                pass
+
             print("   Done!")
         elif (info["type"] == "hf"):
             # Load the model using transformers
@@ -41,7 +67,19 @@ def LoadModels() -> None:
             raise Exception("Invalid model type.")
         
         # Add the model to the list of models
-        __models__.append((model, info))
+        __models__[i] = (model, info)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
     # Load the models
@@ -57,10 +95,9 @@ def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
         
     with open(audio_name, "wb") as f:
         f.write(Data.get_wav_data())
-        f.close()
     
     # Check the model type
-    if (__models__[Index][1]["type"] == "whisper"):
+    if (type(__models__[Index][0]) == whisper.Whisper):
         # Use whisper
         # Inference the model
         result = __models__[Index][0].transcribe(audio_name, temperature = __models__[Index][1]["temp"], verbose = True)
@@ -70,7 +107,7 @@ def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
             "text": result["text"],
             "lang": result["language"],
         }
-    elif (__models__[Index][1]["type"] == "hf"):
+    else:
         # Use transformers
         # Inference the model
         result = __models__[Index][0](audio_name)
@@ -85,6 +122,10 @@ def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
     return result
 
 def GetAudioDataFromFile(FilePath: str) -> sr.AudioData:
+    # Convert to wav
+    audio: AudioSegment = AudioSegment.from_file(FilePath)
+    audio.export(FilePath, format = "wav")
+
     # Open the file
     with sr.AudioFile(FilePath) as source:
         # Return the audio data

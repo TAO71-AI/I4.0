@@ -6,39 +6,63 @@ import torch
 # Import I4.0's utilities
 import ai_config as cfg
 
-__models_text__: list[tuple[AutoModelForSequenceClassification, AutoTokenizer, str, dict[str, any]]] = []
-__models_image__: list[tuple[Pipeline, str, dict[str, any]]] = []
+__models_text__: dict[int, tuple[AutoModelForSequenceClassification, AutoTokenizer, str, dict[str, any]]] = {}
+__models_image__: dict[int, tuple[Pipeline, str, dict[str, any]]] = {}
 
 def LoadTextModels() -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("nsfw_filter-text"))):
         # Check if the model is already loaded
-        if (i < len(__models_text__)):
+        if (i in list(__models_text__.keys())):
             continue
 
         # Load the model
         model, tokenizer, device = cfg.LoadModel("nsfw_filter-text", i, AutoModelForSequenceClassification, AutoTokenizer)
 
         # Add the model to the list
-        __models_text__.append((model, tokenizer, device, cfg.GetInfoOfTask("nsfw_filter-text", i)))
+        __models_text__[i] = (model, tokenizer, device, cfg.GetInfoOfTask("nsfw_filter-text", i))
 
 def LoadImageModels() -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("nsfw_filter-image"))):
         # Check if the model is already loaded
-        if (i < len(__models_image__)):
+        if (i in list(__models_image__.keys())):
             continue
 
         # Load the model
         pipe, device = cfg.LoadPipeline("image-classification", "nsfw_filter-image", i)
 
         # Add the model to the list
-        __models_image__.append((pipe, device, cfg.GetInfoOfTask("nsfw_filter-image", i)))
+        __models_image__[i] = (pipe, device, cfg.GetInfoOfTask("nsfw_filter-image", i))
 
 def LoadModels() -> None:
     # Load both text and image filters
     LoadTextModels()
     LoadImageModels()
+
+def __offload_text__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models_text__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models_text__[Index] = None
+    
+    # Delete from the models list
+    __models_text__.pop(Index)
+
+def __offload_image__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models_image__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models_image__[Index] = None
+    
+    # Delete from the models list
+    __models_image__.pop(Index)
 
 def InferenceText(Prompt: str, Index: int) -> bool:
     # Load the models

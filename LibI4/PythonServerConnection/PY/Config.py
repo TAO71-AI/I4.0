@@ -43,6 +43,8 @@ Text2Image_Steps: int = -1
 RVC_FilterRadius: int = 3
 RVC_Protect: float = 0.33
 RVC_f0: int = 0
+RVC_IndexRate: float = 0.75
+RVC_MixRate: float = 0.25
 
 # Translator
 # Nothing to configure

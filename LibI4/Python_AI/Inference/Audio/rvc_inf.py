@@ -15,7 +15,7 @@ import psutil
 # Import I4.0 utilities
 import ai_config as cfg
 
-__models__: dict[str, tuple[VC, str, str]] = {}
+__models__: dict[int, tuple[VC, str, str]] = {}
 
 def __download_asset__(URL: str, Name: str) -> None:
     # Check if the RVC assets folder exists
@@ -34,7 +34,6 @@ def __download_asset__(URL: str, Name: str) -> None:
     # Save into the file
     with open(Name, "wb") as f:
         f.write(response.content)
-        f.close()
 
 def __move_file__(OriginalPath: str, NewPath: str) -> None:
     # Check if the file exists in the new path or if the original path doesn't exists
@@ -54,7 +53,7 @@ def __get_file_name__(FilePath: str) -> str:
     # Return the file path
     return FilePath
 
-def __load_model__(ModelPath: str, ModelName: str, ModelIndex: str, ModelType: str, Index: int) -> None:
+def __load_model__(ModelPath: str, ModelIndex: str, ModelType: str, Index: int) -> None:
     # Set the environment variables
     os.environ["index_root"] = "rvc_assets"
     os.environ["rmvpe_root"] = "rvc_assets"
@@ -77,10 +76,11 @@ def __load_model__(ModelPath: str, ModelName: str, ModelIndex: str, ModelType: s
     else:
         # Use CPU
         vc.config.use_cpu()
-
-    # Set the VC
-    vc.get_vc(os.getcwd() + "/rvc_assets/" + ModelPath)
-
+        device = "cpu"
+    
+    # Print loading message
+    print(f"Loading model for 'RVC [INDEX {Index}]' on the device '{device}'...")
+    
     # Get threads and check if the number of threads are valid
     if (info["threads"] == -1):
         threads = psutil.cpu_count()
@@ -92,10 +92,16 @@ def __load_model__(ModelPath: str, ModelName: str, ModelIndex: str, ModelType: s
     # Set the threads number to use
     vc.config.n_cpu = threads
 
-    # Add to the models dict
-    __models__[ModelName] = (vc, ModelIndex, ModelType)
+    # Set the VC
+    vc.get_vc(f"{os.getcwd()}/rvc_assets/{ModelPath}")
 
-def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: int, F0UpKey: int) -> bytes:
+    # Add to the models dict
+    __models__[Index] = (vc, ModelIndex, ModelType)
+
+    # Print loading message
+    print("   Done!")
+
+def __make_rvc__(Index: int, AudioPath: str, Protect: float, FilterRadius: int, F0UpKey: int, IndexRate: float, MixRate: float) -> bytes:
     # Load all the models
     LoadModels()
 
@@ -104,7 +110,18 @@ def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: i
         raise Exception("Audio file doesn't exists.")
 
     # Inference the model
-    tgt_sr, audio_opt, _, _ = __models__[ModelName][0].vc_inference(1, Path(AudioPath), f0_up_key = F0UpKey, protect = Protect, filter_radius = FilterRadius, f0_method = __models__[ModelName][2], hubert_path = os.getcwd() + "/rvc_assets/hubert_base.pt", index_file = __models__[ModelName][1])
+    tgt_sr, audio_opt, _, _ = __models__[Index][0].vc_inference(
+        1,
+        Path(AudioPath),
+        f0_up_key = F0UpKey,
+        protect = Protect,
+        filter_radius = FilterRadius,
+        f0_method = __models__[Index][2],
+        hubert_path = f"{os.getcwd()}/rvc_assets/hubert_base.pt",
+        index_file = __models__[Index][1],
+        index_rate = IndexRate,
+        rms_mix_rate = MixRate
+    )
     
     # Write the audio file
     output_file_name = "tmp_rvc_"
@@ -120,7 +137,6 @@ def __make_rvc__(AudioPath: str, ModelName: str, Protect: float, FilterRadius: i
     # Read the output file
     with open(output_file_path, "rb") as f:
         audio_bytes = f.read()
-        f.close()
     
     # Delete the output file
     os.remove(output_file_path)
@@ -149,7 +165,7 @@ def LoadModels(AllowDownloads: bool = True) -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("rvc"))):
         # Check if the model is already loaded
-        if (i < len(list(__models__.keys()))):
+        if (i in list(__models__.keys())):
             continue
 
         # Get the info
@@ -161,10 +177,22 @@ def LoadModels(AllowDownloads: bool = True) -> None:
 
         # Update the info
         mPath = __get_file_name__(info["model"][1])
-        mIndex = __get_file_name__(info["model"][2])
+        mIndex = f"{os.getcwd()}/rvc_assets/{__get_file_name__(info['model'][2])}"
 
         # Load the model
-        __load_model__(mPath, info["model"][0], mIndex, info["model"][3], i)
+        __load_model__(mPath, mIndex, info["model"][3], i)
+
+def __offload_model__(Index: int) -> None:
+    # Check the index is valid
+    if (Index not in list(__models__.keys())):
+        # Not valid, return
+        return
+    
+    # Offload the model
+    __models__[Index] = None
+    
+    # Delete from the models list
+    __models__.pop(Index)
 
 def MakeRVC(Data: dict[str]) -> bytes:
     # Get the input file name
@@ -172,15 +200,15 @@ def MakeRVC(Data: dict[str]) -> bytes:
         InputFile = Data["input"]
     except:
         raise Exception("Input file not found.")
-    
-    # Get the model name
+
+    # Get the index
     try:
-        ModelName = Data["model"]
+        Index = Data["index"]
+
+        if (Index >= len(cfg.GetAllInfosOfATask("rvc"))):
+            raise Exception()
     except:
-        try:
-            ModelName = list(__models__.keys())[Data["index"]]
-        except:
-            raise Exception("Model name can't be NULL.")
+        raise Exception("Invalid Index.")
     
     # Get the filter radius
     try:
@@ -212,8 +240,32 @@ def MakeRVC(Data: dict[str]) -> bytes:
     except:
         Protect = 0.33
     
+    # Get the index rate
+    try:
+        IndexRate = float(Data["index_rate"])
+
+        # Clamp the index rate
+        if (IndexRate < 0):
+            Protect = 0
+        elif (IndexRate > 1):
+            IndexRate = 1
+    except:
+        IndexRate = 0.75
+    
+    # Get the mix rate
+    try:
+        MixRate = float(Data["mix_rate"])
+
+        # Clamp the mix rate
+        if (MixRate < 0):
+            MixRate = 0
+        elif (MixRate > 1):
+            MixRate = 1
+    except:
+        MixRate = 0.25
+    
     # Inference the model
-    return __make_rvc__(InputFile, ModelName, Protect, FilterRadius, F0UpKey)
+    return __make_rvc__(Index, InputFile, Protect, FilterRadius, F0UpKey, IndexRate, MixRate)
 
 # Disable logging
 logging.disable(logging.CRITICAL)

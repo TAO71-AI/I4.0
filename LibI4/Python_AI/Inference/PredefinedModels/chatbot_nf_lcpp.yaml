@@ -1,397 +1,488 @@
+# NOTE:
+# Every quant under Q4_K_S should not be used, the results are very bad.
+# Also, prefer L (or XL for Q3_K) quants if the file size is similar, it will give you better results since it uses the Q8_0 for embed and output weights.
+# We recommend to use Q6_K, Q6_K_L and Q8_0 quants instead of the f16/f32 quants, since the results are very good and requires less compute power.
+# ^--- For small models (<=3B parameters) we recommend only using Q8_0, f16 or f32, since this gives pretty good results and, due to the small size of the model, doesn't require a lot of compute power. Using a smaller quant may give bad results.
+
 qwen2.5-0.5b-instruct:
     # License: Apache 2.0
     repo: "bartowski/Qwen2.5-0.5B-Instruct-GGUF"
     model:
-        q2_k: "Qwen2.5-0.5B-Instruct-Q2_K.gguf"          # 0.34 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "Qwen2.5-0.5B-Instruct-Q2_K_L.gguf"      # 0.34 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "Qwen2.5-0.5B-Instruct-Q3_K_S.gguf"      # 0.34 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "Qwen2.5-0.5B-Instruct-Q3_K_M.gguf"      # 0.36 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "Qwen2.5-0.5B-Instruct-Q3_K_L.gguf"      # 0.37 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "Qwen2.5-0.5B-Instruct-Q3_K_XL.gguf"    # 0.37 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "Qwen2.5-0.5B-Instruct-Q4_K_S.gguf"      # 0.39 GB (good for low RAM, practically unusable for most cases)
-        q4_k_m: "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"      # 0.40 GB (good for low RAM, practically unusable for most cases)
-        q4_k_l: "Qwen2.5-0.5B-Instruct-Q4_K_L.gguf"      # 0.40 GB (good for low RAM, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q5_k_s: "Qwen2.5-0.5B-Instruct-Q5_K_S.gguf"      # 0.41 GB (high quality, practically unusable for most cases, good for low RAM, recommended over Q4 quants)
-        q5_k_m: "Qwen2.5-0.5B-Instruct-Q5_K_M.gguf"      # 0.42 GB (high quality, practically unusable for most cases, good for low RAM, recommended over Q4 quants)
-        q5_k_l: "Qwen2.5-0.5B-Instruct-Q5_K_L.gguf"      # 0.42 GB (high quality, good for low RAM, recommended over Q4 quants, uses Q8_0 for embed and output weights)
-        q6_k: "Qwen2.5-0.5B-Instruct-Q6_K.gguf"          # 0.51 GB (very high quality, recommended)
-        q6_k_l: "Qwen2.5-0.5B-Instruct-Q6_K_L.gguf"      # 0.51 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Qwen2.5-0.5B-Instruct-Q8_0.gguf"          # 0.53 GB (similar quality to F16, recommended)
-        f16: "Qwen2.5-0.5B-Instruct-f16.gguf"            # 0.99 GB (best quality, recommended)
+        q2_k: "Qwen2.5-0.5B-Instruct-Q2_K.gguf"          # 0.34 GB
+        q2_k_l: "Qwen2.5-0.5B-Instruct-Q2_K_L.gguf"      # 0.34 GB
+        q3_k_s: "Qwen2.5-0.5B-Instruct-Q3_K_S.gguf"      # 0.34 GB
+        q3_k_m: "Qwen2.5-0.5B-Instruct-Q3_K_M.gguf"      # 0.36 GB
+        q3_k_l: "Qwen2.5-0.5B-Instruct-Q3_K_L.gguf"      # 0.37 GB
+        q3_k_xl: "Qwen2.5-0.5B-Instruct-Q3_K_XL.gguf"    # 0.37 GB
+        q4_k_s: "Qwen2.5-0.5B-Instruct-Q4_K_S.gguf"      # 0.39 GB
+        q4_k_m: "Qwen2.5-0.5B-Instruct-Q4_K_M.gguf"      # 0.40 GB
+        q4_k_l: "Qwen2.5-0.5B-Instruct-Q4_K_L.gguf"      # 0.40 GB
+        q5_k_s: "Qwen2.5-0.5B-Instruct-Q5_K_S.gguf"      # 0.41 GB
+        q5_k_m: "Qwen2.5-0.5B-Instruct-Q5_K_M.gguf"      # 0.42 GB
+        q5_k_l: "Qwen2.5-0.5B-Instruct-Q5_K_L.gguf"      # 0.42 GB
+        q6_k: "Qwen2.5-0.5B-Instruct-Q6_K.gguf"          # 0.51 GB
+        q6_k_l: "Qwen2.5-0.5B-Instruct-Q6_K_L.gguf"      # 0.51 GB
+        q8_0: "Qwen2.5-0.5B-Instruct-Q8_0.gguf"          # 0.53 GB
+        f16: "Qwen2.5-0.5B-Instruct-f16.gguf"            # 0.99 GB
         default: "f16"
+        recommended: "f16"
     template: "qwen"
+    notes: "A very small model, good for simple things and only in english; you may experience problems using it in another language. Recommended only if you have less than 4GB of RAM."
 
 qwen2.5-1.5b-instruct:
     # License: Apache 2.0
     repo: "bartowski/Qwen2.5-1.5B-Instruct-GGUF"
     model:
-        q2_k: "Qwen2.5-1.5B-Instruct-Q2_K.gguf"          # 0.68 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "Qwen2.5-1.5B-Instruct-Q2_K_L.gguf"      # 0.73 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "Qwen2.5-1.5B-Instruct-Q3_K_S.gguf"      # 0.76 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf"      # 0.82 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "Qwen2.5-1.5B-Instruct-Q3_K_L.gguf"      # 0.88 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "Qwen2.5-1.5B-Instruct-Q3_K_XL.gguf"    # 0.94 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "Qwen2.5-1.5B-Instruct-Q4_K_S.gguf"      # 0.94 GB (good for low RAM, practically unusable for most cases)
-        q4_k_m: "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"      # 0.99 GB (good for low RAM)
-        q4_k_l: "Qwen2.5-1.5B-Instruct-Q4_K_L.gguf"      # 1.04 GB (good for low RAM, uses Q8_0 for embed and output weights)
-        q5_k_s: "Qwen2.5-1.5B-Instruct-Q5_K_S.gguf"      # 1.10 GB (high quality, good for low RAM, recommended over Q4 quants)
-        q5_k_m: "Qwen2.5-1.5B-Instruct-Q5_K_M.gguf"      # 1.13 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Qwen2.5-1.5B-Instruct-Q5_K_L.gguf"      # 1.18 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Qwen2.5-1.5B-Instruct-Q6_K.gguf"          # 1.27 GB (very high quality, recommended)
-        q6_k_l: "Qwen2.5-1.5B-Instruct-Q6_K_L.gguf"      # 1.33 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Qwen2.5-1.5B-Instruct-Q8_0.gguf"          # 1.65 GB (similar quality to F16, recommended)
-        f16: "Qwen2.5-1.5B-Instruct-f16.gguf"            # 3.09 GB (best quality, not worth the compute power needed)
+        q2_k: "Qwen2.5-1.5B-Instruct-Q2_K.gguf"          # 0.68 GB
+        q2_k_l: "Qwen2.5-1.5B-Instruct-Q2_K_L.gguf"      # 0.73 GB
+        q3_k_s: "Qwen2.5-1.5B-Instruct-Q3_K_S.gguf"      # 0.76 GB
+        q3_k_m: "Qwen2.5-1.5B-Instruct-Q3_K_M.gguf"      # 0.82 GB
+        q3_k_l: "Qwen2.5-1.5B-Instruct-Q3_K_L.gguf"      # 0.88 GB
+        q3_k_xl: "Qwen2.5-1.5B-Instruct-Q3_K_XL.gguf"    # 0.94 GB
+        q4_k_s: "Qwen2.5-1.5B-Instruct-Q4_K_S.gguf"      # 0.94 GB
+        q4_k_m: "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"      # 0.99 GB
+        q4_k_l: "Qwen2.5-1.5B-Instruct-Q4_K_L.gguf"      # 1.04 GB
+        q5_k_s: "Qwen2.5-1.5B-Instruct-Q5_K_S.gguf"      # 1.10 GB
+        q5_k_m: "Qwen2.5-1.5B-Instruct-Q5_K_M.gguf"      # 1.13 GB
+        q5_k_l: "Qwen2.5-1.5B-Instruct-Q5_K_L.gguf"      # 1.18 GB
+        q6_k: "Qwen2.5-1.5B-Instruct-Q6_K.gguf"          # 1.27 GB
+        q6_k_l: "Qwen2.5-1.5B-Instruct-Q6_K_L.gguf"      # 1.33 GB
+        q8_0: "Qwen2.5-1.5B-Instruct-Q8_0.gguf"          # 1.65 GB
+        f16: "Qwen2.5-1.5B-Instruct-f16.gguf"            # 3.09 GB
         default: "f16"
+        recommended: "f16"
     template: "qwen"
+    notes: "A small model but can do more things than the 0.5B version. Only in English; you may experience problems using it in another language. Recommended only if you have 4 GB of RAM."
 
 qwen2.5-3b-instruct:
     # License: Qwen-research
     repo: "bartowski/Qwen2.5-3B-Instruct-GGUF"
     model:
-        q2_k: "Qwen2.5-3B-Instruct-Q2_K.gguf"          # 1.27 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "Qwen2.5-3B-Instruct-Q2_K_L.gguf"      # 1.35 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "Qwen2.5-3B-Instruct-Q3_K_S.gguf"      # 1.45 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "Qwen2.5-3B-Instruct-Q3_K_M.gguf"      # 1.59 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "Qwen2.5-3B-Instruct-Q3_K_L.gguf"      # 1.71 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Qwen2.5-3B-Instruct-Q3_K_XL.gguf"    # 1.78 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Qwen2.5-3B-Instruct-Q4_K_S.gguf"      # 1.79 GB (good for low RAM, practically unusable for most cases)
-        q4_k_m: "Qwen2.5-3B-Instruct-Q4_K_M.gguf"      # 1.84 GB (good for low RAM, practically unusable for most cases)
-        q4_k_l: "Qwen2.5-3B-Instruct-Q4_K_L.gguf"      # 1.89 GB (good for low RAM, uses Q8_0 for embed and output weights)
-        q5_k_s: "Qwen2.5-3B-Instruct-Q5_K_S.gguf"      # 1.95 GB (high quality, good for low RAM, recommended over Q4 quants)
-        q5_k_m: "Qwen2.5-3B-Instruct-Q5_K_M.gguf"      # 2.01 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Qwen2.5-3B-Instruct-Q5_K_L.gguf"      # 2.06 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Qwen2.5-3B-Instruct-Q6_K.gguf"          # 2.18 GB (very high quality, recommended)
-        q6_k_l: "Qwen2.5-3B-Instruct-Q6_K_L.gguf"      # 2.26 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Qwen2.5-3B-Instruct-Q8_0.gguf"          # 2.72 GB (similar quality to F16, recommended)
-        f16: "Qwen2.5-3B-Instruct-f16.gguf"            # 5.31 GB (best quality, not worth the compute power needed)
+        q2_k: "Qwen2.5-3B-Instruct-Q2_K.gguf"          # 1.27 GB
+        q2_k_l: "Qwen2.5-3B-Instruct-Q2_K_L.gguf"      # 1.35 GB
+        q3_k_s: "Qwen2.5-3B-Instruct-Q3_K_S.gguf"      # 1.45 GB
+        q3_k_m: "Qwen2.5-3B-Instruct-Q3_K_M.gguf"      # 1.59 GB
+        q3_k_l: "Qwen2.5-3B-Instruct-Q3_K_L.gguf"      # 1.71 GB
+        q3_k_xl: "Qwen2.5-3B-Instruct-Q3_K_XL.gguf"    # 1.78 GB
+        q4_k_s: "Qwen2.5-3B-Instruct-Q4_K_S.gguf"      # 1.79 GB
+        q4_k_m: "Qwen2.5-3B-Instruct-Q4_K_M.gguf"      # 1.84 GB
+        q4_k_l: "Qwen2.5-3B-Instruct-Q4_K_L.gguf"      # 1.89 GB
+        q5_k_s: "Qwen2.5-3B-Instruct-Q5_K_S.gguf"      # 1.95 GB
+        q5_k_m: "Qwen2.5-3B-Instruct-Q5_K_M.gguf"      # 2.01 GB
+        q5_k_l: "Qwen2.5-3B-Instruct-Q5_K_L.gguf"      # 2.06 GB
+        q6_k: "Qwen2.5-3B-Instruct-Q6_K.gguf"          # 2.18 GB
+        q6_k_l: "Qwen2.5-3B-Instruct-Q6_K_L.gguf"      # 2.26 GB
+        q8_0: "Qwen2.5-3B-Instruct-Q8_0.gguf"          # 2.72 GB
+        f16: "Qwen2.5-3B-Instruct-f16.gguf"            # 5.31 GB
         default: "f16"
+        recommended: "f16"
     template: "qwen"
+    notes: "A small model but decent model. Recommended if you have 8 GB of RAM."
 
 qwen2.5-7b-instruct:
     # License: Apache 2.0
     repo: "bartowski/Qwen2.5-7B-Instruct-GGUF"
     model:
-        q2_k: "Qwen2.5-7B-Instruct-Q2_K.gguf"          # 3.02 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "Qwen2.5-7B-Instruct-Q2_K_L.gguf"      # 3.55 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "Qwen2.5-7B-Instruct-Q3_K_S.gguf"      # 3.49 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Qwen2.5-7B-Instruct-Q3_K_M.gguf"      # 3.81 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Qwen2.5-7B-Instruct-Q3_K_L.gguf"      # 4.09 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Qwen2.5-7B-Instruct-Q3_K_XL.gguf"    # 4.57 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Qwen2.5-7B-Instruct-Q4_K_S.gguf"      # 4.46 GB (good for low RAM)
-        q4_k_m: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"      # 4.68 GB (good for low RAM, recommended)
-        q4_k_l: "Qwen2.5-7B-Instruct-Q4_K_L.gguf"      # 5.09 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Qwen2.5-7B-Instruct-Q5_K_S.gguf"      # 5.32 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Qwen2.5-7B-Instruct-Q5_K_M.gguf"      # 5.44 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Qwen2.5-7B-Instruct-Q5_K_L.gguf"      # 5.78 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Qwen2.5-7B-Instruct-Q6_K.gguf"          # 6.25 GB (very high quality, recommended)
-        q6_k_l: "Qwen2.5-7B-Instruct-Q6_K_L.gguf"      # 6.52 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Qwen2.5-7B-Instruct-Q8_0.gguf"          # 8.10 GB (similar quality to F16, recommended)
-        f16: "Qwen2.5-7B-Instruct-f16.gguf"            # 15.2 GB (best quality, not worth the compute power needed)
+        q2_k: "Qwen2.5-7B-Instruct-Q2_K.gguf"          # 3.02 GB
+        q2_k_l: "Qwen2.5-7B-Instruct-Q2_K_L.gguf"      # 3.55 GB
+        q3_k_s: "Qwen2.5-7B-Instruct-Q3_K_S.gguf"      # 3.49 GB
+        q3_k_m: "Qwen2.5-7B-Instruct-Q3_K_M.gguf"      # 3.81 GB
+        q3_k_l: "Qwen2.5-7B-Instruct-Q3_K_L.gguf"      # 4.09 GB
+        q3_k_xl: "Qwen2.5-7B-Instruct-Q3_K_XL.gguf"    # 4.57 GB
+        q4_k_s: "Qwen2.5-7B-Instruct-Q4_K_S.gguf"      # 4.46 GB
+        q4_k_m: "Qwen2.5-7B-Instruct-Q4_K_M.gguf"      # 4.68 GB
+        q4_k_l: "Qwen2.5-7B-Instruct-Q4_K_L.gguf"      # 5.09 GB
+        q5_k_s: "Qwen2.5-7B-Instruct-Q5_K_S.gguf"      # 5.32 GB
+        q5_k_m: "Qwen2.5-7B-Instruct-Q5_K_M.gguf"      # 5.44 GB
+        q5_k_l: "Qwen2.5-7B-Instruct-Q5_K_L.gguf"      # 5.78 GB
+        q6_k: "Qwen2.5-7B-Instruct-Q6_K.gguf"          # 6.25 GB
+        q6_k_l: "Qwen2.5-7B-Instruct-Q6_K_L.gguf"      # 6.52 GB
+        q8_0: "Qwen2.5-7B-Instruct-Q8_0.gguf"          # 8.10 GB
+        f16: "Qwen2.5-7B-Instruct-f16.gguf"            # 15.2 GB
         default: "f16"
+        recommended: "q8_0"
     template: "qwen"
+    notes: "A good model, recommended if you have 16 GB of RAM."
 
 qwen2.5-14b-instruct:
     # License: Apache 2.0
     repo: "bartowski/Qwen2.5-14B-Instruct-GGUF"
     model:
-        q2_k: "Qwen2.5-14B-Instruct-Q2_K.gguf"          # 5.77 GB (very bad quality)
-        q2_k_l: "Qwen2.5-14B-Instruct-Q2_K_L.gguf"      # 6.53 GB (very bad quality, uses Q8_0 for embed and output weights)
-        q3_k_s: "Qwen2.5-14B-Instruct-Q3_K_S.gguf"      # 6.66 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Qwen2.5-14B-Instruct-Q3_K_M.gguf"      # 7.34 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Qwen2.5-14B-Instruct-Q3_K_L.gguf"      # 7.92 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Qwen2.5-14B-Instruct-Q3_K_XL.gguf"    # 8.61 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Qwen2.5-14B-Instruct-Q4_K_S.gguf"      # 8.57 GB (good for low RAM, recommended)
-        q4_k_m: "Qwen2.5-14B-Instruct-Q4_K_M.gguf"      # 8.99 GB (good for low RAM, recommended)
-        q4_k_l: "Qwen2.5-14B-Instruct-Q4_K_L.gguf"      # 9.57 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Qwen2.5-14B-Instruct-Q5_K_S.gguf"      # 10.3 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Qwen2.5-14B-Instruct-Q5_K_M.gguf"      # 10.5 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Qwen2.5-14B-Instruct-Q5_K_L.gguf"      # 11.0 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Qwen2.5-14B-Instruct-Q6_K.gguf"          # 12.1 GB (very high quality, recommended)
-        q6_k_l: "Qwen2.5-14B-Instruct-Q6_K_L.gguf"      # 12.5 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Qwen2.5-14B-Instruct-Q8_0.gguf"          # 15.7 GB (similar quality to F16, recommended)
-        f16: "Qwen2.5-14B-Instruct-f16.gguf"            # 29.5 GB (best quality, not worth the compute power needed)
+        q2_k: "Qwen2.5-14B-Instruct-Q2_K.gguf"          # 5.77 GB
+        q2_k_l: "Qwen2.5-14B-Instruct-Q2_K_L.gguf"      # 6.53 GB
+        q3_k_s: "Qwen2.5-14B-Instruct-Q3_K_S.gguf"      # 6.66 GB
+        q3_k_m: "Qwen2.5-14B-Instruct-Q3_K_M.gguf"      # 7.34 GB
+        q3_k_l: "Qwen2.5-14B-Instruct-Q3_K_L.gguf"      # 7.92 GB
+        q3_k_xl: "Qwen2.5-14B-Instruct-Q3_K_XL.gguf"    # 8.61 GB
+        q4_k_s: "Qwen2.5-14B-Instruct-Q4_K_S.gguf"      # 8.57 GB
+        q4_k_m: "Qwen2.5-14B-Instruct-Q4_K_M.gguf"      # 8.99 GB
+        q4_k_l: "Qwen2.5-14B-Instruct-Q4_K_L.gguf"      # 9.57 GB
+        q5_k_s: "Qwen2.5-14B-Instruct-Q5_K_S.gguf"      # 10.3 GB
+        q5_k_m: "Qwen2.5-14B-Instruct-Q5_K_M.gguf"      # 10.5 GB
+        q5_k_l: "Qwen2.5-14B-Instruct-Q5_K_L.gguf"      # 11.0 GB
+        q6_k: "Qwen2.5-14B-Instruct-Q6_K.gguf"          # 12.1 GB
+        q6_k_l: "Qwen2.5-14B-Instruct-Q6_K_L.gguf"      # 12.5 GB
+        q8_0: "Qwen2.5-14B-Instruct-Q8_0.gguf"          # 15.7 GB
+        f16: "Qwen2.5-14B-Instruct-f16.gguf"            # 29.5 GB
         default: "f16"
+        recommended: "q6_k_l"
     template: "qwen"
+    notes: "A very good model, recommended if you have 32 GB of RAM."
 
 qwen2.5-32b-instruct:
     # License: Apache 2.0
     repo: "bartowski/Qwen2.5-32B-Instruct-GGUF"
     model:
-        q2_k: "Qwen2.5-32B-Instruct-Q2_K.gguf"          # 12.3 GB (very bad quality)
-        q2_k_l: "Qwen2.5-32B-Instruct-Q2_K_L.gguf"      # 13.1 GB (very bad quality, uses Q8_0 for embed and output weights)
-        q3_k_s: "Qwen2.5-32B-Instruct-Q3_K_S.gguf"      # 14.4 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Qwen2.5-32B-Instruct-Q3_K_M.gguf"      # 15.9 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Qwen2.5-32B-Instruct-Q3_K_L.gguf"      # 17.2 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Qwen2.5-32B-Instruct-Q3_K_XL.gguf"    # 17.9 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Qwen2.5-32B-Instruct-Q4_K_S.gguf"      # 18.8 GB (good for low RAM, recommended)
-        q4_k_m: "Qwen2.5-32B-Instruct-Q4_K_M.gguf"      # 19.9 GB (good for low RAM, recommended)
-        q4_k_l: "Qwen2.5-32B-Instruct-Q4_K_L.gguf"      # 20.4 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Qwen2.5-32B-Instruct-Q5_K_S.gguf"      # 22.6 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Qwen2.5-32B-Instruct-Q5_K_M.gguf"      # 23.3 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Qwen2.5-32B-Instruct-Q5_K_L.gguf"      # 23.7 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Qwen2.5-32B-Instruct-Q6_K.gguf"          # 26.9 GB (very high quality, recommended)
-        q6_k_l: "Qwen2.5-32B-Instruct-Q6_K_L.gguf"      # 27.3 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Qwen2.5-32B-Instruct-Q8_0.gguf"          # 34.8 GB (similar quality to F16, recommended)
+        q2_k: "Qwen2.5-32B-Instruct-Q2_K.gguf"          # 12.3 GB
+        q2_k_l: "Qwen2.5-32B-Instruct-Q2_K_L.gguf"      # 13.1 GB
+        q3_k_s: "Qwen2.5-32B-Instruct-Q3_K_S.gguf"      # 14.4 GB
+        q3_k_m: "Qwen2.5-32B-Instruct-Q3_K_M.gguf"      # 15.9 GB
+        q3_k_l: "Qwen2.5-32B-Instruct-Q3_K_L.gguf"      # 17.2 GB
+        q3_k_xl: "Qwen2.5-32B-Instruct-Q3_K_XL.gguf"    # 17.9 GB
+        q4_k_s: "Qwen2.5-32B-Instruct-Q4_K_S.gguf"      # 18.8 GB
+        q4_k_m: "Qwen2.5-32B-Instruct-Q4_K_M.gguf"      # 19.9 GB
+        q4_k_l: "Qwen2.5-32B-Instruct-Q4_K_L.gguf"      # 20.4 GB
+        q5_k_s: "Qwen2.5-32B-Instruct-Q5_K_S.gguf"      # 22.6 GB
+        q5_k_m: "Qwen2.5-32B-Instruct-Q5_K_M.gguf"      # 23.3 GB
+        q5_k_l: "Qwen2.5-32B-Instruct-Q5_K_L.gguf"      # 23.7 GB
+        q6_k: "Qwen2.5-32B-Instruct-Q6_K.gguf"          # 26.9 GB
+        q6_k_l: "Qwen2.5-32B-Instruct-Q6_K_L.gguf"      # 27.3 GB
+        q8_0: "Qwen2.5-32B-Instruct-Q8_0.gguf"          # 34.8 GB
         # F16 not available right now
         default: "q8_0"
+        recommended: "q6_k_l"
     template: "qwen"
+    notes: "A very good model, recommended if you have 32 GB of RAM."
 
 rombos-llm-v2.6-qwen-14b:
     # License: Apache 2.0
     repo: "bartowski/Rombos-LLM-V2.6-Qwen-14b-GGUF"
     model:
-        q2_k: "Rombos-LLM-V2.6-Qwen-14b-Q2_K.gguf"          # 5.77 GB (very bad quality)
-        q2_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q2_K_L.gguf"      # 6.53 GB (very bad quality, uses Q8_0 for embed and output weights)
-        q3_k_s: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_S.gguf"      # 6.66 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_M.gguf"      # 7.34 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_L.gguf"      # 7.92 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_XL.gguf"    # 8.61 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Rombos-LLM-V2.6-Qwen-14b-Q4_K_S.gguf"      # 8.57 GB (good for low RAM, recommended)
-        q4_k_m: "Rombos-LLM-V2.6-Qwen-14b-Q4_K_M.gguf"      # 8.99 GB (good for low RAM, recommended)
-        q4_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q4_K_L.gguf"      # 9.57 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Rombos-LLM-V2.6-Qwen-14b-Q5_K_S.gguf"      # 10.3 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Rombos-LLM-V2.6-Qwen-14b-Q5_K_M.gguf"      # 10.5 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q5_K_L.gguf"      # 11.0 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Rombos-LLM-V2.6-Qwen-14b-Q6_K.gguf"          # 12.1 GB (very high quality, recommended)
-        q6_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q6_K_L.gguf"      # 12.5 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Rombos-LLM-V2.6-Qwen-14b-Q8_0.gguf"          # 15.7 GB (similar quality to F16, recommended)
-        f16: "Rombos-LLM-V2.6-Qwen-14b-f16.gguf"            # 29.5 GB (best quality, not worth the compute power needed)
+        q2_k: "Rombos-LLM-V2.6-Qwen-14b-Q2_K.gguf"          # 5.77 GB
+        q2_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q2_K_L.gguf"      # 6.53 GB
+        q3_k_s: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_S.gguf"      # 6.66 GB
+        q3_k_m: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_M.gguf"      # 7.34 GB
+        q3_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_L.gguf"      # 7.92 GB
+        q3_k_xl: "Rombos-LLM-V2.6-Qwen-14b-Q3_K_XL.gguf"    # 8.61 GB
+        q4_k_s: "Rombos-LLM-V2.6-Qwen-14b-Q4_K_S.gguf"      # 8.57 GB
+        q4_k_m: "Rombos-LLM-V2.6-Qwen-14b-Q4_K_M.gguf"      # 8.99 GB
+        q4_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q4_K_L.gguf"      # 9.57 GB
+        q5_k_s: "Rombos-LLM-V2.6-Qwen-14b-Q5_K_S.gguf"      # 10.3 GB
+        q5_k_m: "Rombos-LLM-V2.6-Qwen-14b-Q5_K_M.gguf"      # 10.5 GB
+        q5_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q5_K_L.gguf"      # 11.0 GB
+        q6_k: "Rombos-LLM-V2.6-Qwen-14b-Q6_K.gguf"          # 12.1 GB
+        q6_k_l: "Rombos-LLM-V2.6-Qwen-14b-Q6_K_L.gguf"      # 12.5 GB
+        q8_0: "Rombos-LLM-V2.6-Qwen-14b-Q8_0.gguf"          # 15.7 GB
+        f16: "Rombos-LLM-V2.6-Qwen-14b-f16.gguf"            # 29.5 GB
         default: "f16"
+        recommended: "q6_k_l"
     template: "qwen"
+    notes: "Fine-tune of Qwen2.5-14B-Instruct. Use this one instead of the default model; it's much better. Recommended if you have 32GB of RAM."
 
 mistral-nemo-instruct-2407:
     # License: Apache 2.0
     repo: "bartowski/Mistral-Nemo-Instruct-2407-GGUF"
     model:
-        q2_k: "Mistral-Nemo-Instruct-2407-Q2_K.gguf"          # 4.79 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "Mistral-Nemo-Instruct-2407-Q2_K_L.gguf"      # 5.45 GB (very bad quality, uses Q8_0 for embed and output weights)
-        q3_k_s: "Mistral-Nemo-Instruct-2407-Q3_K_S.gguf"      # 5.53 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Mistral-Nemo-Instruct-2407-Q3_K_M.gguf"      # 6.08 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Mistral-Nemo-Instruct-2407-Q3_K_L.gguf"      # 6.56 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Mistral-Nemo-Instruct-2407-Q3_K_XL.gguf"    # 7.15 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Mistral-Nemo-Instruct-2407-Q4_K_S.gguf"      # 7.12 GB (good for low RAM)
-        q4_k_m: "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"      # 7.48 GB (good for low RAM, recommended)
-        q4_k_l: "Mistral-Nemo-Instruct-2407-Q4_K_L.gguf"      # 7.98 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Mistral-Nemo-Instruct-2407-Q5_K_S.gguf"      # 8.52 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Mistral-Nemo-Instruct-2407-Q5_K_M.gguf"      # 8.73 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Mistral-Nemo-Instruct-2407-Q5_K_L.gguf"      # 9.14 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Mistral-Nemo-Instruct-2407-Q6_K.gguf"          # 10.1 GB (very high quality, recommended)
-        q6_k_l: "Mistral-Nemo-Instruct-2407-Q6_K_L.gguf"      # 10.4 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Mistral-Nemo-Instruct-2407-Q8_0.gguf"          # 13.0 GB (similar quality to F16, recommended)
-        f16: "Mistral-Nemo-Instruct-2407-f16.gguf"            # 24.5 GB (ultra high quality, not worth the compute power needed)
-        f32: "Mistral-Nemo-Instruct-2407-f32.gguf"            # 49.0 GB (best quality, not worth the compute power needed)
+        q2_k: "Mistral-Nemo-Instruct-2407-Q2_K.gguf"          # 4.79 GB
+        q2_k_l: "Mistral-Nemo-Instruct-2407-Q2_K_L.gguf"      # 5.45 GB
+        q3_k_s: "Mistral-Nemo-Instruct-2407-Q3_K_S.gguf"      # 5.53 GB
+        q3_k_m: "Mistral-Nemo-Instruct-2407-Q3_K_M.gguf"      # 6.08 GB
+        q3_k_l: "Mistral-Nemo-Instruct-2407-Q3_K_L.gguf"      # 6.56 GB
+        q3_k_xl: "Mistral-Nemo-Instruct-2407-Q3_K_XL.gguf"    # 7.15 GB
+        q4_k_s: "Mistral-Nemo-Instruct-2407-Q4_K_S.gguf"      # 7.12 GB
+        q4_k_m: "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf"      # 7.48 GB
+        q4_k_l: "Mistral-Nemo-Instruct-2407-Q4_K_L.gguf"      # 7.98 GB
+        q5_k_s: "Mistral-Nemo-Instruct-2407-Q5_K_S.gguf"      # 8.52 GB
+        q5_k_m: "Mistral-Nemo-Instruct-2407-Q5_K_M.gguf"      # 8.73 GB
+        q5_k_l: "Mistral-Nemo-Instruct-2407-Q5_K_L.gguf"      # 9.14 GB
+        q6_k: "Mistral-Nemo-Instruct-2407-Q6_K.gguf"          # 10.1 GB
+        q6_k_l: "Mistral-Nemo-Instruct-2407-Q6_K_L.gguf"      # 10.4 GB
+        q8_0: "Mistral-Nemo-Instruct-2407-Q8_0.gguf"          # 13.0 GB
+        f16: "Mistral-Nemo-Instruct-2407-f16.gguf"            # 24.5 GB
+        f32: "Mistral-Nemo-Instruct-2407-f32.gguf"            # 49.0 GB
         default: "f32"
+        recommended: "f16"
     template: "mistral-instruct"
+    notes: "Not very good compared to Qwen models."
 
 mixtral-8x7b-instruct-v0.1:
     # License: Apache 2.0
     repo: "second-state/Mixtral-8x7B-Instruct-v0.1-GGUF"
     model:
-        q2_k: "Mixtral-8x7B-Instruct-v0.1-Q2_K.gguf"          # 17.3 GB (very bad quality)
-        q3_k_s: "Mixtral-8x7B-Instruct-v0.1-Q3_K_S.gguf"      # 20.4 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Mixtral-8x7B-Instruct-v0.1-Q3_K_M.gguf"      # 22.5 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Mixtral-8x7B-Instruct-v0.1-Q3_K_L.gguf"      # 24.2 GB (bad quality, recommended only with similar size quants)
-        q4_k_s: "Mixtral-8x7B-Instruct-v0.1-Q4_K_S.gguf"      # 26.7 GB (good for low RAM, recommended)
-        q4_k_m: "Mixtral-8x7B-Instruct-v0.1-Q4_K_M.gguf"      # 28.4 GB (good for low RAM, recommended)
-        q5_k_s: "Mixtral-8x7B-Instruct-v0.1-Q5_K_S.gguf"      # 32.2 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Mixtral-8x7B-Instruct-v0.1-Q5_K_M.gguf"      # 33.2 GB (high quality, good for low RAM, recommended)
-        q6_k: "Mixtral-8x7B-Instruct-v0.1-Q6_K.gguf"          # 38.6 GB (very high quality, recommended)
-        q6_k_l: "Mixtral-8x7B-Instruct-v0.1-Q6_K_L.gguf"      # 41.5 GB (very high quality, recommended)
-        q8_0: "Mixtral-8x7B-Instruct-v0.1-Q8_0.gguf"          # 54.4 GB (best quality, not worth the compute power needed)
-        f16: "Mixtral-8x7B-Instruct-v0.1-f16.gguf"            # 100.1 GB (best quality, not worth the compute power needed)
+        q2_k: "Mixtral-8x7B-Instruct-v0.1-Q2_K.gguf"          # 17.3 GB
+        q3_k_s: "Mixtral-8x7B-Instruct-v0.1-Q3_K_S.gguf"      # 20.4 GB
+        q3_k_m: "Mixtral-8x7B-Instruct-v0.1-Q3_K_M.gguf"      # 22.5 GB
+        q3_k_l: "Mixtral-8x7B-Instruct-v0.1-Q3_K_L.gguf"      # 24.2 GB
+        q4_k_s: "Mixtral-8x7B-Instruct-v0.1-Q4_K_S.gguf"      # 26.7 GB
+        q4_k_m: "Mixtral-8x7B-Instruct-v0.1-Q4_K_M.gguf"      # 28.4 GB
+        q5_k_s: "Mixtral-8x7B-Instruct-v0.1-Q5_K_S.gguf"      # 32.2 GB
+        q5_k_m: "Mixtral-8x7B-Instruct-v0.1-Q5_K_M.gguf"      # 33.2 GB
+        q6_k: "Mixtral-8x7B-Instruct-v0.1-Q6_K.gguf"          # 38.6 GB
+        q6_k_l: "Mixtral-8x7B-Instruct-v0.1-Q6_K_L.gguf"      # 41.5 GB
+        q8_0: "Mixtral-8x7B-Instruct-v0.1-Q8_0.gguf"          # 54.4 GB
+        f16: "Mixtral-8x7B-Instruct-v0.1-f16.gguf"            # 100.1 GB
         default: "f16"
+        recommended: "q6_k_l"
     template: "mixtral"
+    notes: "A great MoE, but Qwen models might be better."
 
 mistral-7b-instruct-v0.3:
     # License: Apache 2.0
     repo: "mradermacher/Mistral-7B-Instruct-v0.3-GGUF"
     model:
-        q2_k: "Mistral-7B-Instruct-v0.3.Q2_K.gguf"          # 2.72 GB (very bad quality, practically unusable for most cases)
-        q3_k_s: "Mistral-7B-Instruct-v0.3.Q3_K_S.gguf"      # 3.17 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "Mistral-7B-Instruct-v0.3.Q3_K_M.gguf"      # 3.52 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Mistral-7B-Instruct-v0.3.Q3_K_L.gguf"      # 3.83 GB (bad quality, recommended only with similar size quants)
-        q4_k_s: "Mistral-7B-Instruct-v0.3.Q4_K_S.gguf"      # 4.14 GB (good for low RAM)
-        q4_k_m: "Mistral-7B-Instruct-v0.3.Q4_K_M.gguf"      # 4.37 GB (good for low RAM)
-        q5_k_s: "Mistral-7B-Instruct-v0.3.Q5_K_S.gguf"      # 5.00 GB (high quality, good for low RAM)
-        q5_k_m: "Mistral-7B-Instruct-v0.3.Q5_K_M.gguf"      # 5.14 GB (high quality, good for low RAM, recommended)
-        q6_k: "Mistral-7B-Instruct-v0.3.Q6_K.gguf"          # 5.95 GB (very high quality, recommended)
-        q8_0: "Mistral-7B-Instruct-v0.3.Q8_0.gguf"          # 7.70 GB (similar quality to F16, recommended)
-        f16: "Mistral-7B-Instruct-v0.3.f16.gguf"            # 14.5 GB (best quality, not worth the compute power needed)
+        q2_k: "Mistral-7B-Instruct-v0.3.Q2_K.gguf"          # 2.72 GB
+        q3_k_s: "Mistral-7B-Instruct-v0.3.Q3_K_S.gguf"      # 3.17 GB
+        q3_k_m: "Mistral-7B-Instruct-v0.3.Q3_K_M.gguf"      # 3.52 GB
+        q3_k_l: "Mistral-7B-Instruct-v0.3.Q3_K_L.gguf"      # 3.83 GB
+        q4_k_s: "Mistral-7B-Instruct-v0.3.Q4_K_S.gguf"      # 4.14 GB
+        q4_k_m: "Mistral-7B-Instruct-v0.3.Q4_K_M.gguf"      # 4.37 GB
+        q5_k_s: "Mistral-7B-Instruct-v0.3.Q5_K_S.gguf"      # 5.00 GB
+        q5_k_m: "Mistral-7B-Instruct-v0.3.Q5_K_M.gguf"      # 5.14 GB
+        q6_k: "Mistral-7B-Instruct-v0.3.Q6_K.gguf"          # 5.95 GB
+        q8_0: "Mistral-7B-Instruct-v0.3.Q8_0.gguf"          # 7.70 GB
+        f16: "Mistral-7B-Instruct-v0.3.f16.gguf"            # 14.5 GB
         default: "f16"
+        recommended: "q8_0"
     template: "mistral-instruct"
+    notes: "Not very good compared to Qwen models."
 
 smollm2-1.7b-instruct:
     # License: Apache 2.0
     repo: "bartowski/SmolLM2-1.7B-Instruct-GGUF"
     model:
-        q2_k: "SmolLM2-1.7B-Instruct-Q2_K.gguf"          # 0.68 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "SmolLM2-1.7B-Instruct-Q2_K_L.gguf"      # 0.70 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "SmolLM2-1.7B-Instruct-Q3_K_S.gguf"      # 0.78 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "SmolLM2-1.7B-Instruct-Q3_K_M.gguf"      # 0.86 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "SmolLM2-1.7B-Instruct-Q3_K_L.gguf"      # 0.93 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "SmolLM2-1.7B-Instruct-Q3_K_XL.gguf"    # 0.96 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "SmolLM2-1.7B-Instruct-Q4_K_S.gguf"      # 1.00 GB (good for low RAM)
-        q4_k_m: "SmolLM2-1.7B-Instruct-Q4_K_M.gguf"      # 1.06 GB (good for low RAM, recommended)
-        q4_k_l: "SmolLM2-1.7B-Instruct-Q4_K_L.gguf"      # 1.08 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "SmolLM2-1.7B-Instruct-Q5_K_S.gguf"      # 1.19 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "SmolLM2-1.7B-Instruct-Q5_K_M.gguf"      # 1.23 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "SmolLM2-1.7B-Instruct-Q5_K_L.gguf"      # 1.25 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "SmolLM2-1.7B-Instruct-Q6_K.gguf"          # 1.41 GB (very high quality, recommended)
-        q6_k_l: "SmolLM2-1.7B-Instruct-Q6_K_L.gguf"      # 1.43 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "SmolLM2-1.7B-Instruct-Q8_0.gguf"          # 1.82 GB (similar quality to F16, recommended)
-        f16: "SmolLM2-1.7B-Instruct-f16.gguf"            # 3.42 GB (ultra high quality, not worth the compute power needed)
+        q2_k: "SmolLM2-1.7B-Instruct-Q2_K.gguf"          # 0.68 GB
+        q2_k_l: "SmolLM2-1.7B-Instruct-Q2_K_L.gguf"      # 0.70 GB
+        q3_k_s: "SmolLM2-1.7B-Instruct-Q3_K_S.gguf"      # 0.78 GB
+        q3_k_m: "SmolLM2-1.7B-Instruct-Q3_K_M.gguf"      # 0.86 GB
+        q3_k_l: "SmolLM2-1.7B-Instruct-Q3_K_L.gguf"      # 0.93 GB
+        q3_k_xl: "SmolLM2-1.7B-Instruct-Q3_K_XL.gguf"    # 0.96 GB
+        q4_k_s: "SmolLM2-1.7B-Instruct-Q4_K_S.gguf"      # 1.00 GB
+        q4_k_m: "SmolLM2-1.7B-Instruct-Q4_K_M.gguf"      # 1.06 GB
+        q4_k_l: "SmolLM2-1.7B-Instruct-Q4_K_L.gguf"      # 1.08 GB
+        q5_k_s: "SmolLM2-1.7B-Instruct-Q5_K_S.gguf"      # 1.19 GB
+        q5_k_m: "SmolLM2-1.7B-Instruct-Q5_K_M.gguf"      # 1.23 GB
+        q5_k_l: "SmolLM2-1.7B-Instruct-Q5_K_L.gguf"      # 1.25 GB
+        q6_k: "SmolLM2-1.7B-Instruct-Q6_K.gguf"          # 1.41 GB
+        q6_k_l: "SmolLM2-1.7B-Instruct-Q6_K_L.gguf"      # 1.43 GB
+        q8_0: "SmolLM2-1.7B-Instruct-Q8_0.gguf"          # 1.82 GB
+        f16: "SmolLM2-1.7B-Instruct-f16.gguf"            # 3.42 GB
         default: "f16"
+        recommended: "f16"
     template: "qwen"
+    notes: "Prefer using Qwen 1.5B instead."
 
 smollm2-360m-instruct:
     # License: Apache 2.0
     repo: "bartowski/SmolLM2-360M-Instruct-GGUF"
     model:
-        q2_k: "SmolLM2-360M-Instruct-Q2_K.gguf"          # 0.22 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "SmolLM2-360M-Instruct-Q2_K_L.gguf"      # 0.22 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "SmolLM2-360M-Instruct-Q3_K_S.gguf"      # 0.22 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "SmolLM2-360M-Instruct-Q3_K_M.gguf"      # 0.24 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "SmolLM2-360M-Instruct-Q3_K_L.gguf"      # 0.25 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "SmolLM2-360M-Instruct-Q3_K_XL.gguf"    # 0.25 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "SmolLM2-360M-Instruct-Q4_K_S.gguf"      # 0.26 GB (good for low RAM, practically unusable for most cases)
-        q4_k_m: "SmolLM2-360M-Instruct-Q4_K_M.gguf"      # 0.27 GB (good for low RAM, practically unusable for most cases)
-        q4_k_l: "SmolLM2-360M-Instruct-Q4_K_L.gguf"      # 0.27 GB (good for low RAM, uses Q8_0 for embed and output weights)
-        q5_k_s: "SmolLM2-360M-Instruct-Q5_K_S.gguf"      # 0.28 GB (high quality, good for low RAM)
-        q5_k_m: "SmolLM2-360M-Instruct-Q5_K_M.gguf"      # 0.29 GB (high quality, good for low RAM)
-        q5_k_l: "SmolLM2-360M-Instruct-Q5_K_L.gguf"      # 0.29 GB (high quality, good for low RAM, uses Q8_0 for embed and output weights)
-        q6_k: "SmolLM2-360M-Instruct-Q6_K.gguf"          # 0.37 GB (very high quality)
-        q6_k_l: "SmolLM2-360M-Instruct-Q6_K_L.gguf"      # 0.37 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "SmolLM2-360M-Instruct-Q8_0.gguf"          # 0.39 GB (similar quality to F16, recommended)
-        f16: "SmolLM2-360M-Instruct-f16.gguf"            # 0.73 GB (best quality, recommended)
+        q2_k: "SmolLM2-360M-Instruct-Q2_K.gguf"          # 0.22 GB
+        q2_k_l: "SmolLM2-360M-Instruct-Q2_K_L.gguf"      # 0.22 GB
+        q3_k_s: "SmolLM2-360M-Instruct-Q3_K_S.gguf"      # 0.22 GB
+        q3_k_m: "SmolLM2-360M-Instruct-Q3_K_M.gguf"      # 0.24 GB
+        q3_k_l: "SmolLM2-360M-Instruct-Q3_K_L.gguf"      # 0.25 GB
+        q3_k_xl: "SmolLM2-360M-Instruct-Q3_K_XL.gguf"    # 0.25 GB
+        q4_k_s: "SmolLM2-360M-Instruct-Q4_K_S.gguf"      # 0.26 GB
+        q4_k_m: "SmolLM2-360M-Instruct-Q4_K_M.gguf"      # 0.27 GB
+        q4_k_l: "SmolLM2-360M-Instruct-Q4_K_L.gguf"      # 0.27 GB
+        q5_k_s: "SmolLM2-360M-Instruct-Q5_K_S.gguf"      # 0.28 GB
+        q5_k_m: "SmolLM2-360M-Instruct-Q5_K_M.gguf"      # 0.29 GB
+        q5_k_l: "SmolLM2-360M-Instruct-Q5_K_L.gguf"      # 0.29 GB
+        q6_k: "SmolLM2-360M-Instruct-Q6_K.gguf"          # 0.37 GB
+        q6_k_l: "SmolLM2-360M-Instruct-Q6_K_L.gguf"      # 0.37 GB
+        q8_0: "SmolLM2-360M-Instruct-Q8_0.gguf"          # 0.39 GB
+        f16: "SmolLM2-360M-Instruct-f16.gguf"            # 0.73 GB
         default: "f16"
+        recommended: "f16"
     template: "qwen"
+    notes: "Do not use this model unless you have 2 GB of RAM."
 
 smollm2-135m-instruct:
     # License: Apache 2.0
     repo: "bartowski/SmolLM2-135M-Instruct-GGUF"
     model:
-        q2_k: "SmolLM2-135M-Instruct-Q2_K.gguf"          # 0.09 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "SmolLM2-135M-Instruct-Q2_K_L.gguf"      # 0.09 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "SmolLM2-135M-Instruct-Q3_K_S.gguf"      # 0.09 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "SmolLM2-135M-Instruct-Q3_K_M.gguf"      # 0.09 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "SmolLM2-135M-Instruct-Q3_K_L.gguf"      # 0.10 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "SmolLM2-135M-Instruct-Q3_K_XL.gguf"    # 0.10 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "SmolLM2-135M-Instruct-Q4_K_S.gguf"      # 0.10 GB (good for low RAM, practically unusable for most cases)
-        q4_k_m: "SmolLM2-135M-Instruct-Q4_K_M.gguf"      # 0.10 GB (good for low RAM, practically unusable for most cases)
-        q4_k_l: "SmolLM2-135M-Instruct-Q4_K_L.gguf"      # 0.10 GB (good for low RAM, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q5_k_s: "SmolLM2-135M-Instruct-Q5_K_S.gguf"      # 0.11 GB (high quality, practically unusable for most cases, good for low RAM)
-        q5_k_m: "SmolLM2-135M-Instruct-Q5_K_M.gguf"      # 0.11 GB (high quality, practically unusable for most cases, good for low RAM)
-        q5_k_l: "SmolLM2-135M-Instruct-Q5_K_L.gguf"      # 0.11 GB (high quality, good for low RAM, uses Q8_0 for embed and output weights)
-        q6_k: "SmolLM2-135M-Instruct-Q6_K.gguf"          # 0.14 GB (very high quality)
-        q6_k_l: "SmolLM2-135M-Instruct-Q6_K_L.gguf"      # 0.14 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "SmolLM2-135M-Instruct-Q8_0.gguf"          # 0.15 GB (similar quality to F16, recommended)
-        f16: "SmolLM2-135M-Instruct-f16.gguf"            # 0.27 GB (best quality, recommended)
+        q2_k: "SmolLM2-135M-Instruct-Q2_K.gguf"          # 0.09 GB
+        q2_k_l: "SmolLM2-135M-Instruct-Q2_K_L.gguf"      # 0.09 GB
+        q3_k_s: "SmolLM2-135M-Instruct-Q3_K_S.gguf"      # 0.09 GB
+        q3_k_m: "SmolLM2-135M-Instruct-Q3_K_M.gguf"      # 0.09 GB
+        q3_k_l: "SmolLM2-135M-Instruct-Q3_K_L.gguf"      # 0.10 GB
+        q3_k_xl: "SmolLM2-135M-Instruct-Q3_K_XL.gguf"    # 0.10 GB
+        q4_k_s: "SmolLM2-135M-Instruct-Q4_K_S.gguf"      # 0.10 GB
+        q4_k_m: "SmolLM2-135M-Instruct-Q4_K_M.gguf"      # 0.10 GB
+        q4_k_l: "SmolLM2-135M-Instruct-Q4_K_L.gguf"      # 0.10 GB
+        q5_k_s: "SmolLM2-135M-Instruct-Q5_K_S.gguf"      # 0.11 GB
+        q5_k_m: "SmolLM2-135M-Instruct-Q5_K_M.gguf"      # 0.11 GB
+        q5_k_l: "SmolLM2-135M-Instruct-Q5_K_L.gguf"      # 0.11 GB
+        q6_k: "SmolLM2-135M-Instruct-Q6_K.gguf"          # 0.14 GB
+        q6_k_l: "SmolLM2-135M-Instruct-Q6_K_L.gguf"      # 0.14 GB
+        q8_0: "SmolLM2-135M-Instruct-Q8_0.gguf"          # 0.15 GB
+        f16: "SmolLM2-135M-Instruct-f16.gguf"            # 0.27 GB
         default: "f16"
+        recommended: "f16"
     template: "qwen"
+    notes: "Do not use this model unless you have 1 GB of RAM."
 
 llama-3.1-8b-instruct:
     # License: Llama3.1
     repo: "bartowski/Meta-Llama-3.1-8B-Instruct-GGUF"
     model:
-        q2_k: "Meta-Llama-3.1-8B-Instruct-Q2_K.gguf"          # 3.18 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "Meta-Llama-3.1-8B-Instruct-Q2_K_L.gguf"      # 3.69 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "Meta-Llama-3.1-8B-Instruct-Q3_K_S.gguf"      # 3.66 GB (bad quality, recommended only with similar size quants)
-        q3_k_m: "Meta-Llama-3.1-8B-Instruct-Q3_K_M.gguf"      # 4.02 GB (bad quality, recommended only with similar size quants)
-        q3_k_l: "Meta-Llama-3.1-8B-Instruct-Q3_K_L.gguf"      # 4.32 GB (bad quality, recommended only with similar size quants)
-        q3_k_xl: "Meta-Llama-3.1-8B-Instruct-Q3_K_XL.gguf"    # 4.78 GB (bad quality, uses Q8_0 for embed and output weights)
-        q4_k_s: "Meta-Llama-3.1-8B-Instruct-Q4_K_S.gguf"      # 4.69 GB (good for low RAM, recommended)
-        q4_k_m: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"      # 4.92 GB (good for low RAM, recommended)
-        q4_k_l: "Meta-Llama-3.1-8B-Instruct-Q4_K_L.gguf"      # 5.31 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Meta-Llama-3.1-8B-Instruct-Q5_K_S.gguf"      # 5.60 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"      # 5.73 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Meta-Llama-3.1-8B-Instruct-Q5_K_L.gguf"      # 6.06 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf"          # 6.60 GB (very high quality, recommended)
-        q6_k_l: "Meta-Llama-3.1-8B-Instruct-Q6_K_L.gguf"      # 6.85 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf"          # 8.54 GB (similar quality to F16, recommended)
+        q2_k: "Meta-Llama-3.1-8B-Instruct-Q2_K.gguf"          # 3.18 GB
+        q2_k_l: "Meta-Llama-3.1-8B-Instruct-Q2_K_L.gguf"      # 3.69 GB
+        q3_k_s: "Meta-Llama-3.1-8B-Instruct-Q3_K_S.gguf"      # 3.66 GB
+        q3_k_m: "Meta-Llama-3.1-8B-Instruct-Q3_K_M.gguf"      # 4.02 GB
+        q3_k_l: "Meta-Llama-3.1-8B-Instruct-Q3_K_L.gguf"      # 4.32 GB
+        q3_k_xl: "Meta-Llama-3.1-8B-Instruct-Q3_K_XL.gguf"    # 4.78 GB
+        q4_k_s: "Meta-Llama-3.1-8B-Instruct-Q4_K_S.gguf"      # 4.69 GB
+        q4_k_m: "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"      # 4.92 GB
+        q4_k_l: "Meta-Llama-3.1-8B-Instruct-Q4_K_L.gguf"      # 5.31 GB
+        q5_k_s: "Meta-Llama-3.1-8B-Instruct-Q5_K_S.gguf"      # 5.60 GB
+        q5_k_m: "Meta-Llama-3.1-8B-Instruct-Q5_K_M.gguf"      # 5.73 GB
+        q5_k_l: "Meta-Llama-3.1-8B-Instruct-Q5_K_L.gguf"      # 6.06 GB
+        q6_k: "Meta-Llama-3.1-8B-Instruct-Q6_K.gguf"          # 6.60 GB
+        q6_k_l: "Meta-Llama-3.1-8B-Instruct-Q6_K_L.gguf"      # 6.85 GB
+        q8_0: "Meta-Llama-3.1-8B-Instruct-Q8_0.gguf"          # 8.54 GB
         # F16 not available right now
-        f32: "Meta-Llama-3.1-8B-Instruct-f32.gguf"            # 32.1 GB (best quality, not worth the compute power needed)
+        f32: "Meta-Llama-3.1-8B-Instruct-f32.gguf"            # 32.1 GB
         default: "f32"
+        recommended: "q8_0"
     template: "llama-3"
+    notes: "Better than Qwen 7B but has a limit on how it can be commercialized."
 
 llama-3.2-3b-instruct:
     # License: Llama3.2
     repo: "bartowski/Llama-3.2-3B-Instruct-GGUF"
     model:
-        q3_k_l: "Llama-3.2-3B-Instruct-Q3_K_L.gguf"      # 1.82 GB (bad quality, practically unusable for most cases)
-        q3_k_xl: "Llama-3.2-3B-Instruct-Q3_K_XL.gguf"    # 1.91 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "Llama-3.2-3B-Instruct-Q4_K_S.gguf"      # 1.93 GB (good for low RAM, practically unusable for most cases, recommended)
-        q4_k_m: "Llama-3.2-3B-Instruct-Q4_K_M.gguf"      # 2.02 GB (good for low RAM, practically unusable for most cases, recommended)
-        q4_k_l: "Llama-3.2-3B-Instruct-Q4_K_L.gguf"      # 2.11 GB (good for low RAM, practically unusable for most cases, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Llama-3.2-3B-Instruct-Q5_K_S.gguf"      # 2.27 GB (high quality, practically unusable for most cases, good for low RAM, recommended)
-        q5_k_m: "Llama-3.2-3B-Instruct-Q5_K_M.gguf"      # 2.32 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "Llama-3.2-3B-Instruct-Q5_K_L.gguf"      # 2.42 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Llama-3.2-3B-Instruct-Q6_K.gguf"          # 2.64 GB (very high quality, recommended)
-        q6_k_l: "Llama-3.2-3B-Instruct-Q6_K_L.gguf"      # 2.74 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Llama-3.2-3B-Instruct-Q8_0.gguf"          # 3.42 GB (similar quality to F16, recommended)
-        f16: "Llama-3.2-3B-Instruct-f16.gguf"            # 6.43 GB (best quality, not worth the compute power needed)
+        q3_k_l: "Llama-3.2-3B-Instruct-Q3_K_L.gguf"      # 1.82 GB
+        q3_k_xl: "Llama-3.2-3B-Instruct-Q3_K_XL.gguf"    # 1.91 GB
+        q4_k_s: "Llama-3.2-3B-Instruct-Q4_K_S.gguf"      # 1.93 GB
+        q4_k_m: "Llama-3.2-3B-Instruct-Q4_K_M.gguf"      # 2.02 GB
+        q4_k_l: "Llama-3.2-3B-Instruct-Q4_K_L.gguf"      # 2.11 GB
+        q5_k_s: "Llama-3.2-3B-Instruct-Q5_K_S.gguf"      # 2.27 GB
+        q5_k_m: "Llama-3.2-3B-Instruct-Q5_K_M.gguf"      # 2.32 GB
+        q5_k_l: "Llama-3.2-3B-Instruct-Q5_K_L.gguf"      # 2.42 GB
+        q6_k: "Llama-3.2-3B-Instruct-Q6_K.gguf"          # 2.64 GB
+        q6_k_l: "Llama-3.2-3B-Instruct-Q6_K_L.gguf"      # 2.74 GB
+        q8_0: "Llama-3.2-3B-Instruct-Q8_0.gguf"          # 3.42 GB
+        f16: "Llama-3.2-3B-Instruct-f16.gguf"            # 6.43 GB
         default: "f16"
+        recommended: "q8_0"
     template: "llama-3"
+    notes: "Better than Qwen 3B."
 
 llama-3.2-1b-instruct:
     # License: Llama3.2
     repo: "bartowski/Llama-3.2-1B-Instruct-GGUF"
     model:
-        q3_k_l: "Llama-3.2-1B-Instruct-Q3_K_L.gguf"      # 0.73 GB (bad quality, practically unusable for most cases)
-        q3_k_xl: "Llama-3.2-1B-Instruct-Q3_K_XL.gguf"    # 0.80 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "Llama-3.2-1B-Instruct-Q4_K_S.gguf"      # 0.78 GB (good for low RAM, practically unusable for most cases, recommended)
-        q4_k_m: "Llama-3.2-1B-Instruct-Q4_K_M.gguf"      # 0.80 GB (good for low RAM, practically unusable for most cases, recommended)
-        q4_k_l: "Llama-3.2-1B-Instruct-Q4_K_L.gguf"      # 0.87 GB (good for low RAM, practically unusable for most cases, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "Llama-3.2-1B-Instruct-Q5_K_S.gguf"      # 0.89 GB (high quality, practically unusable for most cases, good for low RAM, recommended)
-        q5_k_m: "Llama-3.2-1B-Instruct-Q5_K_M.gguf"      # 0.91 GB (high quality, practically unusable for most cases, good for low RAM, recommended)
-        q5_k_l: "Llama-3.2-1B-Instruct-Q5_K_L.gguf"      # 0.98 GB (high quality, practically unusable for most cases, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "Llama-3.2-1B-Instruct-Q6_K.gguf"          # 1.02 GB (very high quality, recommended)
-        q6_k_l: "Llama-3.2-1B-Instruct-Q6_K_L.gguf"      # 1.09 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "Llama-3.2-1B-Instruct-Q8_0.gguf"          # 1.32 GB (similar quality to F16, recommended)
-        f16: "Llama-3.2-1B-Instruct-f16.gguf"            # 2.48 GB (best quality, recommended)
+        q3_k_l: "Llama-3.2-1B-Instruct-Q3_K_L.gguf"      # 0.73 GB
+        q3_k_xl: "Llama-3.2-1B-Instruct-Q3_K_XL.gguf"    # 0.80 GB
+        q4_k_s: "Llama-3.2-1B-Instruct-Q4_K_S.gguf"      # 0.78 GB
+        q4_k_m: "Llama-3.2-1B-Instruct-Q4_K_M.gguf"      # 0.80 GB
+        q4_k_l: "Llama-3.2-1B-Instruct-Q4_K_L.gguf"      # 0.87 GB
+        q5_k_s: "Llama-3.2-1B-Instruct-Q5_K_S.gguf"      # 0.89 GB
+        q5_k_m: "Llama-3.2-1B-Instruct-Q5_K_M.gguf"      # 0.91 GB
+        q5_k_l: "Llama-3.2-1B-Instruct-Q5_K_L.gguf"      # 0.98 GB
+        q6_k: "Llama-3.2-1B-Instruct-Q6_K.gguf"          # 1.02 GB
+        q6_k_l: "Llama-3.2-1B-Instruct-Q6_K_L.gguf"      # 1.09 GB
+        q8_0: "Llama-3.2-1B-Instruct-Q8_0.gguf"          # 1.32 GB
+        f16: "Llama-3.2-1B-Instruct-f16.gguf"            # 2.48 GB
         default: "f16"
+        recommended: "f16"
     template: "llama-3"
+    notes: "Prefer using Qwen 1.5B; this one is slightly better but has a limit on how it can be commercialized."
 
 granite-3.0-2b-instruct:
     # License: Apache 2.0
     repo: "bartowski/granite-3.0-2b-instruct-GGUF"
     model:
-        q2_k: "granite-3.0-2b-instruct-Q2_K.gguf"          # 1.01 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "granite-3.0-2b-instruct-Q2_K_L.gguf"      # 1.11 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "granite-3.0-2b-instruct-Q3_K_S.gguf"      # 1.17 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "granite-3.0-2b-instruct-Q3_K_L.gguf"      # 1.40 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "granite-3.0-2b-instruct-Q3_K_XL.gguf"    # 1.49 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "granite-3.0-2b-instruct-Q4_K_S.gguf"      # 1.52 GB (good for low RAM, practically unusable for most cases)
-        q4_k_m: "granite-3.0-2b-instruct-Q4_K_M.gguf"      # 1.60 GB (good for low RAM, practically unusable for most cases)
-        q4_k_l: "granite-3.0-2b-instruct-Q4_K_L.gguf"      # 1.68 GB (good for low RAM, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q5_k_s: "granite-3.0-2b-instruct-Q5_K_S.gguf"      # 1.83 GB (high quality, practically unusable for most cases, good for low RAM)
-        q5_k_m: "granite-3.0-2b-instruct-Q5_K_M.gguf"      # 1.87 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "granite-3.0-2b-instruct-Q5_K_L.gguf"      # 1.94 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "granite-3.0-2b-instruct-Q6_K.gguf"          # 2.16 GB (very high quality, recommended)
-        q6_k_l: "granite-3.0-2b-instruct-Q6_K_L.gguf"      # 2.21 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "granite-3.0-2b-instruct-Q8_0.gguf"          # 2.80 GB (similar quality to F16, recommended)
-        f16: "granite-3.0-2b-instruct-f16.gguf"            # 5.27 GB (best quality, not worth the compute power needed)
+        q2_k: "granite-3.0-2b-instruct-Q2_K.gguf"          # 1.01 GB
+        q2_k_l: "granite-3.0-2b-instruct-Q2_K_L.gguf"      # 1.11 GB
+        q3_k_s: "granite-3.0-2b-instruct-Q3_K_S.gguf"      # 1.17 GB
+        q3_k_l: "granite-3.0-2b-instruct-Q3_K_L.gguf"      # 1.40 GB
+        q3_k_xl: "granite-3.0-2b-instruct-Q3_K_XL.gguf"    # 1.49 GB
+        q4_k_s: "granite-3.0-2b-instruct-Q4_K_S.gguf"      # 1.52 GB
+        q4_k_m: "granite-3.0-2b-instruct-Q4_K_M.gguf"      # 1.60 GB
+        q4_k_l: "granite-3.0-2b-instruct-Q4_K_L.gguf"      # 1.68 GB
+        q5_k_s: "granite-3.0-2b-instruct-Q5_K_S.gguf"      # 1.83 GB
+        q5_k_m: "granite-3.0-2b-instruct-Q5_K_M.gguf"      # 1.87 GB
+        q5_k_l: "granite-3.0-2b-instruct-Q5_K_L.gguf"      # 1.94 GB
+        q6_k: "granite-3.0-2b-instruct-Q6_K.gguf"          # 2.16 GB
+        q6_k_l: "granite-3.0-2b-instruct-Q6_K_L.gguf"      # 2.21 GB
+        q8_0: "granite-3.0-2b-instruct-Q8_0.gguf"          # 2.80 GB
+        f16: "granite-3.0-2b-instruct-f16.gguf"            # 5.27 GB
         default: "f16"
+        recommended: "f16"
     template: ""
+    notes: "Similar to Qwen 3B."
 
 granite-3.0-8b-instruct:
     # License: Apache 2.0
     repo: "bartowski/granite-3.0-8b-instruct-GGUF"
     model:
-        q2_k: "granite-3.0-8b-instruct-Q2_K.gguf"          # 3.10 GB (very bad quality, practically unusable for most cases)
-        q2_k_l: "granite-3.0-8b-instruct-Q2_K_L.gguf"      # 3.15 GB (very bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q3_k_s: "granite-3.0-8b-instruct-Q3_K_S.gguf"      # 3.59 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_m: "granite-3.0-8b-instruct-Q3_K_M.gguf"      # 4.00 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_l: "granite-3.0-8b-instruct-Q3_K_L.gguf"      # 4.35 GB (bad quality, practically unusable for most cases, recommended only with similar size quants)
-        q3_k_xl: "granite-3.0-8b-instruct-Q3_K_XL.gguf"    # 4.40 GB (bad quality, practically unusable for most cases, uses Q8_0 for embed and output weights)
-        q4_k_s: "granite-3.0-8b-instruct-Q4_K_S.gguf"      # 4.69 GB (good for low RAM)
-        q4_k_m: "granite-3.0-8b-instruct-Q4_K_M.gguf"      # 4.94 GB (good for low RAM)
-        q4_k_l: "granite-3.0-8b-instruct-Q4_K_L.gguf"      # 4.99 GB (good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q5_k_s: "granite-3.0-8b-instruct-Q5_K_S.gguf"      # 5.65 GB (high quality, good for low RAM, recommended)
-        q5_k_m: "granite-3.0-8b-instruct-Q5_K_M.gguf"      # 5.80 GB (high quality, good for low RAM, recommended)
-        q5_k_l: "granite-3.0-8b-instruct-Q5_K_L.gguf"      # 5.85 GB (high quality, good for low RAM, recommended, uses Q8_0 for embed and output weights)
-        q6_k: "granite-3.0-8b-instruct-Q6_K.gguf"          # 6.71 GB (very high quality, recommended)
-        q6_k_l: "granite-3.0-8b-instruct-Q6_K_L.gguf"      # 6.75 GB (very high quality, recommended, uses Q8_0 for embed and output weights)
-        q8_0: "granite-3.0-8b-instruct-Q8_0.gguf"          # 8.68 GB (similar quality to F16, recommended)
-        f16: "granite-3.0-8b-instruct-f16.gguf"            # 16.3 GB (best quality, not worth the compute power needed)
+        q2_k: "granite-3.0-8b-instruct-Q2_K.gguf"          # 3.10 GB
+        q2_k_l: "granite-3.0-8b-instruct-Q2_K_L.gguf"      # 3.15 GB
+        q3_k_s: "granite-3.0-8b-instruct-Q3_K_S.gguf"      # 3.59 GB
+        q3_k_m: "granite-3.0-8b-instruct-Q3_K_M.gguf"      # 4.00 GB
+        q3_k_l: "granite-3.0-8b-instruct-Q3_K_L.gguf"      # 4.35 GB
+        q3_k_xl: "granite-3.0-8b-instruct-Q3_K_XL.gguf"    # 4.40 GB
+        q4_k_s: "granite-3.0-8b-instruct-Q4_K_S.gguf"      # 4.69 GB
+        q4_k_m: "granite-3.0-8b-instruct-Q4_K_M.gguf"      # 4.94 GB
+        q4_k_l: "granite-3.0-8b-instruct-Q4_K_L.gguf"      # 4.99 GB
+        q5_k_s: "granite-3.0-8b-instruct-Q5_K_S.gguf"      # 5.65 GB
+        q5_k_m: "granite-3.0-8b-instruct-Q5_K_M.gguf"      # 5.80 GB
+        q5_k_l: "granite-3.0-8b-instruct-Q5_K_L.gguf"      # 5.85 GB
+        q6_k: "granite-3.0-8b-instruct-Q6_K.gguf"          # 6.71 GB
+        q6_k_l: "granite-3.0-8b-instruct-Q6_K_L.gguf"      # 6.75 GB
+        q8_0: "granite-3.0-8b-instruct-Q8_0.gguf"          # 8.68 GB
+        f16: "granite-3.0-8b-instruct-f16.gguf"            # 16.3 GB
         default: "f16"
+        recommended: "q8_0"
     template: ""
+    notes: "Similar to Qwen 7B."
+
+marco-o1:
+    # License: Apache 2.0
+    repo: "bartowski/Marco-o1-GGUF"
+    model:
+        q2_k: "Marco-o1-Q2_K.gguf"          # 3.02 GB
+        q2_k_l: "Marco-o1-Q2_K_L.gguf"      # 3.55 GB
+        q3_k_s: "Marco-o1-Q3_K_S.gguf"      # 3.49 GB
+        q3_k_m: "Marco-o1-Q3_K_M.gguf"      # 3.81 GB
+        q3_k_l: "Marco-o1-Q3_K_L.gguf"      # 4.09 GB
+        q3_k_xl: "Marco-o1-Q3_K_XL.gguf"    # 4.57 GB
+        q4_k_s: "Marco-o1-Q4_K_S.gguf"      # 4.46 GB
+        q4_k_m: "Marco-o1-Q4_K_M.gguf"      # 4.68 GB
+        q4_k_l: "Marco-o1-Q4_K_L.gguf"      # 5.09 GB
+        q5_k_s: "Marco-o1-Q5_K_S.gguf"      # 5.32 GB
+        q5_k_m: "Marco-o1-Q5_K_M.gguf"      # 5.44 GB
+        q5_k_l: "Marco-o1-Q5_K_L.gguf"      # 5.78 GB
+        q6_k: "Marco-o1-Q6_K.gguf"          # 6.25 GB
+        q6_k_l: "Marco-o1-Q6_K_L.gguf"      # 6.52 GB
+        q8_0: "Marco-o1-Q8_0.gguf"          # 8.10 GB
+        f16: "Marco-o1-f16.gguf"            # 15.2 GB
+        f32: "Marco-o1-f32.gguf"            # 30.5 GB
+        default: "f16"
+        recommended: "q8_0"
+    template: "qwen"
+    notes: "Fine-tune of Qwen 7B, uses reasoning."
+
+qwq-32b-preview:
+    # License: Apache 2.0
+    repo: "bartowski/QwQ-32B-Preview-GGUF"
+    model:
+        q2_k: "QwQ-32B-Preview-Q2_K.gguf"          # 12.3 GB
+        q2_k_l: "QwQ-32B-Preview-Q2_K_L.gguf"      # 13.1 GB
+        q3_k_s: "QwQ-32B-Preview-Q3_K_S.gguf"      # 14.4 GB
+        q3_k_m: "QwQ-32B-Preview-Q3_K_M.gguf"      # 15.9 GB
+        q3_k_l: "QwQ-32B-Preview-Q3_K_L.gguf"      # 17.2 GB
+        q3_k_xl: "QwQ-32B-Preview-Q3_K_XL.gguf"    # 17.9 GB
+        q4_k_s: "QwQ-32B-Preview-Q4_K_S.gguf"      # 18.8 GB
+        q4_k_m: "QwQ-32B-Preview-Q4_K_M.gguf"      # 19.9 GB
+        q4_k_l: "QwQ-32B-Preview-Q4_K_L.gguf"      # 20.4 GB
+        q5_k_s: "QwQ-32B-Preview-Q5_K_S.gguf"      # 22.6 GB
+        q5_k_m: "QwQ-32B-Preview-Q5_K_M.gguf"      # 23.3 GB
+        q5_k_l: "QwQ-32B-Preview-Q5_K_L.gguf"      # 23.7 GB
+        q6_k: "QwQ-32B-Preview-Q6_K.gguf"          # 26.9 GB
+        q6_k_l: "QwQ-32B-Preview-Q6_K_L.gguf"      # 27.3 GB
+        q8_0: "QwQ-32B-Preview-Q8_0.gguf"          # 34.8 GB
+        # F16 not available right now
+    template: "qwen"
+    notes: "Similar to Qwen 32B, uses reasoning."
