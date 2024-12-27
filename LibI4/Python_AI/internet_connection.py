@@ -95,24 +95,6 @@ def Search__Websites(Prompt: str, MaxResults: int) -> list[str]:
     # Return the results list
     return results
 
-def Search__Answers(Prompt: str, MaxResults: int) -> list[str]:
-    # Search the prompt in DuckDuckGo (answers) and create the results list
-    searchResults = DDGS().answers(Prompt)
-    results = []
-
-    # Check length
-    if (len(searchResults) > MaxResults):
-        # Limit the results
-        searchResults = searchResults[:MaxResults]
-    
-    # For each result
-    for result in searchResults:
-        # Append the result text to the results list
-        results.append(f"ANSWER #{searchResults.index(result) + 1}:\n> Text: {result['text']}\n> Source: {result['url']}")
-    
-    # Return the results list
-    return results
-
 def Search__News(Prompt: str, MaxResults: int) -> list[str]:
     # Search the prompt in DuckDuckGo (news) and create the results list
     searchResults = DDGS().news(Prompt, max_results = MaxResults)

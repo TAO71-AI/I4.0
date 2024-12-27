@@ -1,4 +1,5 @@
 ﻿// NOTE: Some functions are still under creation
+// WARNING: C# bindings are deprecated. ^-- These functions will not be completed.
 
 using System.Diagnostics;
 using System.IO;

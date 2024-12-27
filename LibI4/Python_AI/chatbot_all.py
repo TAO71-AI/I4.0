@@ -215,17 +215,6 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
             except:
                 # Ignore error
                 continue
-    elif (SearchSystem == "answers" or SearchSystem == "answer"):
-        # Search for answers
-        internetResults = internet.Search__Answers(SearchPrompt, Count)
-        internetResponse = "".join([res + "\n" for res in internetResults])
-
-        # Check if internet response length is 0
-        if (len(internetResponse.strip()) == 0):
-            # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
-        else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
     elif (SearchSystem == "news"):
         # Search for news
         internetResults = internet.Search__News(SearchPrompt, Count)
@@ -341,7 +330,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
             sp.append(f"Memory #{mem}: {mems[mem]}")
     
     # Check NSFW in prompt
-    if ((Service == "chatbot" or Service == "sc" or Service == "tr" or Service == "text2img" or Service == "text2audio" or Service == "tts" or Service == "qa") and not cfg.current_data["allow_processing_if_nsfw"][0] and Service != "nsfw_filter-text"):
+    if ((Service == "chatbot" or Service == "sc" or Service == "tr" or Service == "text2img" or Service == "text2audio" or Service == "tts" or Service == "qa") and not cfg.current_data["allow_processing_if_nsfw"][0] and Service != "nsfw_filter-text" and len(cfg.GetAllInfosOfATask("nsfw_filter-text")) > 0):
         # Pick random text NSFW filter
         filterIdx = random.randint(0, len(cfg.GetAllInfosOfATask("nsfw_filter-text")) - 1)
         
@@ -367,7 +356,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         __cache_files__.append(f)
 
         # Check NSFW
-        if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"):
+        if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"  and len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0):
             # Pick random image NSFW filter
             filterIdx = random.randint(0, len(cfg.GetAllInfosOfATask("nsfw_filter-image")) - 1)
 

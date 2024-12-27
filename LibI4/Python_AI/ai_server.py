@@ -577,9 +577,16 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # If an error occurs, set to default
         index = -1
     
+    try:
+        # Try to get the client's public key
+        clientPublicKey = Prompt["PublicKey"]
+    except:
+        # If an error occurs, set to default
+        clientPublicKey = None
+    
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
-        yield {"response": "ERROR: Your API key is banned.", "files": [], "ended": True}
+        yield {"response": "ERROR: Your API key is banned.", "files": [], "ended": True, "pubKey": clientPublicKey}
         return
     
     # Check if the user wants to execute a service
@@ -592,7 +599,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
 
         # Check index
         if (index < 0):
@@ -604,20 +611,20 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             enoughTokens = CheckIfHasEnoughTokens(service, index, key["tokens"])
         except ValueError:
             print(f"Invalid index for service, returning exception. From 0 to {len(cfg.GetAllInfosOfATask(service)) - 1} expected; got {index}.")
-            yield {"response": f"ERROR: Invalid index. Expected index to be from 0 to {len(cfg.GetAllInfosOfATask(service)) - 1}; got {index}.", "files": [], "ended": True}
+            yield {"response": f"ERROR: Invalid index. Expected index to be from 0 to {len(cfg.GetAllInfosOfATask(service)) - 1}; got {index}.", "files": [], "ended": True, "pubKey": clientPublicKey}
             return
         except Exception as ex:
             print(f"[Check enouth tokens: ai_server.py] Unknown error: {ex}")
-            yield {"response": f"ERROR: Unknown error checking if you have enouth tokens.", "files": [], "ended": True}
+            yield {"response": f"ERROR: Unknown error checking if you have enouth tokens.", "files": [], "ended": True, "pubKey": clientPublicKey}
 
         # Check the price and it's a valid key
         if (not enoughTokens and key["key"] != None and cfg.current_data["force_api_key"]):
             # Doesn't have enough tokens or the API key is invalid, return an error
-            yield {"response": f"ERROR: Not enough tokens or invalid API key. You need {cfg.GetInfoOfTask(service, index)['price']} tokens, you have {key['tokens']}.", "files": [], "ended": True}
+            yield {"response": f"ERROR: Not enough tokens or invalid API key. You need {cfg.GetInfoOfTask(service, index)['price']} tokens, you have {key['tokens']}.", "files": [], "ended": True, "pubKey": clientPublicKey}
             return
         elif (not enoughTokens and key["key"] == None):
             # Invalid API key
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True}
+            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
             return
         
         # Check if the key is an admin
@@ -636,6 +643,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
 
                 # For each token
                 for inf_t in inf:
+                    inf_t["pubKey"] = clientPublicKey
                     yield inf_t
             else:
                 # For each file
@@ -645,10 +653,11 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
 
                     # For each token
                     for inf_t in inf:
+                        inf_t["pubKey"] = clientPublicKey
                         yield inf_t
             
             # Return empty response
-            yield {"response": "", "files": [], "ended": True}
+            yield {"response": "", "files": [], "ended": True, "pubKey": clientPublicKey}
         except Exception as ex:
             if (str(ex).lower() == "nsfw detected!"):
                 # NSFW detected, check if the server should ban the API key
@@ -677,7 +686,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             print("Unknown exception found in a service.")
             traceback.print_exc()
 
-            yield {"response": f"ERROR: {ex}", "files": [], "ended": True}
+            yield {"response": f"ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "clear_my_history" or service == "clear_conversation"):
         # Clear the conversation
         # Check the key
@@ -698,14 +707,14 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             conv.GetConversationFromUser("", True).DeleteConversation(conversation)
         else:
             # The key is invalid and it's required by the server, return an error
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True}
+            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
         
         # Return a message
-        yield {"response": "Conversation deleted.", "files": [], "ended": True}
+        yield {"response": "Conversation deleted.", "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_all_services"):
         # Get all the available services
         # Return all the services
-        yield {"response": json.dumps(cb.GetServicesAndIndexes()), "files": [], "ended": True}
+        yield {"response": json.dumps(cb.GetServicesAndIndexes()), "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_conversation"):
         # Get the conversation of the user
         # Check the key
@@ -715,7 +724,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
         
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -726,7 +735,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             cnv = conv.GetConversationFromUser("", True).Conv[conversation]
 
         # Return the conversation
-        yield {"response": json.dumps(cnv), "files": [], "ended": True}
+        yield {"response": json.dumps(cnv), "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_conversations"):
         # Get all the conversations of the user
         # Check the key
@@ -736,7 +745,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
         
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -747,7 +756,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             cnv = list(conv.GetConversationFromUser("", True).Conv.keys())
 
         # Return all the conversations
-        yield {"response": json.dumps([cn for cn in cnv]), "files": [], "ended": True}
+        yield {"response": json.dumps([cn for cn in cnv]), "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "clear_memories"):
         # Delete all the memories of the user
         # Check the key
@@ -757,7 +766,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
         
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -768,10 +777,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             memories.RemoveMemories("")
         else:
             # The key is invalid and it's required by the server, return an error
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True}
+            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
         
         # Return a message
-        yield {"response": "Memories deleted.", "files": [], "ended": True}
+        yield {"response": "Memories deleted.", "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "clear_memory"):
         # Delete a memory of the user
         # Check the key
@@ -781,7 +790,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
             
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -792,10 +801,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             memories.RemoveMemory("", int(prompt))
         else:
             # The key is invalid and it's required by the server, return an error
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True}
+            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
         
         # Return a message
-        yield {"response": "Memory deleted.", "files": [], "ended": True}
+        yield {"response": "Memory deleted.", "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_memories"):
         # Get all the memories of the user
         # Check the key
@@ -805,7 +814,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
         
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -816,7 +825,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             mms = memories.GetMemories("")
 
         # Return all the memories
-        yield {"response": json.dumps(mms), "files": [], "ended": True}
+        yield {"response": json.dumps(mms), "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_queue"):
         # Check index
         if (index < 0):
@@ -828,25 +837,25 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             queueUsers, queueTime = GetQueueForService(prompt, index)
 
             print(f"Queue for service '{prompt}:{index}' ==> {queueUsers} users, ~{queueTime}ms/token.")
-            yield {"response": json.dumps({"users": queueUsers, "time": queueTime}), "files": [], "ended": True}
+            yield {"response": json.dumps({"users": queueUsers, "time": queueTime}), "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_tos"):
         # Get the Terms of Service of the server
         with open("TOS.txt", "r") as f:
             tos = f.read()
         
-        yield {"response": tos, "files": [], "ended": True}
+        yield {"response": tos, "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "create_key" and key["admin"]):
         # Create a new API key
         keyData = cfg.JSONDeserializer(Prompt)
         keyData = sb.GenerateKey(keyData["tokens"], keyData["daily"])["key"]
 
-        yield {"response": keyData, "files": [], "ended": True}
+        yield {"response": keyData, "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_key"):
         # Get information about the key
         keyData = key
         keyData["key"] = "[PRIVATE]"
 
-        yield {"response": json.dumps(keyData), "files": [], "ended": True}
+        yield {"response": json.dumps(keyData), "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_service_description"):
         # Get the description of a specific service
         # Get the info from the service
@@ -855,10 +864,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if contains a description
         if ("description" in list(info.keys())):
             # Contains a description, send it
-            yield {"response": info["description"], "files": [], "ended": True}
+            yield {"response": info["description"], "files": [], "ended": True, "pubKey": clientPublicKey}
         else:
             # Does not contain a description, send an empty message
-            yield {"response": "", "files": [], "ended": True}
+            yield {"response": "", "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "is_chatbot_multimodal"):
         # Check if the chatbot is multimodal
         try:
@@ -867,18 +876,22 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # Set index
                 index = GetAutoIndex("chatbot")
 
-            yield {"response": str(cfg.GetInfoOfTask("chatbot", index)["allows_files"]), "files": [], "ended": True}
+            yield {"response": str(cfg.GetInfoOfTask("chatbot", index)["allows_files"]), "files": [], "ended": True, "pubKey": clientPublicKey}
         except Exception as ex:
-            {"response": f"ERROR: {ex}", "files": [], "ended": True}
+            {"response": f"ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
     else:
-        yield {"response": "ERROR: Invalid command.", "files": [], "ended": True}
+        yield {"response": "ERROR: Invalid command.", "files": [], "ended": True, "pubKey": clientPublicKey}
 
 async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtocol, Prompt: dict[str, any]) -> None:
     try:
         # Try to execute the service
         for response in ExecuteService(Prompt, Client.remote_address[0]):
+            # Get the public key from the response
+            clPubKey = response["pubKey"]
+            response.pop("pubKey")
+
             # Send the response
-            await Client.send(json.dumps(response).encode("utf-8"))
+            await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey)
     except:
         # Print error
         print("Error processing! Could not send data to client.")
@@ -906,11 +919,11 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
 
         try:
             # Try to send the closed message
-            await Client.send(json.dumps({
+            await __send_to_client__(Client, json.dumps({
                 "response": "",
                 "files": [],
                 "ended": True
-            }).encode("utf-8"))
+            }).encode("utf-8"), None)
         except:
             # Error, ignore
             pass
@@ -941,28 +954,39 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
     # Print received length
     print(f"Received {len(received)} bytes from '{Client.remote_address[0]}'")
 
+    # Check for some services
+    if ((received == "get_public_key" and type(received) is str) or (received.decode("utf-8") == "get_public_key" and type(received) is bytes)):
+        # Send the public key to the client
+        await __send_to_client__(Client, sb.publicKey.decode("utf-8"), None)
+        return
+
     try:
-        # Check the type of the received message
-        if (type(received) == str):
-            # Received a string, try to deserialize it
-            prompt = cfg.JSONDeserializer(received)
-        elif (type(received) == bytes):
-            # Received bytes, try to decode it to string and deserialize it
-            prompt = cfg.JSONDeserializer(received.decode("utf-8"))
-        else:
-            # Received something else, return an error
-            raise Exception("Invalid received type.")
+        # Decrypt the message
+        received = sb.DecryptMessage(received)
+        
+        # Try to deserialize the message
+        prompt = cfg.JSONDeserializer(received)
+        
+        # Execute service and send data
+        thread = threading.Thread(target = __exec_serv__, args = (Client, prompt))
+        thread.start()
     except Exception as ex:
         # If there's an error, send the response
-        await Client.send(json.dumps({
+        await __send_to_client__(Client, json.dumps({
             "response": "Error. Details: " + str(ex),
             "files": [],
             "ended": True
-        }).encode("utf-8"))
+        }).encode("utf-8"), None)
 
-    # Execute service and send data
-    thread = threading.Thread(target = __exec_serv__, args = (Client, prompt))
-    thread.start()
+async def __send_to_client__(Client: websockets.WebSocketClientProtocol, Message: str | bytes, EncryptKey: bytes | None) -> None:
+    # Encrypt the message
+    if (EncryptKey is None):
+        msg = Message
+    else:
+        msg = sb.EncryptMessage(Message, EncryptKey)
+
+    # Send the message
+    await Client.send(msg)
 
 async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
     while (not Client.closed and started):
@@ -974,13 +998,15 @@ async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
             break
         except Exception as ex:
             # Error returned
+            print(f"Error executing a prompt of the client. Error: {ex}")
+
             try:
                 # Try to send to the client
-                await Client.send(json.dumps({
+                await __send_to_client__(Client, json.dumps({
                     "response": "Error executing service. Details: " + str(ex),
                     "files": [],
                     "ended": True
-                }))
+                }), None)
 
                 # Print the error
                 print("Error executing service. Traceback:")
@@ -999,11 +1025,11 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
     if (Client.remote_address[0] in banned["ip"]):
         try:
             # Send banned message
-            await Client.send(json.dumps({
+            await __send_to_client__(Client, json.dumps({
                 "response": "Your IP address has been banned. Please contact support if this was a mistake.",
                 "files": [],
                 "ended": True
-            }))
+            }), None)
 
             # Close the connection
             await Client.close()
@@ -1046,6 +1072,9 @@ def StartServer() -> None:
 
 # Start the server
 try:
+    # Generate public and private keys
+    sb.__create_keys__()
+
     # Try to set the banned IPs
     if (os.path.exists("BannedIPs.json")):
         with open("BannedIPs.json", "r") as f:

@@ -93,7 +93,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         msg += "- Replace `PROMPT` with what you want to search.\n"
         msg += "- Replace `QUESTION` with the question to respond.\n"
         msg += "- Replace `TYPE` with the type of information you want to search. The available types are:\n"
-        msg += "    - `answers` obtains answers from the internet. In case no answer is found it obtains websites and reads it's content.\n"
+        msg += "    - `websites` searches for websites and information.\n"
         msg += "    - `news` obtains the latest news from the internet.\n"
         msg += "    - `chat` uses a chatbot from the internet to answer the prompt.\n"
         msg += "    - `maps` obtains nearby places near the prompt.\n"

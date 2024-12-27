@@ -1,5 +1,6 @@
 ﻿/*
  * REMEMBER: Both client-side code and server-side code can be updated and might not work with older versions.
+ * WARNING: C# bindings have been deprecated :(. This will not be updated anymore.
 */
 
 using System;

@@ -1,8 +1,11 @@
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import serialization, hashes
 import os
 import random
 import time
 import json
 import datetime
+import base64
 import pymysql as mysql
 import pymysql.cursors as mysql_c
 import ai_config as cfg
@@ -13,9 +16,100 @@ mysql_connection = None
 mysql_cursor = None
 saving: bool = False
 reading: bool = False
+privateKey: bytes = b""
+publicKey: bytes = b""
 
 if (not os.path.exists("API/")):
     os.mkdir("API/")
+
+def __split_message__(Message: bytes, MaxSize: int) -> list[bytes]:
+    # Split the message into chunks
+    return [Message[i:i+MaxSize] for i in range(0, len(Message), MaxSize)]
+
+def __create_keys__() -> None:
+    global privateKey, publicKey
+
+    # Generate the keys
+    prKey = rsa.generate_private_key(public_exponent = 65537, key_size = 2048)
+    puKey = prKey.public_key()
+
+    # Get private and public bytes
+    privateKey = prKey.private_bytes(
+        encoding = serialization.Encoding.PEM,
+        format = serialization.PrivateFormat.TraditionalOpenSSL,
+        encryption_algorithm = serialization.NoEncryption()
+    )
+    publicKey = puKey.public_bytes(
+        encoding = serialization.Encoding.PEM,
+        format = serialization.PublicFormat.SubjectPublicKeyInfo
+    )
+
+def DecryptMessage(Message: str | bytes) -> str:
+    global privateKey
+
+    # Get the private key from the data
+    prKey = serialization.load_pem_private_key(privateKey, password = None)
+
+    # Encode the message
+    if (type(Message) is bytes):
+        Message = Message.decode("utf-8")
+    
+    Message = [base64.b64decode(chunk) for chunk in Message.split("|")]
+
+    # Create the chunks list
+    decChunks = []
+
+    for chunk in Message:
+        # Decrypt using the private key
+        message = prKey.decrypt(
+            chunk,
+            padding.OAEP(
+                mgf = padding.MGF1(algorithm = hashes.SHA512()),
+                algorithm = hashes.SHA512(),
+                label = None
+            )
+        )
+
+        # Append into the chunks list
+        decChunks.append(message)
+
+    # Return the message
+    return b"".join(decChunks).decode("utf-8")
+
+def EncryptMessage(Message: str | bytes, Key: str | bytes | None) -> str:
+    global publicKey
+
+    # Get the public key from the data
+    if (type(Key) is str):
+        Key = Key.encode("utf-8")
+    elif (type(Key) is None):
+        Key = publicKey
+
+    puKey = serialization.load_pem_public_key(Key)
+
+    # Encode the message
+    if (type(Message) is str):
+        Message = Message.encode("utf-8")
+
+    # Create the chunks list
+    encChunks = []
+
+    for chunk in __split_message__(Message, 126):
+        # Encrypt using the public key
+        message = puKey.encrypt(
+            chunk,
+            padding.OAEP(
+                mgf = padding.MGF1(algorithm = hashes.SHA512()),
+                algorithm = hashes.SHA512(),
+                label = None
+            )
+        )
+
+        # Append into the chunks list
+        encChunks.append(base64.b64encode(message).decode("utf-8"))
+
+    # Return the message
+    return "|".join(encChunks)
 
 def ReloadDB() -> None:
     global mysql_connection, mysql_cursor

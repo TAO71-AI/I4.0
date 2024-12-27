@@ -165,13 +165,6 @@ fi
 echo -e "\e[1m > Updating PIP... \e[0m"
 "$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS "pip<24.1" setuptools
 
-rm -rf fairseq/
-git clone --branch main --single-branch https://github.com/Tps-F/fairseq.git ./fairseq
-cd fairseq
-pip install . --verbose --upgrade --index-url "$PYTORCH_WHL" --extra-index-url https://pypi.org/simple
-cd ..
-rm -rf fairseq/
-
 rm -rf RVC/
 git clone --branch intel_support --single-branch https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git ./RVC     # TAO71-AI's fork; NVIDIA, AMD and Intel GPUs support.
 #git clone --branch develop --single-branch https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git ./RVC       # Original repository; NVIDIA and AMD GPUs support only.
@@ -179,6 +172,14 @@ cd RVC
 pip install . --verbose --upgrade
 cd ..
 rm -rf RVC/
+
+rm -rf fairseq/
+pip uninstall -y fairseq
+git clone --branch main --single-branch https://github.com/Tps-F/fairseq.git ./fairseq
+cd fairseq
+pip install . --verbose --upgrade --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
+cd ..
+rm -rf fairseq/
 
 # 3. Install PyTorch.
 echo -e "\e[1m > Installing PyTorch... \e[0m"
@@ -209,7 +210,7 @@ fi
 
 # 6. Install I4.0 requirements.
 echo -e "\e[1m > Installing I4.0's requirements... \e[0m"
-"$PIP_CMD" install -r requirements.txt --index-url "$PYTORCH_WHL" --extra-index-url https://pypi.org/simple
+"$PIP_CMD" install -r requirements.txt --upgrade --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
 
 if [ $? != 0 ]; then
     echo -e "\e[1m > Requirements installation failed. \e[0m"
@@ -219,7 +220,7 @@ fi
 # 7. Install extra I4.0 requirements.
 if [ "$ALLOW_EXTRA_REQUIREMENTS" = true ]; then
     echo -e "\e[1m > Installing I4.0's extra requirements... \e[0m"
-    "$PIP_CMD" install -r requirements_optional.txt
+    "$PIP_CMD" install -r requirements_optional.txt --upgrade --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
 
     if [ $? != 0 ]; then
         echo -e "\e[1m > Extra requirements installation failed. Ignoring. \e[0m"

@@ -1,2 +1,6 @@
+# Server connection
 websockets==13.1
 asyncio
+
+# Recorder
+pyaudio

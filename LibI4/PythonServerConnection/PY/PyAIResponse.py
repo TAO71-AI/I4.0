@@ -8,6 +8,7 @@ import base64
 import Config as Conf
 from Service import Service as Service
 from Service import ServiceManager as ServiceManager
+import Encryption
 
 # Servers variables
 ServersTasks: dict[int, list[Service]] = {}
@@ -29,6 +30,11 @@ def GetTasks() -> dict[int, list[Service]]:
 
 async def __connect_str__(Server: str) -> None:
     global ClientSocket, Connected
+
+    # Check if the keys have been generated
+    if (len(Encryption.PublicKey) == 0 or len(Encryption.PrivateKey) == 0):
+        # Generate keys
+        Encryption.__create_keys__()
 
     # Disconnect from any other server
     await Disconnect()
@@ -52,6 +58,10 @@ async def __connect_str__(Server: str) -> None:
     # Set connected server
     Connected = Server
 
+    # Get the public key from the server
+    serverPubKey = await SendAndReceive("get_public_key".encode("utf-8"), False)
+    Encryption.ServerPublicKey = serverPubKey
+
     # Invoke the action
     if (OnConnectedToServerAction != None):
         OnConnectedToServerAction(Server)
@@ -62,7 +72,7 @@ async def __connect_int__(Server: int) -> None:
         raise Exception("Invalid server ID.")
     
     # Connect to the server
-    await Connected(Conf.Servers[Server])
+    await __connect_str__(Conf.Servers[Server])
 
 async def Connect(Server: str | int) -> None:
     """
@@ -120,7 +130,7 @@ async def __receive_from_server__() -> bytes:
     # Return the bytes
     return data
 
-async def SendAndReceive(Data: bytes) -> bytes:
+async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
     """
     This will send a message to the server and wait for it's response.
     The user must be connected to a server before using this.
@@ -130,14 +140,23 @@ async def SendAndReceive(Data: bytes) -> bytes:
     if (not IsConnected()):
         raise Exception("Connect to a server first.")
     
+    # Encrypt the data
+    if (Encrypt):
+        OriginalData = Data
+        Data = Encryption.EncryptMessage(Data, Encryption.ServerPublicKey).encode("utf-8")
+    
     # Send the data
     await ClientSocket.send(Data)
 
     # Invoke the action
     if (OnSendDataAction != None):
-        OnSendDataAction(Data)
+        OnSendDataAction(OriginalData if (Encrypt) else Data)
     
     received = await __receive_from_server__()
+
+    # Decrypt the data
+    if (Encrypt):
+        received = Encryption.DecryptMessage(received).encode("utf-8")
 
     # Invoke the action
     if (OnReceiveDataAction != None):
@@ -160,8 +179,9 @@ async def GetServicesFromServer() -> list[Service]:
     received = await SendAndReceive(json.dumps({
         "Service": "get_all_services",
         "Prompt": "",
-        "Files": {}
-    }).encode("utf-8"))
+        "Files": {},
+        "PublicKey": Encryption.PublicKey.decode("utf-8")
+    }).encode("utf-8"), True)
     receivedData = received.decode("utf-8")
     jsonData = json.loads(receivedData)
     services = []
@@ -245,7 +265,7 @@ def SendAndWaitForStreaming(Data: str) -> Iterator[dict[str, any]]:
     """
 
     # Send to the server and get a response
-    responseBytes = asyncio.get_event_loop().run_until_complete(SendAndReceive(Data.encode("utf-8")))
+    responseBytes = asyncio.get_event_loop().run_until_complete(SendAndReceive(Data.encode("utf-8"), True))
     responseStr = responseBytes.decode("utf-8")
     response = json.loads(responseStr)
 
@@ -256,7 +276,7 @@ def SendAndWaitForStreaming(Data: str) -> Iterator[dict[str, any]]:
 
         # Wait for receive
         responseBytes = asyncio.get_event_loop().run_until_complete(__receive_from_server__())
-        responseStr = responseBytes.decode("utf-8")
+        responseStr = Encryption.DecryptMessage(responseBytes)
         response = json.loads(responseStr)
     
     yield response
@@ -277,7 +297,8 @@ def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Iterator[
         "Service": Service,
         "Conversation": Conf.Chatbot_Conversation,
         "Index": Index,
-        "DataShare": Conf.AllowDataShare
+        "DataShare": Conf.AllowDataShare,
+        "PublicKey": Encryption.PublicKey.decode("utf-8")
     })
 
     # Return the response (probably serialized)
@@ -428,7 +449,8 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
         "SystemPrompts": systemPrompt.strip(),
         "UseDefaultSystemPrompts": Conf.Chatbot_AllowServerSystemPrompts,
         "Index": Index,
-        "DataShare": Conf.AllowDataShare
+        "DataShare": Conf.AllowDataShare,
+        "PublicKey": Encryption.PublicKey.decode("utf-8")
     })
 
     # Return the response

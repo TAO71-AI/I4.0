@@ -13,11 +13,12 @@ diffusers>=0.31.0
 asyncio
 websockets==13.1
 pymysql==1.1.1
+cryptography>=44.0.0,<45.0.0
 
 # Other requirements
 requests
 beautifulsoup4
-duckduckgo-search
+duckduckgo-search>=7.0.2
 soundfile
 scipy
 opencv-python
