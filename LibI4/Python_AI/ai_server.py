@@ -439,8 +439,8 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 text += token["response"]
                 yield {"response": token["response"], "files": token["files"], "ended": False}
 
-            # Remove the command from the response
-            fullResponse = fullResponse.replace(line, f"[You used the command '{line}' and got this response]:\n```text\n{text}\n```")
+            # Create a memory with the information
+            memories.AddMemory(Key["key"], f"Internet: {text}")
         elif (line.lower().startswith("/mem ")):
             # Save memory command
             # Get the prompt
