@@ -91,7 +91,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     if (cfg.current_data["enabled_plugins"].count("internet") > 0):
         msg += "To search over the internet, write `/int {\"prompt\": \"PROMPT\", \"question\": \"QUESTION\", \"type\": \"TYPE\", \"count\": COUNT}` and follow these rules:\n"
         msg += "- Replace `PROMPT` with what you want to search.\n"
-        msg += "- Replace `QUESTION` with the question to respond.\n"
+        msg += "- Replace `QUESTION` with the question to respond. More details = better results!\n"
         msg += "- Replace `TYPE` with the type of information you want to search. The available types are:\n"
         msg += "    - `websites` searches for websites and information.\n"
         msg += "    - `news` obtains the latest news from the internet.\n"
