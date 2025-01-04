@@ -1,4 +1,4 @@
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, AsyncIterator
 import asyncio
 import json
 import websockets
@@ -42,7 +42,7 @@ async def __connect_str__(Server: str) -> None:
     # Invoke the action
     if (OnConnectingToServerAction != None):
         OnConnectingToServerAction(Server)
-    
+
     # Create socket and connect
     ClientSocket = await websockets.connect(f"ws://{Server}:8060", max_size = None)
 
@@ -70,7 +70,7 @@ async def __connect_int__(Server: int) -> None:
     if (Server < 0 or Server >= len(Conf.Servers)):
         # The server ID is invalid
         raise Exception("Invalid server ID.")
-    
+
     # Connect to the server
     await __connect_str__(Conf.Servers[Server])
 
@@ -111,7 +111,7 @@ async def Disconnect() -> None:
         # Invoke the action
         if (OnDisconnectFromServerAction != None):
             OnDisconnectFromServerAction()
-    
+
     # Delete the connected server
     Connected = ""
 
@@ -126,7 +126,7 @@ async def __receive_from_server__() -> bytes:
     elif (type(data) != bytes):
         # Invalid type
         raise Exception("Invalid received type.")
-    
+
     # Return the bytes
     return data
 
@@ -139,19 +139,19 @@ async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
     # Check if you're connected
     if (not IsConnected()):
         raise Exception("Connect to a server first.")
-    
+
     # Encrypt the data
     if (Encrypt):
         OriginalData = Data
         Data = Encryption.EncryptMessage(Data, Encryption.ServerPublicKey).encode("utf-8")
-    
+
     # Send the data
     await ClientSocket.send(Data)
 
     # Invoke the action
     if (OnSendDataAction != None):
         OnSendDataAction(OriginalData if (Encrypt) else Data)
-    
+
     received = await __receive_from_server__()
 
     # Decrypt the data
@@ -161,7 +161,7 @@ async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
     # Invoke the action
     if (OnReceiveDataAction != None):
         OnReceiveDataAction(received)
-    
+
     # Return the response
     return received
 
@@ -174,7 +174,7 @@ async def GetServicesFromServer() -> list[Service]:
     # Check if you're connected
     if (not IsConnected()):
         raise Exception("Connect to a server first.")
-    
+
     # Ask the server for the models, then deserialize the response into a dictionary and create a services list
     received = await SendAndReceive(json.dumps({
         "Service": "get_all_services",
@@ -187,14 +187,14 @@ async def GetServicesFromServer() -> list[Service]:
     services = []
 
     # Set jsonData
-    jsonData = jsonData["response"]
+    jsonData = json.loads(jsonData["response"])
 
     for service in list(jsonData.keys()):
         # Ignore if it alredy exists on the list
         if (ServiceManager.FromString(service) not in services):
             # Add the service to the list if don't exists
             services.append(ServiceManager.FromString(service))
-    
+
     # Return all the services
     return services
 
@@ -225,18 +225,18 @@ async def FindFirstServer(ServiceToExecute: Service, DeleteData: bool = False) -
                     if (service == ServiceToExecute and serverToReturn < 0):
                         # If the service is the same the user requests, set the server ID to this server's ID
                         serverToReturn = Conf.Servers.index(server)
-                
+
                 # Disconnect from the server
                 await Disconnect()
             except:
                 # If the server doesn't responds or if there's another error, ignore it and continue with the next server
                 ServersTasks[Conf.Servers.index(server)] = []
-        
+
         # Check if the server ID is valid
         if (serverToReturn >= 0):
             # Return the ID if it's valid (the requested service has been found)
             return serverToReturn
-        
+
         # Return an error if it's invalid (the requested service could not be found)
         raise Exception("Could not find any server.")
 
@@ -248,9 +248,9 @@ async def FindFirstServer(ServiceToExecute: Service, DeleteData: bool = False) -
             if (service == ServiceToExecute):
                 # If it is, then return the server ID
                 return Conf.Servers.index(server)
-        
+
         # Continue with the next server if the requested service could not be found on this one
-    
+
     # If the requested service has not been found on any server, return an error
     raise Exception("Could not find any server.")
 
@@ -258,14 +258,14 @@ def IsConnected() -> bool:
     # Check if the user is connected to a server
     return len(Connected.strip()) > 0 and ClientSocket != None and ClientSocket.open
 
-def SendAndWaitForStreaming(Data: str) -> Iterator[dict[str, any]]:
+async def SendAndWaitForStreaming(Data: str) -> AsyncIterator[dict[str, any]]:
     """
     This will send a prompt to the connected server and will wait for the full response.
     Also, this will yield the response of the server when received even if they're not complete.
     """
 
     # Send to the server and get a response
-    responseBytes = asyncio.get_event_loop().run_until_complete(SendAndReceive(Data.encode("utf-8"), True))
+    responseBytes = await SendAndReceive(Data.encode("utf-8"), True)
     responseStr = responseBytes.decode("utf-8")
     response = json.loads(responseStr)
 
@@ -275,13 +275,13 @@ def SendAndWaitForStreaming(Data: str) -> Iterator[dict[str, any]]:
         yield response
 
         # Wait for receive
-        responseBytes = asyncio.get_event_loop().run_until_complete(__receive_from_server__())
+        responseBytes = await __receive_from_server__()
         responseStr = Encryption.DecryptMessage(responseBytes)
         response = json.loads(responseStr)
-    
+
     yield response
 
-def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Iterator[dict[str, any]]:
+async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> AsyncIterator[dict[str, any]]:
     """
     Executes a very-basic command on the server.
     You can use this, for example, to delete your conversation or get the queue for a service.
@@ -302,15 +302,16 @@ def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Iterator[
     })
 
     # Return the response (probably serialized)
-    return SendAndWaitForStreaming(jsonData)
+    async for token in SendAndWaitForStreaming(jsonData):
+        yield token
 
-def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], VisionService: Service, Index: int, ForceNoConnect: bool, SVisionPrompts: list[str]) -> None:
+async def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], VisionService: Service, Index: int, ForceNoConnect: bool, SVisionPrompts: list[str]) -> None:
     # Try to send the message
     res = AutoGetResponseFromServer("", Files, VisionService, Index, ForceNoConnect, False)
     img = 0
 
     # For each response
-    for token in res:
+    async for token in res:
         # Check if the response ended
         if (token["ended"]):
             # Break the loop
@@ -320,7 +321,7 @@ def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], Vis
         SVisionPrompts[img] += Template.replace("[IMAGE_ID]", str(img + 1)).replace("[RESPONSE]", str(token["response"]))
         img += 1
 
-def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerService: Service, Index: int = -1, ForceNoConnect: bool = False, FilesPath: bool = True) -> Iterator[dict[str, any]]:
+async def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerService: Service, Index: int = -1, ForceNoConnect: bool = False, FilesPath: bool = True) -> AsyncIterator[dict[str, any]]:
     """
     This will automatically get a response a server.
     If the service requires it, this will serialize your prompt.
@@ -330,6 +331,14 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
     If FilesPath is false, the Files list MUST have the bytes of the files, in base64.
     If ForceNoConnect is true, this will not connect to any server, so you must be connected to one first.
     """
+
+    # Connect to a server
+    if (not ForceNoConnect):
+        # Connect to the first server to the service
+        server = await FindFirstServer(ServerService)
+        await Connect(server)
+    elif (not IsConnected()):
+        raise Exception("Please connect to a server first or set `ForceNoConnect` to false.")
 
     # Copy the files list to a new one
     files = []
@@ -351,7 +360,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
         else:
             # Add the file as it is
             files.append(file)
-    
+
     # Serialize the data to send to the server (in some services)
     if (ServerService == Service.ImageGeneration):
         # Template: text2img
@@ -366,7 +375,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
         else:
             # Doesn't contains negative prompt, set prompt
             prompt = Prompt
-        
+
         # Set prompt to the Text2Image template
         Prompt = json.dumps({
             "prompt": prompt,
@@ -394,7 +403,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
         # Check if the chatbot is multimodal
         chatbotMultimodal = None
 
-        for token in ExecuteCommand("is_chatbot_multimodal", "", Index):
+        async for token in ExecuteCommand("is_chatbot_multimodal", "", Index):
             # Check if the response is an error
             if (token["response"].lower().startswith("error")):
                 # Error, break the loop
@@ -402,7 +411,7 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
 
             # Not an error, set boolean
             chatbotMultimodal = token["response"].lower() == "true"
-        
+
         if (chatbotMultimodal != None and not chatbotMultimodal and len(files) > 0):
             # Is not multimodal and files length is > 0, apply simulated vision template
             sVisionPrompts = ["" for _ in range(len(files))]
@@ -411,33 +420,26 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
             if (Conf.Chatbot_SimulatedVision_Image2Text):
                 try:
                     # Try to send the message
-                    __execute_simulated_vision__("### Image [IMAGE_ID] (description): [RESPONSE]\n", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, sVisionPrompts)
+                    await __execute_simulated_vision__("### Image [IMAGE_ID] (description): [RESPONSE]\n", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, sVisionPrompts)
                 except:
                     # Ignore error
                     pass
-            
+
             # Get response from ObjectDetection
             if (Conf.Chatbot_SimulatedVision_ObjectDetection):
                 try:
                     # Try to send the message
-                    __execute_simulated_vision__("### Image [IMAGE_ID] (objects detected with position, in JSON format): [RESPONSE]\n", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, sVisionPrompts)
+                    await __execute_simulated_vision__("### Image [IMAGE_ID] (objects detected with position, in JSON format): [RESPONSE]\n", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, sVisionPrompts)
                 except:
                     # Ignore error
                     pass
-        
+
             # Save the user's prompt
             simulatedVisionPrompt = "".join(sVisionPrompts)
 
             # Replace the system prompts
             systemPrompt += f"\n{simulatedVisionPrompt}"
-    
-    if (not ForceNoConnect):
-        # Connect to the first server to the service
-        server = asyncio.get_event_loop().run_until_complete(FindFirstServer(ServerService))
-        asyncio.get_event_loop().run_until_complete(Connect(server))
-    elif (not IsConnected()):
-        raise Exception("Please connect to a server first or set `ForceNoConnect` to false.")
-    
+
     # Set prompt
     Prompt = json.dumps({
         "Service": ServiceManager.ToString(ServerService),
@@ -454,9 +456,10 @@ def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerSe
     })
 
     # Return the response
-    return SendAndWaitForStreaming(Prompt)
+    async for token in SendAndWaitForStreaming(Prompt):
+        yield token
 
-def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, int]:
+async def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, int]:
     """
     This will send a prompt to the connected server asking for the queue size and time.
     Once received, it will return it.
@@ -465,9 +468,9 @@ def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, int
     """
 
     # Get response from the queue command
-    res = ExecuteCommand("get_command", ServiceManager.ToString(QueueService), Index)
+    res = ExecuteCommand("get_queue", ServiceManager.ToString(QueueService), Index)
 
-    for response in res:
+    async for response in res:
         if (not response["ended"]):
             # Continue, ignoring this message
             continue
@@ -475,11 +478,11 @@ def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, int
         # Deserialize the received JSON response to a dictionary and return the users and the time
         queue = json.loads(response["response"])
         return (queue["users"], queue["time"])
-    
+
     # Throw an error
     raise Exception("Queue error: Error getting queue.")
 
-def DeleteConversation(Conversation: str | None) -> None:
+async def DeleteConversation(Conversation: str | None) -> None:
     """
     This will delete your current conversation ONLY on the connected server.
     If `Conversation` is null this will use the conversation of the configuration.
@@ -490,14 +493,14 @@ def DeleteConversation(Conversation: str | None) -> None:
     if (Conversation != None):
         # Update the conversation in the configuration settings
         Conf.Chatbot_Conversation = Conversation
-    
+
     # Send request to the server and get the result
     res = ExecuteCommand("clear_conversation")
 
     # Restore the conversation in the configuration settings
     Conf.Chatbot_Conversation = CConversation
 
-    for response in res:
+    async for response in res:
         if (not response["ended"]):
             # Continue, ignoring this message
             continue
@@ -509,14 +512,14 @@ def DeleteConversation(Conversation: str | None) -> None:
         if (result != "conversation deleted."):
             # It's invalid, throw an error
             raise Exception(f"Error deleting the conversation. Got `{result}`; `conversation deleted.` expected.")
-        
+
         # It's a valid response, return
         return
-    
+
     # Throw an error
     raise Exception("Delete conversation error.")
 
-def DeleteMemory(Memory: int = -1) -> None:
+async def DeleteMemory(Memory: int = -1) -> None:
     """
     This will delete your current memory/memories ONLY on the connected server.
     If `Memory` is -1 this will delete all the memories.
@@ -528,11 +531,11 @@ def DeleteMemory(Memory: int = -1) -> None:
     else:
         # Set the command to delete a memory
         cmd = "clear_memory"
-    
+
     # Send request to the server and get the result
     res = ExecuteCommand(cmd, str(Memory))
 
-    for response in res:
+    async for response in res:
         if (not response["ended"]):
             # Continue, ignoring this message
             continue
@@ -544,14 +547,14 @@ def DeleteMemory(Memory: int = -1) -> None:
         if (result != "memories deleted." and result != "memory deleted."):
             # It's invalid, throw an error
             raise Exception(f"Error deleting the memories/memory. Got `{result}`; `memories deleted.` or `memory deleted.` expected.")
-        
+
         # It's a valid response, return
         return
-    
+
     # Throw an error
     raise Exception("Delete memory/memories error.")
 
-def GetTOS() -> str:
+async def GetTOS() -> str:
     """
     Gets the server's Terms Of Service.
     """
@@ -560,7 +563,7 @@ def GetTOS() -> str:
     res = ExecuteCommand("get_tos")
 
     # For each response
-    for response in res:
+    async for response in res:
         # Check if it ended
         if (not response["ended"]):
             # Continue, ignoring this message
@@ -576,10 +579,10 @@ def GetTOS() -> str:
         if (len(tResponse) == 0):
             # There are not TOS
             return "No TOS."
-        
+
         # There are TOS, return the text response
         return tResponse
-    
+
     raise Exception("Error getting TOS: No response from server.")
 
 def OpenFile(Path: str, WaitForExit: bool = False, TemporalFile: bool = False) -> None:
@@ -591,7 +594,7 @@ def OpenFile(Path: str, WaitForExit: bool = False, TemporalFile: bool = False) -
     if (not (os.path.exists(Path) and os.path.isfile(Path))):
         # Return an error if it doesn't
         raise Exception("File doesn't exists.")
-    
+
     # Check the type of file and adjust the variables to it
     programName = ""
     programArgs = ""
@@ -605,7 +608,7 @@ def OpenFile(Path: str, WaitForExit: bool = False, TemporalFile: bool = False) -
     else:
         # Unknown type, return an error
         raise Exception("Invalid/unknown file type.")
-    
+
     # Check if the program name is empty
     if (len(programName.strip()) == 0):
         # If it is, set it to the path (to use the default system's program)
@@ -613,7 +616,7 @@ def OpenFile(Path: str, WaitForExit: bool = False, TemporalFile: bool = False) -
     else:
         # If it isn't, set the args (to open the file with the specified program)
         programArgs = Path
-    
+
     # Set the process info and create the process
     info = {
         "args": [programName] + ([programArgs] if (len(programArgs) > 0) else []),

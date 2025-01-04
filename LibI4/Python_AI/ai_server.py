@@ -438,6 +438,9 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             for token in cmdResponse:
                 text += token["response"]
                 yield {"response": token["response"], "files": token["files"], "ended": False}
+            
+            # Replace lines with spaces
+            text = text.replace("\n", " ")
 
             # Create a memory with the information
             memories.AddMemory(Key["key"], f"Internet: {text}")
@@ -892,6 +895,27 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
 
             # Send the response
             await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey)
+    except websockets.ConnectionClosedError:
+        # Print error
+        print("Connection closed while processing!")
+
+        # Check if the service is valid
+        if (len(cfg.GetAllInfosOfATask(Prompt["Service"])) == 0):
+            # Not valid, return
+            return
+
+        try:
+            # Try to get the index of the model to use
+            index = Prompt["Index"]
+        except:
+            # If an error occurs, auto get index
+            index = GetAutoIndex(Prompt["Service"])
+            
+        # Substract 1 to the queue
+        try:
+            queue[Prompt["Service"]][index] -= 1
+        except:
+            pass
     except:
         # Print error
         print("Error processing! Could not send data to client.")
@@ -972,11 +996,14 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
         thread.start()
     except Exception as ex:
         # If there's an error, send the response
-        await __send_to_client__(Client, json.dumps({
-            "response": "Error. Details: " + str(ex),
-            "files": [],
-            "ended": True
-        }).encode("utf-8"), None)
+        try:
+            await __send_to_client__(Client, json.dumps({
+                "response": "Error. Details: " + str(ex),
+                "files": [],
+                "ended": True
+            }).encode("utf-8"), None)
+        except:
+            pass
 
 async def __send_to_client__(Client: websockets.WebSocketClientProtocol, Message: str | bytes, EncryptKey: bytes | None) -> None:
     # Encrypt the message

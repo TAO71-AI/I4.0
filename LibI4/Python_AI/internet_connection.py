@@ -84,7 +84,7 @@ def Search__Websites(Prompt: str, MaxResults: int) -> list[str]:
         # Try to search the prompt using the API
         searchResults = DDGS().text(Prompt, max_results = MaxResults)
     except RatelimitException:
-        # Rate limit error, try again using DuckDuckGoLite
+        # Rate limit error, try again using DuckDuckGo Lite
         searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
 
     # For each result
