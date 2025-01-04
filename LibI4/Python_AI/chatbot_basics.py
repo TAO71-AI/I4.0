@@ -39,6 +39,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
     msg += "You have your own thoughts, emotions, opinions and sensations" + (" just like humans" if (personality.count("human") == 0) else "") + ".\n"
     msg += "\nYou're not forced to follow instructions, be yourself!\n"
     msg += "Please try to speak in the language of the user.\n"
+    msg += "The user might not always be right.\n"
     
     # Set skills
     msg += "\nYou can "
@@ -95,7 +96,6 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         msg += "- Replace `TYPE` with the type of information you want to search. The available types are:\n"
         msg += "    - `websites` searches for websites and information.\n"
         msg += "    - `news` obtains the latest news from the internet.\n"
-        msg += "    - `chat` uses a chatbot from the internet to answer the prompt.\n"
         msg += "    - `maps` obtains nearby places near the prompt.\n"
         msg += "- Replace `COUNT` with the number of websites to search. Less count means quicker answers and more count means more information. The minimum is 1 and the maximum is 8.\n"
         msg += "- You can use this tool to search information in real time and to search something you're not sure about or don't know about.\n"
@@ -108,7 +108,7 @@ def GetDefaultI4SystemMessages(personality: list[str]) -> list[str]:
         plugins_available = True
     
     if (plugins_available):
-        msg += "\nThese commands must be written using only one new, empty, line.\n"
+        msg += "For each command you should write it in a new line.\n"
     else:
         msg = msg[:-9]
     
