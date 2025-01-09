@@ -143,7 +143,7 @@ async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
     # Encrypt the data
     if (Encrypt):
         OriginalData = Data
-        Data = Encryption.EncryptMessage(Data, Encryption.ServerPublicKey).encode("utf-8")
+        Data = Encryption.EncryptMessage(Data, Encryption.ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
 
     # Send the data
     await ClientSocket.send(Data)
@@ -156,7 +156,7 @@ async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
 
     # Decrypt the data
     if (Encrypt):
-        received = Encryption.DecryptMessage(received).encode("utf-8")
+        received = Encryption.DecryptMessage(received, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
 
     # Invoke the action
     if (OnReceiveDataAction != None):
@@ -276,7 +276,7 @@ async def SendAndWaitForStreaming(Data: str) -> AsyncIterator[dict[str, any]]:
 
         # Wait for receive
         responseBytes = await __receive_from_server__()
-        responseStr = Encryption.DecryptMessage(responseBytes)
+        responseStr = Encryption.DecryptMessage(responseBytes, Encryption.__parse_hash__(Conf.HashAlgorithm))
         response = json.loads(responseStr)
 
     yield response
@@ -297,7 +297,6 @@ async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Asy
         "Service": Service,
         "Conversation": Conf.Chatbot_Conversation,
         "Index": Index,
-        "DataShare": Conf.AllowDataShare,
         "PublicKey": Encryption.PublicKey.decode("utf-8")
     })
 
@@ -451,8 +450,8 @@ async def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], Se
         "SystemPrompts": systemPrompt.strip(),
         "UseDefaultSystemPrompts": Conf.Chatbot_AllowServerSystemPrompts,
         "Index": Index,
-        "DataShare": Conf.AllowDataShare,
-        "PublicKey": Encryption.PublicKey.decode("utf-8")
+        "PublicKey": Encryption.PublicKey.decode("utf-8"),
+        "AllowedTools": Conf.AllowedTools
     })
 
     # Return the response

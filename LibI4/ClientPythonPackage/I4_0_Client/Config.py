@@ -6,7 +6,8 @@ Servers: list[str] = [
 DefaultImagesProgram: str = ""  # Leave empty to use the system's default
 DefaultAudiosProgram: str = ""  # Leave empty to use the system's default
 ServerAPIKey: str = ""
-AllowDataShare: bool = True
+AllowedTools: list[str] | str | None = None
+HashAlgorithm: str = "sha512"
 
 # Chatbot
 Chatbot_ExtraSystemPrompts: str = ""
@@ -24,39 +25,12 @@ Text2Image_Height: int = -1
 Text2Image_GuidanceScale: float = -1
 Text2Image_Steps: int = -1
 
-# Image2Text
-# Nothing to configure
-
-# Voice Recognition
-# Nothing to configure
-
-# Text2Audio
-# Nothing to configure
-
-# Depth Estimarion
-# Nothing to configure
-
-# Object Detection
-# Nothing to configure
-
 # RVC
 RVC_FilterRadius: int = 3
 RVC_Protect: float = 0.33
 RVC_f0: int = 0
 RVC_IndexRate: float = 0.75
 RVC_MixRate: float = 0.25
-
-# Translator
-# Nothing to configure
-
-# Text Classification
-# Nothing to configure
-
-# NSFW Filter (Text)
-# Nothing to configure
-
-# NSFW Filter (Image)
-# Nothing to configure
 
 # TTS
 TTS_Voice: str = "espeak-f1"
@@ -69,6 +43,3 @@ UVR_Agg: int = 10
 
 # Image2Image
 Image2Image_Steps: int = 10
-
-# Question Answering
-# Nothing to configure

@@ -19,6 +19,7 @@ GPU_INFO=$(lspci -nn | grep -E "VGA|3D|Display")
 VULKAN_INFO=$(vulkaninfo)
 INTEL_GPU_VARS="/opt/intel/oneapi/setvars.sh"       # Only used if you have a Intel GPU.
 
+PYTORCH_PKG="torch torchaudio torchvision"
 PYTORCH_WHL="--extra-index-url https://download.pytorch.org/whl/cpu"      # PyTorch CPU version.
 LCPP_WHL="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"               # LlamaCPP (Python) CPU version.
 SDCPP_WHL="-DGGML_OPENBLAS=ON"                                      # StableDiffusionCPP (Python) CPU version.
@@ -61,7 +62,7 @@ if echo "$GPU_INFO" | grep -i nvidia; then
 
     if [ $FORCE_CPU_PT -ne 1 ]; then
         echo "   Building PyTorch with CUDA support..."
-        PYTORCH_WHL="--extra-index-url https://download.pytorch.org/whl/cu124"
+        PYTORCH_WHL="https://download.pytorch.org/whl/cu124"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
@@ -90,7 +91,7 @@ elif echo "$GPU_INFO" | grep -i amd; then
 
     if [ $FORCE_CPU_PT -ne 1 ]; then
         echo "   Building PyTorch with ROCm support..."
-        PYTORCH_WHL="--extra-index-url https://download.pytorch.org/whl/rocm6.2"
+        PYTORCH_WHL="https://download.pytorch.org/whl/rocm6.2"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
@@ -120,7 +121,8 @@ elif echo "$GPU_INFO" | grep -i intel; then                                 # EX
 
     if [ $FORCE_CPU_PT -ne 1 ]; then
         echo "   Building PyTorch with XPU support..."
-        PYTORCH_WHL="torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu oneccl_bind_pt==2.3.100+xpu --extra-index-url https://pytorch-extension.intel.com/release-whl/stable/xpu/us/"
+        PYTORCH_WHL="https://pytorch-extension.intel.com/release-whl/stable/xpu/us/"
+        PYTORCH_PKG="torch==2.3.1+cxx11.abi torchvision==0.18.1+cxx11.abi torchaudio==2.3.1+cxx11.abi intel-extension-for-pytorch==2.3.110+xpu oneccl_bind_pt==2.3.100+xpu"
     else
         echo "   Building PyTorch with CPU support only..."
     fi
@@ -165,11 +167,15 @@ fi
 echo -e "\e[1m > Updating PIP... \e[0m"
 "$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS "pip<24.1" setuptools
 
+# 3. Install PyTorch.
+echo -e "\e[1m > Installing PyTorch... \e[0m"
+"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS "$TORCH_PKG" $PYTORCH_WHL
+
 rm -rf RVC/
 git clone --branch intel_support --single-branch https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git ./RVC     # TAO71-AI's fork; NVIDIA, AMD and Intel GPUs support.
 #git clone --branch develop --single-branch https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git ./RVC       # Original repository; NVIDIA and AMD GPUs support only.
 cd RVC
-pip install . --verbose --upgrade
+pip install --upgrade --editable ./ --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
 cd ..
 rm -rf RVC/
 
@@ -177,13 +183,9 @@ rm -rf fairseq/
 pip uninstall -y fairseq
 git clone --branch main --single-branch https://github.com/Tps-F/fairseq.git ./fairseq
 cd fairseq
-pip install . --verbose --upgrade --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
+pip install --upgrade --editable ./ --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
 cd ..
 rm -rf fairseq/
-
-# 3. Install PyTorch.
-echo -e "\e[1m > Installing PyTorch... \e[0m"
-"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS torch torchvision torchaudio $PYTORCH_WHL
 
 if [ $? != 0 ]; then
     echo "PyTorch installation failed."
