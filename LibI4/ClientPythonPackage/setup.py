@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "I4_0-Client-PY",
-    version = "11.0.2",
+    version = "12.0.0",
     description = "Client Python bindings for I4.0.",
     author = "TAO71-AI",
     url = "https://github.com/TAO71-AI/I4.0",

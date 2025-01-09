@@ -24,16 +24,13 @@ __config_data__: dict[str] = {
         "database": "",                                                                             # Database name.
         "table": "keys"                                                                             # Database table.
     },
-    "enabled_plugins": "sing vtuber discord_bot twitch gaming image_generation audio_generation internet",
-    # ^-- I4.0 plugins. Creates more system prompts.
+    "enabled_tools": "image_generation audio_generation internet memory",
+    # ^-- I4.0 tools.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
     "ban_if_nsfw": True,                                                                        # Bans the API key if a NSFW prompt is detected (requires `force_api_key` to be true).
     "ban_if_nsfw_ip": True,                                                                     # Bans the IP of the user if a NSFW prompt is detected.
     "use_local_ip": False,                                                                      # Disables the public IP address use for the server (only accepts connections from `127.0.0.1`, recommended for personal use).
-    "allow_data_share": True,                                                                   # Allows data sharing to TAO71's servers to make a better dataset for I4.0 and train AI models on that dataset (shares the user's prompt [files included], service used and the server's response and it's 100% anonymous).
-    "data_share_servers": ["tao71.sytes.net"],                                                  # List of servers to share the data.
-    "data_share_timeout": 2.5,                                                                  # Seconds to wait per server response on data share.
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
     "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
@@ -41,6 +38,13 @@ __config_data__: dict[str] = {
     "offload_time": 3600,                                                                       # Time (in seconds) to wait before offloading a model that has not been used. Set to 0 to disable.
     "clear_cache_time": 300,                                                                    # Time (in seconds) to wait before clearing the cache. Set to 0 to disable.
     "clear_queue_time": 600,                                                                    # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
+    "allowed_hashes": [                                                                         # Allowed hashes for receive data. See documentation for more information.
+        # SHA-2
+        "sha224", "sha256", "sha384", "sha512",
+
+        # SHA-3
+        "sha3-224", "sha3-256", "sha3-384", "sha3-512"
+    ],
     "models": [                                                                                 # Models to be used.
         # Examples:
         #{

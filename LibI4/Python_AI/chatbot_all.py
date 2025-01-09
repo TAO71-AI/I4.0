@@ -248,7 +248,7 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
     # Return the response
     return MakePrompt(Index, "Internet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], [False, False])
 
-def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[dict[str]]:
+def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None, AllowedTools: list[str] | str | None = None) -> Iterator[dict[str]]:
     # Define I4.0's personality
     if (AIArgs == None):
         AIArgs = cfg.current_data["ai_args"].split("+")
@@ -269,6 +269,9 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Set system prompts
     sp = []
 
+    # Get the personality
+    sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
+
     # Define the use of the default system prompts
     if (UseDefaultSystemPrompts == None):
         UseDefaultSystemPrompts = cfg.current_data["use_default_system_messages"]
@@ -277,11 +280,11 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         UseDefaultSystemPrompts = (UseDefaultSystemPrompts[0], UseDefaultSystemPrompts[1])  # Ignore any other values of the list
     
     if (type(UseDefaultSystemPrompts) == bool):
-        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts)
+        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts)
     
     if (UseDefaultSystemPrompts[0]):
-        # Get default system prompts (for I4.0's personality and server's tools)
-        sp += cbbasics.GetDefaultI4SystemMessages(AIArgs)
+        # Get default system prompts
+        sp.append(cbbasics.GetDefaultSystemPrompts())
     
     # Add the system prompts from the configuration
     if (len(cfg.current_data["custom_system_messages"].strip()) > 0 and UseDefaultSystemPrompts[1]):
@@ -292,6 +295,9 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         sp += ExtraSystemPrompts
     elif (len(ExtraSystemPrompts) > 0):
         sp.append(str(ExtraSystemPrompts))
+    
+    # Get the tools
+    sp.append(cbbasics.GetTools(AllowedTools) + "\n\n")
 
     # Get the info of the model
     info = cfg.GetInfoOfTask(Service, Index)

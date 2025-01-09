@@ -12,11 +12,11 @@ import gc
 try:
     # Try to import I4.0 utilities
     import server_basics as sb
+    import encryption as enc
     import chatbot_all as cb
     import ai_config as cfg
     import conversation_multimodal as conv
     import ai_memory as memories
-    import data_share as ds
 except ImportError:
     # Error importing utilities
     traceback.print_exc()
@@ -32,7 +32,6 @@ banned: dict[str, list[str]] = {
     "key": []
 }
 started: bool = False
-serverWS: websockets.WebSocketServerProtocol = None
 modelsUsed: dict[str, list[int]] = {}
 
 def __clear_cache_loop__() -> None:
@@ -157,79 +156,7 @@ def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     
     return (users, t)
 
-def __send_share_data__(Data: str | bytes) -> list[tuple[bool, str, websockets.WebSocketClientProtocol]]:
-    # Set the servers
-    ds.Servers = cfg.current_data["data_share_servers"]
-    
-    # Create a loop and send
-    loop = asyncio.new_event_loop()
-    results = loop.run_until_complete(ds.SendToAllServers(Data))
-
-    # Return the results
-    return results
-
-def __share_data__(UserPrompt: str, UserFiles: dict[str, list[str | bytes]], Response: str, ResponseFiles: dict[str, list[str | bytes]]) -> None:
-    # Set some variables
-    userFiles = []
-    responseFiles = []
-    
-    # Add all the user files
-    for ft in UserFiles:
-        for f in UserFiles[ft]:
-            t = "unknown"
-
-            if (ft == "images" or ft == "image"):
-                t = "image"
-            elif (ft == "audios" or ft == "audio"):
-                t = "audio"
-            elif (ft == "videos" or ft == "video"):
-                t = "video"
-            elif (ft == "documents" or ft == "document"):
-                t = "document"
-            
-            userFiles.append({"Type": t, "Data": f})
-    
-    # Add all the response files
-    for ft in ResponseFiles:
-        for f in ResponseFiles[ft]:
-            t = "unknown"
-
-            if (ft == "images" or ft == "image"):
-                t = "image"
-            elif (ft == "audios" or ft == "audio"):
-                t = "audio"
-            elif (ft == "videos" or ft == "video"):
-                t = "video"
-            elif (ft == "documents" or ft == "document"):
-                t = "document"
-            
-            responseFiles.append({"Type": t, "Data": f})
-
-    # Set the data to send
-    data = {
-        "UserText": UserPrompt,
-        "ResponseText": Response,
-        "UserFiles": userFiles,
-        "ResponseFiles": responseFiles
-    }
-    
-    try:
-        # Try to share the data
-        results = []
-        dataThread = threading.Thread(target = lambda: results.extend(__send_share_data__(json.dumps(data))))
-        dataThread.start()
-        dataThread.join()
-
-        # Print the results
-        for result in results:
-            if (result[0]):
-                print(f"[DATA SHARE] Sent without errors to the server '{ds.Servers[results.index(result)]}'.")
-            else:
-                print(f"[DATA SHARE] Error sending to the server '{ds.Servers[results.index(result)]}': {result[1]}")
-    except Exception as ex:
-        print(f"[DATA SHARE] Error sending to ALL servers. Info: {ex}")
-
-def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool, AllowDataShare: bool) -> Iterator[dict[str, any]]:
+def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool, AllowDataShare: bool, AllowedTools: str | list[str] | None) -> Iterator[dict[str, any]]:
     # Make sure the key of the service exists
     if (Service not in list(queue.keys())):
         queue[Service] = []
@@ -271,7 +198,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         modelsUsed[Service] = [Index]
 
     # Process the prompt and get a response
-    response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts)
+    response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts, AllowedTools)
     fullResponse = ""
     responseFiles = []
 
@@ -316,43 +243,6 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     if (queue[Service][Index] < 0):
         queue[Service][Index] = 0
 
-    # Set the data share files
-    sdFilesTemplate = {
-        "images": [],
-        "audios": [],
-        "documents": [],
-        "other": []
-    }
-
-    if (AllowDataShare and cfg.current_data["allow_data_share"]):
-        sdUFiles = sdFilesTemplate.copy()
-        sdRFiles = sdFilesTemplate.copy()
-
-        # For every response file
-        for file in responseFiles:
-            if (file["type"] == "image"):
-                sdRFiles["images"].append(file["data"])
-            elif (file["type"] == "audio"):
-                sdRFiles["audios"].append(file["data"])
-            elif (file["type"] == "document"):
-                sdRFiles["documents"].append(file["data"])
-            else:
-                sdRFiles["other"].append(file["data"])
-                
-        # For every client file
-        for file in Files:
-            if (file["type"] == "image"):
-                sdUFiles["images"].append(file["data"])
-            elif (file["type"] == "audio"):
-                sdUFiles["audios"].append(file["data"])
-            elif (file["type"] == "document"):
-                sdUFiles["documents"].append(file["data"])
-            else:
-                sdUFiles["other"].append(file["data"])
-
-        # Share the data (if allowed by the server)
-        __share_data__(Prompt, sdUFiles, fullResponse, sdRFiles)
-
     # Strip the full response
     fullResponse = fullResponse.strip()
     convAssistantFiles = []
@@ -375,7 +265,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             cmd = line[5:].strip()
 
             # Generate the image and append it to the files
-            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare)
+            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare, AllowedTools)
 
             # Append all the files
             for token in cmdResponse:
@@ -392,7 +282,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             cmd = line[5:].strip()
 
             # Generate the audio and append it to the files
-            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare)
+            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare, AllowedTools)
 
             # Append all the files
             for token in cmdResponse:
@@ -587,6 +477,13 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # If an error occurs, set to default
         clientPublicKey = None
     
+    try:
+        # Try to get the allowed tools
+        aTools = Prompt["AllowedTools"]
+    except:
+        # If an error occurs, set to default
+        aTools = None
+    
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
         yield {"response": "ERROR: Your API key is banned.", "files": [], "ended": True, "pubKey": clientPublicKey}
@@ -642,7 +539,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Check files length and service
             if (len(files) == 0 or service == "chatbot"):
                 # Execute the service with all the files
-                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare)
+                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare, aTools)
 
                 # For each token
                 for inf_t in inf:
@@ -652,7 +549,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # For each file
                 for file in files:
                     # Execute the service with the current file
-                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare)
+                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare, aTools)
 
                     # For each token
                     for inf_t in inf:
@@ -885,7 +782,9 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     else:
         yield {"response": "ERROR: Invalid command.", "files": [], "ended": True, "pubKey": clientPublicKey}
 
-async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtocol, Prompt: dict[str, any]) -> None:
+async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtocol, Prompt: dict[str, any], HashAlgorithm: enc.hashes.HashAlgorithm) -> None:
+    clPubKey = None
+    
     try:
         # Try to execute the service
         for response in ExecuteService(Prompt, Client.remote_address[0]):
@@ -894,7 +793,7 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
             response.pop("pubKey")
 
             # Send the response
-            await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey)
+            await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey, HashAlgorithm)
     except websockets.ConnectionClosedError:
         # Print error
         print("Connection closed while processing!")
@@ -947,7 +846,7 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
                 "response": "",
                 "files": [],
                 "ended": True
-            }).encode("utf-8"), None)
+            }).encode("utf-8"), clPubKey, HashAlgorithm)
         except:
             # Error, ignore
             pass
@@ -955,45 +854,48 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
     # Update the server
     UpdateServer()
 
-def __exec_serv__(Client: websockets.WebSocketClientProtocol, Prompt: dict) -> None:
-    # Create loop
-    loop = asyncio.new_event_loop()
-
-    # Run the loop
-    loop.run_until_complete(ExecuteServiceAndSendToClient(Client, Prompt))
-
-    # Close the loop
-    loop.close()
-
-async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
+async def WaitForReceive(Client: websockets.WebSocketClientProtocol, Message: bytes | str) -> None:
     # Wait for receive
-    received = await Client.recv()
+    clientHashType = None
 
     # Check the length of the received data
-    if (len(received) == 0):
+    if (len(Message) == 0):
         # Received nothing, close the connection
         Client.close()
-        raise websockets.ConnectionClosed
+        raise websockets.ConnectionClosed(None, None)
 
     # Print received length
-    print(f"Received {len(received)} bytes from '{Client.remote_address[0]}'")
+    print(f"Received {len(Message)} bytes from '{Client.remote_address[0]}'")
 
     # Check for some services
-    if ((received == "get_public_key" and type(received) is str) or (received.decode("utf-8") == "get_public_key" and type(received) is bytes)):
+    if ((Message == "get_public_key" and type(Message) is str) or (Message.decode("utf-8") == "get_public_key" and type(Message) is bytes)):
         # Send the public key to the client
-        await __send_to_client__(Client, sb.publicKey.decode("utf-8"), None)
+        await __send_to_client__(Client, enc.PublicKey.decode("utf-8"), None, None)
         return
 
     try:
         # Decrypt the message
-        received = sb.DecryptMessage(received)
+        for encType in cfg.current_data["allowed_hashes"]:
+            try:
+                Message = enc.DecryptMessage(Message, enc.__parse_hash__(encType))
+                clientHashType = enc.__parse_hash__(encType)
+
+                print(f"Client is using the hash '{encType}'.")
+
+                break
+            except:
+                continue
+        
+        # Check if the client hash is valid
+        if (clientHashType == None):
+            # Invalid hash
+            raise ValueError(f"Invalid client hash. The valid hashes are: {cfg.current_data['allowed_hashes']}.")
         
         # Try to deserialize the message
-        prompt = cfg.JSONDeserializer(received)
+        prompt = cfg.JSONDeserializer(Message)
         
         # Execute service and send data
-        thread = threading.Thread(target = __exec_serv__, args = (Client, prompt))
-        thread.start()
+        await ExecuteServiceAndSendToClient(Client, prompt, clientHashType)
     except Exception as ex:
         # If there's an error, send the response
         try:
@@ -1001,25 +903,41 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol) -> None:
                 "response": "Error. Details: " + str(ex),
                 "files": [],
                 "ended": True
-            }).encode("utf-8"), None)
+            }).encode("utf-8"), None, None)
         except:
             pass
 
-async def __send_to_client__(Client: websockets.WebSocketClientProtocol, Message: str | bytes, EncryptKey: bytes | None) -> None:
+async def __send_to_client__(Client: websockets.WebSocketClientProtocol, Message: str | bytes, EncryptKey: bytes | None, HashAlgorithm: enc.hashes.HashAlgorithm | None) -> None:
     # Encrypt the message
-    if (EncryptKey is None):
+    if (EncryptKey is None or HashAlgorithm is None):
         msg = Message
     else:
-        msg = sb.EncryptMessage(Message, EncryptKey)
+        msg = enc.EncryptMessage(Message, EncryptKey, HashAlgorithm)
 
     # Send the message
     await Client.send(msg)
 
+def __receive_thread__(Client: websockets.WebSocketClientProtocol, Message: str | bytes) -> None:
+    # Create new event loop
+    clientLoop = asyncio.new_event_loop()
+
+    # Run the receive function
+    clientLoop.run_until_complete(WaitForReceive(Client, Message))
+
+    # Close the event loop
+    clientLoop.close()
+
 async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
-    while (not Client.closed and started):
+    async for message in Client:
+        # Check if the connection ended or if the server is closed
+        if (Client.closed or not started):
+            # Break the loop
+            break
+
         try:
-            # Wait for receive in a bucle
-            await WaitForReceive(Client)
+            # Create and start a new thread
+            clientThread = threading.Thread(target = __receive_thread__, args = (Client, message), daemon = True)
+            clientThread.start()
         except websockets.ConnectionClosed:
             # Connection closed
             break
@@ -1033,7 +951,7 @@ async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
                     "response": "Error executing service. Details: " + str(ex),
                     "files": [],
                     "ended": True
-                }), None)
+                }), None, None)
 
                 # Print the error
                 print("Error executing service. Traceback:")
@@ -1051,12 +969,15 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
 
     if (Client.remote_address[0] in banned["ip"]):
         try:
+            # Print
+            print("Banned user. Closing connection.")
+
             # Send banned message
             await __send_to_client__(Client, json.dumps({
                 "response": "Your IP address has been banned. Please contact support if this was a mistake.",
                 "files": [],
                 "ended": True
-            }), None)
+            }), None, None)
 
             # Close the connection
             await Client.close()
@@ -1069,9 +990,7 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
     # Receive
     await __receive_loop__(Client)
 
-def StartServer() -> None:
-    global serverWS
-
+async def StartServer() -> None:
     # Create thread for the cache cleanup
     cacheThread = threading.Thread(target = __clear_cache_loop__)
     cacheThread.start()
@@ -1087,20 +1006,16 @@ def StartServer() -> None:
     # Set the IP
     ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
 
-    # Set the websocket and listen
-    eventLoop = asyncio.new_event_loop()
-    asyncio.set_event_loop(eventLoop)
-
-    serverWS = websockets.serve(OnConnect, ip, 8060, max_size = None)
-
     # Start the server
-    eventLoop.run_until_complete(serverWS)
-    eventLoop.run_forever()
+    serverWS = await websockets.serve(OnConnect, ip, 8060, max_size = None, ping_interval = 60, ping_timeout = 30)
+    await serverWS.wait_closed()
 
 # Start the server
+serverLoop = asyncio.new_event_loop()
+
 try:
     # Generate public and private keys
-    sb.__create_keys__()
+    enc.__create_keys__()
 
     # Try to set the banned IPs
     if (os.path.exists("BannedIPs.json")):
@@ -1114,7 +1029,8 @@ try:
     print("Server started!")
     started = True
 
-    StartServer()
+    serverLoop.run_until_complete(StartServer())
+    serverLoop.close()
 except KeyboardInterrupt:
     print("\nClosing server...")
 
