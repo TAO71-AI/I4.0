@@ -13,36 +13,39 @@ import psutil
 
 __models__: dict[int, tuple[AutoPipelineForText2Image | StableDiffusion, dict[str, any]]] = {}
 
+def __load_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+        
+    # Get info about the model
+    info = cfg.GetInfoOfTask("text2img", Index)
+
+    # Get threads and check if the number of threads are valid
+    if (list(info.keys()).count("threads") == 0 or info["threads"] == -1):
+        threads = psutil.cpu_count()
+    elif (info["threads"] <= 0 or info["threads"] > psutil.cpu_count()):
+        raise Exception("Invalid number of threads.")
+    else:
+        threads = info["threads"]
+
+    # Load the model
+    if (info["type"] == "hf"):
+        # Load the model using HuggingFace
+        model = hf.__load_model__(Index)
+    elif (info["type"] == "sdcpp-flux" or info["type"] == "sdcpp-sd"):
+        # Load the model using Stable-Diffusion-CPP-Python
+        model = sdcpp.LoadModel(Index, threads)
+    else:
+        raise Exception("Invalid text2img type.")
+
+    # Add the model to the list of models
+    __models__[Index] = (model, info)
+
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("text2img"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-        
-        # Get info about the model
-        info = cfg.GetInfoOfTask("text2img", i)
-
-        # Get threads and check if the number of threads are valid
-        if (list(info.keys()).count("threads") == 0 or info["threads"] == -1):
-            threads = psutil.cpu_count()
-        elif (info["threads"] <= 0 or info["threads"] > psutil.cpu_count()):
-            raise Exception("Invalid number of threads.")
-        else:
-            threads = info["threads"]
-
-        # Load the model
-        if (info["type"] == "hf"):
-            # Load the model using HuggingFace
-            model = hf.__load_model__(i)
-        elif (info["type"] == "sdcpp-flux" or info["type"] == "sdcpp-sd"):
-            # Load the model using Stable-Diffusion-CPP-Python
-            model = sdcpp.LoadModel(i, threads)
-        else:
-            raise Exception("Invalid text2img type.")
-
-        # Add the model to the list of models
-        __models__[i] = (model, info)
+        __load_model__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -120,8 +123,8 @@ def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     return __generate_images__(Index, p, np, width, height, guidance, steps)
 
 def __generate_images__(Index: int, Prompt: str, NegativePrompt: str, Width: int, Height: int, Guidance: float, Steps: int) -> list[bytes]:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Get the info
     info = cfg.GetInfoOfTask("text2img", Index)

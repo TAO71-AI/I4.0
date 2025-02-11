@@ -103,8 +103,8 @@ def LoadModels() -> None:
         __load_model__(i)
 
 def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: list[str] = ["", ""]) -> Iterator[str]:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Strip the prompt and set the system prompts
     Prompt = Prompt.strip()
@@ -114,12 +114,31 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: l
     contentForModel = [{"role": "system", "content": SystemPrompts}]
 
     # Get the conversation of the user
-    conversation = conv.GetConversationFromUser(Conversation[0], True)
+    conversation = conv.GetConversation(Conversation[0], Conversation[1]).copy()
 
     # For each message in the conversation
-    for msg in range(conversation.GetLengthOfConversation(Conversation[1])):
+    for msg in conversation:
+        # Get the role and content
+        role = msg["role"]
+        content = msg["content"]
+        text = ""
+
+        # For each message in the content
+        for cont in content:
+            # Check the content type
+            if (cont["type"] != "text"):
+                # Invalid, continue
+                continue
+
+            # Add the content text to the text
+            text += cont["text"] + "\n"
+        
+        # Cut the text
+        if (text.endswith("\n")):
+            text = text[:-1]
+
         # Append the message in the old template to contentForModel
-        contentForModel.append(conversation.GetFromID_Old(Conversation[1], msg))
+        contentForModel.append({"role": role, "content": text})
 
     # Set the prompt that will be displayed (or passed to GPT4All)
     contentToShow = f"### Conversation:\n"

@@ -34,6 +34,10 @@ banned: dict[str, list[str]] = {
 started: bool = False
 modelsUsed: dict[str, list[int]] = {}
 
+# Keys
+ServerPublicKey: bytes | None = None
+ServerPrivateKey: bytes | None = None
+
 def __clear_cache_loop__() -> None:
     # Check if cache clear time is less or equal to 0
     if (cfg.current_data["clear_cache_time"] <= 0):
@@ -47,6 +51,9 @@ def __clear_cache_loop__() -> None:
 
         # Clear the cache
         cb.EmptyCache()
+
+        # Save old data
+        SaveOldData()
 
 def __clear_queue_loop__() -> None:
     # Check if queue clear time is less or equal to 0
@@ -84,54 +91,121 @@ def __offload_loop__() -> None:
         # Run the garbage collector
         gc.collect()
 
+def SaveOldData() -> None:
+    # Print
+    if (os.path.exists("API/") or os.path.exists("Conversations/") or os.path.exists("memories.json")):
+        print("Saving old data into the DB.")
+
+    # Check if the API directory exists
+    if (os.path.exists("API/")):
+        # Create API errors variable
+        aerrs = 0
+
+        # For each key file
+        for file in os.listdir("API/"):
+            # Open stream
+            f = open(f"API/{file}", "r")
+
+            try:
+                # Parse the JSON
+                key = cfg.JSONDeserializer(f.read())
+
+                # Try to save the key
+                sb.SaveKey(key)
+            except Exception as ex:
+                # Error parsing the JSON, continue with the next file
+                print(f"Error parsing key file '{file}'. Ignoring. Error: {ex}")
+
+                # Add API error
+                aerrs += 1
+
+                # Continue
+                continue
+            
+            # Close the stream
+            f.close()
+
+            # Remove the file
+            os.remove(f"API/{file}")
+        
+        # Check if any API errors occurred
+        if (aerrs == 0):
+            # No API errors occurred, delete directory
+            os.rmdir("API/")
+    
+    # Check if the conversations directory exists
+    if (os.path.exists("Conversations/")):
+        # Create conversation errors variable
+        cerrs = 0
+
+        # For each key file
+        for file in os.listdir("Conversations/"):
+            # Open stream
+            f = open(f"Conversations/{file}", "r")
+
+            try:
+                # Parse the JSON
+                convers = cfg.JSONDeserializer(f.read())
+
+                # Try to save the conversations
+                conv.SaveConversation(convers["User"], convers["Conv"])
+            except Exception as ex:
+                # Error parsing the JSON, continue with the next file
+                print(f"Error parsing conversation file '{file}'. Ignoring. Error: {ex}")
+                
+                # Add conversation error
+                cerrs += 1
+
+                # Continue
+                continue
+            
+            # Close the stream
+            f.close()
+
+            # Remove the file
+            os.remove(f"Conversations/{file}")
+        
+        # Check if any conversation errors occurred
+        if (cerrs == 0):
+            # No conversation errors occurred, delete directory
+            os.rmdir("Conversations/")
+    
+    # Check if the memories file exists
+    if (os.path.exists("memories.json")):
+        # Create memory errors variable
+        merrs = 0
+
+        # Open stream
+        f = open("memories.json", "r")
+
+        try:
+            # Parse the JSON
+            mems = cfg.JSONDeserializer(f.read())
+
+            # Try to save the memories
+            memories.SaveMemory("", mems)
+        except Exception as ex:
+            # Error parsing the JSON, continue with the next file
+            print(f"Error parsing memories file. Ignoring. Error: {ex}")
+
+            # Add memory error
+            merrs += 1
+        
+        f.close()
+
+        # Check if any memory errors occurred
+        if (merrs == 0):
+            # No memory errors occurred, delete file
+            os.remove("memories.json")
+
 def CheckFiles() -> None:
     # Check if some files exists
-    if (not os.path.exists("API/")):
-        os.mkdir("API/")
-    
     if (not os.path.exists("Logs/")):
         os.mkdir("Logs/")
     
     if (not os.path.exists("TOS.txt")):
         with open("TOS.txt", "w") as f:
             f.write("")
-
-def UpdateServer() -> None:
-    # Check the files
-    CheckFiles()
-
-    if (cfg.current_data["force_api_key"]):
-        # Get all the API keys from the server
-        api_keys = sb.GetAllKeys()
-
-        for api_key in api_keys:
-            try:
-                # Check if the API key is daily-updated
-                if (str(api_key["daily"]).lower() == "true" or str(api_key["daily"]) == "1"):
-                    # If it is, calculate the time that has passed (minute-precise)
-                    date = datetime.datetime.now()
-                    key_date = datetime.datetime(
-                        int(api_key["date"]["year"]),
-                        int(api_key["date"]["month"]),
-                        int(api_key["date"]["day"]),
-                        int(api_key["date"]["hour"]),
-                        int(api_key["date"]["minute"]))
-                    date_diff = date - key_date
-
-                    # If a day or more has passed since the last use of the key, reset the tokens and the day
-                    if (date_diff.total_seconds() >= 86400):
-                        api_key["tokens"] = api_key["default"]["tokens"]
-                        api_key["date"] = sb.GetCurrentDateDict()
-            except Exception as ex:
-                # Print the exception if something went wrong
-                print("Error on API Key '" + str(api_key["key"]) + "': " + str(ex))
-            
-            # Save the API key
-            sb.SaveKey(api_key)
-    
-    # Save all the conversations and memories
-    conv.SaveConversations()
-    memories.SaveMemories()
 
 def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     # Get the users for the queue
@@ -156,11 +230,14 @@ def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     
     return (users, t)
 
-def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool, AllowDataShare: bool, AllowedTools: str | list[str] | None) -> Iterator[dict[str, any]]:
+def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str | None, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None, AllowedTools: str | list[str] | None) -> Iterator[dict[str, any]]:
     # Make sure the key of the service exists
     if (Service not in list(queue.keys())):
         queue[Service] = []
         times[Service] = []
+    
+    # Convert the key to string
+    Key["key"] = str(Key["key"])
 
     # Wait for the queue to be valid
     while (GetQueueForService(Service, Index)[0] >= 1):
@@ -189,7 +266,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     
     # Remove tokens
     Key["tokens"] -= cfg.GetInfoOfTask(Service, Index)["price"]
-    sb.SaveKey(Key, None)
+    sb.SaveKey(Key)
 
     # Add the index to the models used
     try:
@@ -217,8 +294,8 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         # Make sure the response is a string
         token["response"] = str(token["response"])
 
-        # Set the files, ending and full response
-        fullResponse += str(token["response"])
+        # Set token variables
+        fullResponse += token["response"]
         responseFiles += token["files"]
         token["ended"] = False
 
@@ -247,7 +324,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     fullResponse = fullResponse.strip()
     convAssistantFiles = []
 
-    # Search for commands for every line
+    # For each command
     for line in fullResponse.split("\n"):
         # Check if the line starts and/or ends with quotes, then remove them
         while (line.startswith("\"") or line.startswith("\'") or line.startswith("`")):
@@ -265,7 +342,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             cmd = line[5:].strip()
 
             # Generate the image and append it to the files
-            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare, AllowedTools)
+            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools)
 
             # Append all the files
             for token in cmdResponse:
@@ -273,16 +350,13 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 convAssistantFiles += token["files"]
                 
                 yield {"response": "\n[IMAGES]\n", "files": token["files"], "ended": False}
-
-            # Remove the command from the response
-            fullResponse = fullResponse.replace(line, "[IMAGES]")
         elif (line.lower().startswith("/aud ")):
             # Generate audio command
             # Get the prompt
             cmd = line[5:].strip()
 
             # Generate the audio and append it to the files
-            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowDataShare, AllowedTools)
+            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools)
 
             # Append all the files
             for token in cmdResponse:
@@ -290,9 +364,6 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 convAssistantFiles += token["files"]
 
                 yield {"response": "\n[AUDIOS]\n", "files": token["files"], "ended": False}
-
-            # Remove the command from the response
-            fullResponse = fullResponse.replace(line, "[AUDIOS]")
         elif (line.lower().startswith("/int ")):
             # Internet (websites, answers, news, chat and maps) search command
             # Get the prompt
@@ -301,25 +372,25 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             # Deserialize the prompt
             try:
                 cmd = cfg.JSONDeserializer(cmd)
-                cmdP = cmd["prompt"].strip()
+                cmdP = cmd["keywords"].strip()
                 cmdQ = cmd["question"].strip()
                 cmdS = cmd["type"].strip()
                 
                 try:
                     cmdC = int(cmd["count"])
 
-                    if (cmdC > 8):
-                        cmdC = 8
-                    elif (cmdC <= 0):
-                        cmdC = 1
+                    if (cmdC > cfg.current_data["internet"]["max_results"]):
+                        cmdC = cfg.current_data["internet"]["max_results"]
+                    elif (cmdC <= cfg.current_data["internet"]["min_results"]):
+                        cmdC = cfg.current_data["internet"]["min_results"]
                 except:
-                    cmdC = 5
+                    cmdC = cmdC = cfg.current_data["internet"]["min_results"]
             except:
                 # Could not deserialize the prompt, ignoring
                 continue
 
             # Generate the image and append it to the files
-            cmdResponse = cb.GetResponseFromInternet(Index, cmdP, cmdQ, cmdS, cmdC)
+            cmdResponse = cb.GetResponseFromInternet(Index, cmdP, cmdQ, cmdS, cmdC, AIArgs, SystemPrompts, UseDefaultSystemPrompts)
             text = ""
 
             # Yield another line
@@ -333,21 +404,41 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             text = text.replace("\n", " ")
 
             # Create a memory with the information
-            memories.AddMemory(Key["key"], f"Internet: {text}")
+            memories.SaveMemory(Key["key"], f"Internet: {text}")
         elif (line.lower().startswith("/mem ")):
             # Save memory command
             # Get the prompt
             cmd = line[5:].strip()
 
             # Save the memory
-            memories.AddMemory(Key["key"], cmd)
+            memories.SaveMemory(Key["key"], cmd)
     
     # Save messages in the conversation if the service is a chatbot
     if (Service == "chatbot"):
-        conversation = conv.GetConversationFromUser(Key["key"] if (Key["key"] != None) else "", True)
+        conversation = conv.GetConversation(Key["key"], Conversation)
+        uFiles = []
+        aFiles = []
 
-        conversation.AppendMessageToConversation_User(Conversation, Prompt, Files)
-        conversation.AppendMessageToConversation_Assistant(Conversation, fullResponse, convAssistantFiles)
+        for f in Files:
+            uFiles.append({"type": f["type"], f["type"]: f["data"]})
+        
+        for f in convAssistantFiles:
+            aFiles.append({"type": f["type"], f["type"]: f["data"]})
+
+        conversation.append({
+            "role": "user",
+            "content": uFiles + [
+                {"type": "text", "text": Prompt}
+            ]
+        })
+        conversation.append({
+            "role": "assistant",
+            "content": aFiles + [
+                {"type": "text", "text": fullResponse}
+            ]
+        })
+
+        conv.SaveConversation(Key["key"], (Conversation, conversation))
 
 def CheckIfHasEnoughTokens(Service: str, Index: int, KeyTokens: float) -> bool:
     # Get price
@@ -404,8 +495,35 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     try:
         # Try to get the key
         key = sb.GetKey(Prompt["APIKey"])
-    except:
+
+        try:
+            # Check if the API key is daily-updated
+            if (str(key["daily"]).lower() == "true" or str(key["daily"]) == "1"):
+                # If it is, calculate the time that has passed (minute-precise)
+                date = datetime.datetime.now()
+                key_date = datetime.datetime(
+                    int(key["date"]["year"]),
+                    int(key["date"]["month"]),
+                    int(key["date"]["day"]),
+                    int(key["date"]["hour"]),
+                    int(key["date"]["minute"]))
+                date_diff = date - key_date
+
+                # If a day or more has passed since the last use of the key, reset the tokens and the day
+                if (date_diff.total_seconds() >= 86400):
+                    key["tokens"] = key["default"]["tokens"]
+                    key["date"] = sb.__get_current_datetime__()
+
+                # Save the key
+                sb.SaveKey(key)
+        except Exception as ex:
+            # Print the exception if something went wrong
+            print("Error on API Key '" + str(key["key"]) + "': " + str(ex))
+    except Exception as ex:
         # Could not get the key, create empty key
+        print(f"Could not get client key. Reason: {ex}")
+        traceback.print_last()
+
         key = {"tokens": 0, "key": None, "admin": False}
     
     # Get some "optional" variables
@@ -423,13 +541,6 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except:
         # If any of this variables is missing, return an error
         yield {"response": "ERROR: Missing variables.", "files": [], "ended": True}
-        
-    try:
-        # Try to get conversation
-        conversation = Prompt["Conversation"]
-    except:
-        # If an error occurs, set to default
-        conversation = "default"
         
     try:
         # Try to get AI args
@@ -455,13 +566,6 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except:
         # If an error occurs, set to default
         useDefSystemPrompts = None
-    
-    try:
-        # Try to get the data share
-        allowDataShare = Prompt["DataShare"]
-    except:
-        # If an error occurs, set to default
-        allowDataShare = True
 
     try:
         # Try to get the index of the model to use
@@ -520,7 +624,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check the price and it's a valid key
         if (not enoughTokens and key["key"] != None and cfg.current_data["force_api_key"]):
             # Doesn't have enough tokens or the API key is invalid, return an error
-            yield {"response": f"ERROR: Not enough tokens or invalid API key. You need {cfg.GetInfoOfTask(service, index)['price']} tokens, you have {key['tokens']}.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": f"ERROR: Not enough tokens. You need {cfg.GetInfoOfTask(service, index)['price']} tokens, you have {key['tokens']}.", "files": [], "ended": True, "pubKey": clientPublicKey}
             return
         elif (not enoughTokens and key["key"] == None):
             # Invalid API key
@@ -539,7 +643,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Check files length and service
             if (len(files) == 0 or service == "chatbot"):
                 # Execute the service with all the files
-                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare, aTools)
+                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools)
 
                 # For each token
                 for inf_t in inf:
@@ -549,7 +653,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # For each file
                 for file in files:
                     # Execute the service with the current file
-                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, allowDataShare, aTools)
+                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools)
 
                     # For each token
                     for inf_t in inf:
@@ -561,7 +665,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         except Exception as ex:
             if (str(ex).lower() == "nsfw detected!"):
                 # NSFW detected, check if the server should ban the API key
-                if (cfg.current_data["ban_if_nsfw"] and cfg.current_data["force_api_key"] and key["key"] != None):
+                if (cfg.current_data["ban_if_nsfw"] and cfg.current_data["force_api_key"] and key["key"] is not None):
                     # Ban the API key
                     banned["key"].append(key["key"])
                 
@@ -569,10 +673,15 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 if (cfg.current_data["ban_if_nsfw_ip"] and IPAddress != "127.0.0.1"):
                     # Ban the IP address
                     banned["ip"].append(IPAddress)
+            elif (key["key"] is None):
+                # Check if the server should ban the IP address
+                if (cfg.current_data["ban_if_nsfw_ip"] and IPAddress != "127.0.0.1"):
+                    # Ban the IP address
+                    banned["ip"].append(IPAddress)
             else:
                 # Return half of the tokens spent
                 key["tokens"] += cfg.GetInfoOfTask(service, index)["price"] / 2
-                sb.SaveKey(key, None)
+                sb.SaveKey(key)
             
             # Remove the user from the queue
             queue[service][index] -= 1
@@ -596,15 +705,15 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False}
+            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
 
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # The key is valid, delete the conversation
-            conv.GetConversationFromUser(key["key"], True).DeleteConversation(conversation)
+            conv.DeleteConversation(key["key"], conversation)
         elif (not cfg.current_data["force_api_key"] or MinPriceForService("chatbot") <= 0):
             # The key is not valid, but the server says it's optional, so delete the conversation
-            conv.GetConversationFromUser("", True).DeleteConversation(conversation)
+            conv.DeleteConversation("", conversation)
         else:
             # The key is invalid and it's required by the server, return an error
             yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
@@ -629,10 +738,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # Get the conversation of the key
-            cnv = conv.GetConversationFromUser(key["key"], True).Conv[conversation]
+            cnv = conv.GetConversation(key["key"], conversation)
         else:
             # Get the conversation from the empty key
-            cnv = conv.GetConversationFromUser("", True).Conv[conversation]
+            cnv = conv.GetConversation("", conversation)
 
         # Return the conversation
         yield {"response": json.dumps(cnv), "files": [], "ended": True, "pubKey": clientPublicKey}
@@ -650,10 +759,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # Get the conversations of the key
-            cnv = list(conv.GetConversationFromUser(key["key"], True).Conv.keys())
+            cnv = list(conv.GetConversations(key["key"]).keys())
         else:
             # Get the conversations from the empty key
-            cnv = list(conv.GetConversationFromUser("", True).Conv.keys())
+            cnv = list(conv.GetConversations("").keys())
 
         # Return all the conversations
         yield {"response": json.dumps([cn for cn in cnv]), "files": [], "ended": True, "pubKey": clientPublicKey}
@@ -671,10 +780,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # The key is valid, delete the memories
-            memories.RemoveMemories(key["key"])
+            memories.DeleteMemories(key["key"])
         elif (not cfg.current_data["force_api_key"] or MinPriceForService("chatbot") <= 0):
             # The key is not valid, but the server says it's optional, so delete the memories
-            memories.RemoveMemories("")
+            memories.DeleteMemories("")
         else:
             # The key is invalid and it's required by the server, return an error
             yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
@@ -695,10 +804,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
             # The key is valid, delete the memory
-            memories.RemoveMemory(key["key"], int(prompt))
+            memories.DeleteMemory(key["key"], int(prompt))
         elif (not cfg.current_data["force_api_key"] or MinPriceForService("chatbot") <= 0):
             # The key is not valid, but the server says it's optional, so delete the memory
-            memories.RemoveMemory("", int(prompt))
+            memories.DeleteMemory("", int(prompt))
         else:
             # The key is invalid and it's required by the server, return an error
             yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
@@ -746,10 +855,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         yield {"response": tos, "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "create_key" and key["admin"]):
         # Create a new API key
-        keyData = cfg.JSONDeserializer(Prompt)
-        keyData = sb.GenerateKey(keyData["tokens"], keyData["daily"])["key"]
+        keyData = cfg.JSONDeserializer(prompt)
+        keyData = sb.CreateKey(keyData["tokens"], keyData["daily"])
 
-        yield {"response": keyData, "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": keyData["key"], "files": [], "ended": True, "pubKey": clientPublicKey}
     elif (service == "get_key"):
         # Get information about the key
         keyData = key
@@ -778,7 +887,22 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
 
             yield {"response": str(cfg.GetInfoOfTask("chatbot", index)["allows_files"]), "files": [], "ended": True, "pubKey": clientPublicKey}
         except Exception as ex:
-            {"response": f"ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": f"ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
+    elif (service == "get_price"):
+        # Get the price of a service and index
+        try:
+            # Check if the index is valid
+            if (index < 0):
+                # Set index by default
+                index = GetAutoIndex(prompt)
+            
+            if (index >= len(cfg.GetAllInfosOfATask(prompt))):
+                # Index is out of range, return error
+                yield {"response": "ERROR: Invalid index.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            else:
+                yield {"response": str(cfg.GetInfoOfTask(prompt, index)["price"]), "files": [], "ended": True, "pubKey": clientPublicKey}
+        except Exception as ex:
+            yield {"response": f"COULD NOT GET THE PRICE DUE TO THIS ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
     else:
         yield {"response": "ERROR: Invalid command.", "files": [], "ended": True, "pubKey": clientPublicKey}
 
@@ -850,9 +974,6 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
         except:
             # Error, ignore
             pass
-    
-    # Update the server
-    UpdateServer()
 
 async def WaitForReceive(Client: websockets.WebSocketClientProtocol, Message: bytes | str) -> None:
     # Wait for receive
@@ -870,25 +991,30 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol, Message: by
     # Check for some services
     if ((Message == "get_public_key" and type(Message) is str) or (Message.decode("utf-8") == "get_public_key" and type(Message) is bytes)):
         # Send the public key to the client
-        await __send_to_client__(Client, enc.PublicKey.decode("utf-8"), None, None)
+        await __send_to_client__(Client, ServerPublicKey.decode("utf-8"), None, None)
         return
 
     try:
-        # Decrypt the message
-        for encType in cfg.current_data["allowed_hashes"]:
-            try:
-                Message = enc.DecryptMessage(Message, enc.__parse_hash__(encType))
-                clientHashType = enc.__parse_hash__(encType)
+        # Get the message and hash algorithm of the client
+        try:
+            Message = cfg.JSONDeserializer(Message)
+            clientHashType = Message["Hash"]
+            Message = enc.DecryptMessage(Message["Message"], ServerPrivateKey, enc.__parse_hash__(clientHashType))
 
-                print(f"Client is using the hash '{encType}'.")
+            print(f"Client is using the hash '{clientHashType}' (specified by client).")
+            clientHashType = enc.__parse_hash__(clientHashType)
+        except json.JSONDecodeError:
+            # Decrypt the message
+            for encType in cfg.current_data["allowed_hashes"]:
+                try:
+                    Message = enc.DecryptMessage(Message, ServerPrivateKey, enc.__parse_hash__(encType))
+                    clientHashType = enc.__parse_hash__(encType)
 
-                break
-            except:
-                continue
-        
-        # Check if the client hash is valid
-        if (clientHashType == None):
-            # Invalid hash
+                    print(f"Client is using the hash '{encType}' (automatically detected).")
+                    break
+                except:
+                    continue
+        except:
             raise ValueError(f"Invalid client hash. The valid hashes are: {cfg.current_data['allowed_hashes']}.")
         
         # Try to deserialize the message
@@ -1006,16 +1132,27 @@ async def StartServer() -> None:
     # Set the IP
     ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"
 
+    try:
+        # Try to parse the port
+        port = int(cfg.current_data["server_port"])
+    except:
+        # Error parsing the port, print and use default
+        port = 8060
+        print(f"Error parsing the server port, make sure it's an integer. Using default ({port}).")
+
     # Start the server
-    serverWS = await websockets.serve(OnConnect, ip, 8060, max_size = None, ping_interval = 60, ping_timeout = 30)
+    serverWS = await websockets.serve(OnConnect, ip, port, max_size = None, ping_interval = 60, ping_timeout = 30)
     await serverWS.wait_closed()
+
+# Save old data
+SaveOldData()
 
 # Start the server
 serverLoop = asyncio.new_event_loop()
 
 try:
     # Generate public and private keys
-    enc.__create_keys__()
+    ServerPrivateKey, ServerPublicKey = enc.CreateKeys()
 
     # Try to set the banned IPs
     if (os.path.exists("BannedIPs.json")):
@@ -1036,12 +1173,6 @@ except KeyboardInterrupt:
 
     # Save the configuration
     cfg.SaveConfig(cfg.current_data)
-
-    # Save the conversations
-    conv.SaveConversations()
-
-    # Stop the DB
-    sb.StopDB()
 
     # Delete the cache
     cb.EmptyCache()

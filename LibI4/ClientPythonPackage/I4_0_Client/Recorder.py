@@ -3,6 +3,37 @@ from threading import Event
 import pyaudio
 import numpy as np
 import time
+import wave
+import io
+
+def RAWToWAV(RawBytes: bytes, Channels: int = 1, SampleRate: int = 44100) -> bytes:
+    """
+    Converts raw audio bytes to WAV format.
+
+    ## Parameters:
+    - RawBytes (bytes): Raw audio bytes.
+
+    ## Returns:
+    bytes: WAV audio bytes.
+    """
+
+    # Create buffer
+    buffer = io.BytesIO()
+
+    # Write the WAV header
+    with wave.open(buffer, "wb") as wavefile:
+        wavefile.setnchannels(Channels)
+        wavefile.setsampwidth(2)
+        wavefile.setframerate(SampleRate)
+        wavefile.writeframesraw(RawBytes)
+
+    # Read the buffer bytes
+    buffer.seek(0)
+    bufBytes = buffer.read()
+
+    # Close the buffer and return the bytes
+    buffer.close()
+    return bufBytes
 
 def RecordMicrophoneUntilSilence(SilenceDuration: float = 1.5, VoiceThreshold: int = 150, Channels: int = 1, SampleRate: int = 44100) -> tuple[bool, bytes]:
     """
@@ -16,6 +47,8 @@ def RecordMicrophoneUntilSilence(SilenceDuration: float = 1.5, VoiceThreshold: i
 
     ## Returns:
     tuple: (containsVoice (bool), data (bytes))
+
+    The bytes returned are RAW audio bytes.
     """
 
     # Create variables

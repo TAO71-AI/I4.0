@@ -2,11 +2,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
 import base64
 
-PrivateKey: bytes = b""
-PublicKey: bytes = b""
-ServerPublicKey: bytes = b""
-
-def __parse_hash__(HashName: str) -> hashes.HashAlgorithm:
+def __parse_hash__(HashName: str) -> hashes.HashAlgorithm | None:
     if (HashName == "sha224"):
         return hashes.SHA224()
     elif (HashName == "sha256"):
@@ -15,50 +11,53 @@ def __parse_hash__(HashName: str) -> hashes.HashAlgorithm:
         return hashes.SHA384()
     elif (HashName == "sha512"):
         return hashes.SHA512()
-    elif (HashName == "sha3-224"):
-        return hashes.SHA3_224()
-    elif (HashName == "sha3-256"):
-        return hashes.SHA3_256()
-    elif (HashName == "sha3-384"):
-        return hashes.SHA3_384()
-    elif (HashName == "sha3-512"):
-        return hashes.SHA3_512()
     
     raise ValueError("Unsupported hash algorithm.")
 
 def __split_message__(Message: bytes, MaxSize: int) -> list[bytes]:
     # Split the message into chunks
-    return [Message[i:i+MaxSize] for i in range(0, len(Message), MaxSize)]
+    return [Message[i:i + MaxSize] for i in range(0, len(Message), MaxSize)]
 
-def __create_keys__() -> None:
-    global PrivateKey, PublicKey
-
+def CreateKeys() -> tuple[bytes, bytes]:
     # Generate the keys
     prKey = rsa.generate_private_key(public_exponent = 65537, key_size = 2048)
     puKey = prKey.public_key()
 
-    # Get private and public bytes
-    PrivateKey = prKey.private_bytes(
+    # Get the private and public bytes
+    prKey = prKey.private_bytes(
         encoding = serialization.Encoding.PEM,
-        format = serialization.PrivateFormat.TraditionalOpenSSL,
+        format = serialization.PrivateFormat.PKCS8,
         encryption_algorithm = serialization.NoEncryption()
     )
-    PublicKey = puKey.public_bytes(
+    puKey = puKey.public_bytes(
         encoding = serialization.Encoding.PEM,
         format = serialization.PublicFormat.SubjectPublicKeyInfo
     )
 
-def DecryptMessage(Message: str | bytes, HashAlgorithm: hashes.HashAlgorithm) -> str:
-    global PrivateKey
+    # Return the bytes of the keys
+    return (prKey, puKey)
+
+def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes.HashAlgorithm) -> str:
+    # Encode the message
+    if (isinstance(Message, bytes)):
+        Message = Message.decode("utf-8")
+    elif (not isinstance(Message, str)):
+        raise Exception("Invalid message.")
 
     # Get the private key from the data
-    prKey = serialization.load_pem_private_key(PrivateKey, password = None)
+    if (isinstance(Key, str)):
+        Key = Key.encode("utf-8")
+    elif (not isinstance(Key, bytes)):
+        raise Exception("Invalid key.")
 
-    # Encode the message
-    if (type(Message) is bytes):
-        Message = Message.decode("utf-8")
+    prKey = serialization.load_pem_private_key(Key, password = None)
     
-    Message = [base64.b64decode(chunk) for chunk in Message.split("|")]
+    try:
+        # Try to decode the message using base64
+        Message = [base64.b64decode(chunk) for chunk in Message.split("|")] if (Message.count("|") > 0) else [base64.b64decode(Message)]
+    except:
+        # Error decoding the message, return the message (probably isn't encrypted)
+        return Message
 
     # Create the chunks list
     decChunks = []
@@ -80,23 +79,23 @@ def DecryptMessage(Message: str | bytes, HashAlgorithm: hashes.HashAlgorithm) ->
     # Return the message
     return b"".join(decChunks).decode("utf-8")
 
-def EncryptMessage(Message: str | bytes, Key: str | bytes | None, HashAlgorithm: hashes.HashAlgorithm) -> str:
-    global PublicKey
+def EncryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes.HashAlgorithm) -> str:
+    # Encode the message
+    if (isinstance(Message, str)):
+        Message = Message.encode("utf-8")
+    elif (not isinstance(Message, bytes)):
+        raise Exception("Invalid message.")
 
     # Get the public key from the data
-    if (type(Key) is str):
+    if (isinstance(Key, str)):
         Key = Key.encode("utf-8")
-    elif (type(Key) is None):
-        Key = PublicKey
+    elif (not isinstance(Key, bytes)):
+        raise Exception(f"Invalid key. Key is '{type(Key)}'.")
 
     puKey = serialization.load_pem_public_key(Key)
     puKeySize = puKey.key_size // 8
     hashSize = HashAlgorithm.digest_size
     maxMessageSize = puKeySize - 2 * hashSize - 2
-
-    # Encode the message
-    if (type(Message) is str):
-        Message = Message.encode("utf-8")
 
     # Create the chunks list
     encChunks = []

@@ -6,18 +6,21 @@ import ai_config as cfg
 
 __models__: dict[int, tuple[AutoPipelineForImage2Image, dict[str, any]]] = {}
 
+def __load_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+        
+    # Load the model
+    model, _ = cfg.LoadDiffusersPipeline("img2img", Index, AutoPipelineForImage2Image)
+
+    # Add the model and info to the list of models
+    __models__[Index] = (model, cfg.GetInfoOfTask("img2img", Index))
+
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("img2img"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-        
-        # Load the model
-        model, _ = cfg.LoadDiffusersPipeline("img2img", i, AutoPipelineForImage2Image)
-
-        # Add the model and info to the list of models
-        __models__[i] = (model, cfg.GetInfoOfTask("img2img", i))
+        __load_model__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -54,8 +57,8 @@ def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     return __process__(Index, p["prompt"], steps, p["image"])
 
 def __process__(Index: int, Prompt: str, Steps: int, Image: str | Image.Image) -> list[bytes]:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Cut the prompt
     if (Prompt.startswith("\"") or Prompt.startswith("\'")):

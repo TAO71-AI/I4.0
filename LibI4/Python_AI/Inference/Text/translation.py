@@ -6,39 +6,45 @@ import ai_config as cfg
 __models__: dict[int, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str, dict[str, any]]] = {}
 __classifiers__: dict[int, Pipeline] = {}
 
+def __load_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+        
+    # Get the info of the model
+    info = cfg.GetInfoOfTask("tr", Index)
+
+    # Check if contains a valid model
+    if (info["lang"].count("-") != 1):
+        # Return an error
+        raise Exception(f"Invalid language for model {info['model']}. Expected 'INPUT LANGUAGE-OUTPUT LANGUAGE'; got '{info['lang']}'.")
+
+    # Load the model
+    model, tokenizer, device = cfg.LoadModel("tr", Index, AutoModelForSeq2SeqLM, AutoTokenizer)
+
+    # Add the model to the list of models
+    __models__[Index] = (model, tokenizer, device, info)
+
+def __load_classifier__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__classifiers__.keys())):
+        return
+        
+    # Load the model
+    model, _ = cfg.LoadPipeline("text-classification", "ld", Index)
+
+    # Add the model to the list of models
+    __classifiers__[Index] = model
+
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("tr"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-        
-        # Get the info of the model
-        info = cfg.GetInfoOfTask("tr", i)
-
-        # Check if contains a valid model
-        if (info["lang"].count("-") != 1):
-            # Return an error
-            raise Exception(f"Invalid language for model {info['model']}. Expected 'INPUT LANGUAGE-OUTPUT LANGUAGE'; got '{info['lang']}'.")
-
-        # Load the model
-        model, tokenizer, device = cfg.LoadModel("tr", i, AutoModelForSeq2SeqLM, AutoTokenizer)
-
-        # Add the model to the list of models
-        __models__[i] = (model, tokenizer, device, info)
+        __load_model__(i)
 
 def LoadClassifiers() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("ld"))):
-        # Check if the model is already loaded
-        if (i in list(__classifiers__.keys())):
-            continue
-        
-        # Load the model
-        model, _ = cfg.LoadPipeline("text-classification", "ld", i)
-
-        # Add the model to the list of models
-        __classifiers__[i] = model
+        __load_classifier__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -77,8 +83,8 @@ def GetAvailableLanguages() -> list[str]:
     return langs
 
 def InferenceModel(Index: int, Prompt: str) -> str:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Strip and demojize the prompt
     Prompt = Prompt.strip()
@@ -121,8 +127,8 @@ def InferenceModel(Index: int, Prompt: str) -> str:
     return response
 
 def InferenceClassifier(Prompt: str, Index: int = -1) -> str:
-    # Load the classifiers
-    LoadClassifiers()
+    # Load the classifier
+    __load_classifier__(Index)
 
     # Remove the emojis from the prompt and strip
     Prompt = "".join([p if (not emoji.is_emoji(p)) else "" for p in Prompt])

@@ -1,7 +1,7 @@
 # Import libraries
 from bs4 import BeautifulSoup
 from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import RatelimitException
+from duckduckgo_search.exceptions import RatelimitException, DuckDuckGoSearchException
 import requests
 import json
 
@@ -83,9 +83,13 @@ def Search__Websites(Prompt: str, MaxResults: int) -> list[str]:
     try:
         # Try to search the prompt using the API
         searchResults = DDGS().text(Prompt, max_results = MaxResults)
-    except RatelimitException:
-        # Rate limit error, try again using DuckDuckGo Lite
-        searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
+    except (RatelimitException, DuckDuckGoSearchException):
+        try:
+            # Rate limit error, try again using DuckDuckGo Lite
+            searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
+        except (RatelimitException, DuckDuckGoSearchException):
+            # Rate limit error, try again using DuckDuckGo HTML
+            searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "html")
 
     # For each result
     for result in searchResults:

@@ -102,8 +102,8 @@ def __load_model__(ModelPath: str, ModelIndex: str, ModelType: str, Index: int) 
     print("   Done!")
 
 def __make_rvc__(Index: int, AudioPath: str, Protect: float, FilterRadius: int, F0UpKey: int, IndexRate: float, MixRate: float) -> bytes:
-    # Load all the models
-    LoadModels()
+    # Load the model
+    __prepare_model__(Index)
 
     # Check if the audio file exists
     if (not os.path.exists(AudioPath)):
@@ -156,6 +156,25 @@ def DownloadAssets() -> None:
         # Download the asset and save it
         __download_asset__(assets[asset], "rvc_assets/" + asset)
 
+def __prepare_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+
+    # Get the info
+    info = cfg.GetInfoOfTask("rvc", Index)
+
+    # Move the files
+    __move_file__(info["model"][1], "rvc_assets/" + __get_file_name__(info["model"][1]))
+    __move_file__(info["model"][2], "rvc_assets/" + __get_file_name__(info["model"][2]))
+
+    # Update the info
+    mPath = __get_file_name__(info["model"][1])
+    mIndex = f"{os.getcwd()}/rvc_assets/{__get_file_name__(info['model'][2])}"
+
+    # Load the model
+    __load_model__(mPath, mIndex, info["model"][3], Index)
+
 def LoadModels(AllowDownloads: bool = True) -> None:
     # Check if the downloads are enabled
     if (AllowDownloads):
@@ -164,23 +183,7 @@ def LoadModels(AllowDownloads: bool = True) -> None:
 
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("rvc"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-
-        # Get the info
-        info = cfg.GetInfoOfTask("rvc", i)
-
-        # Move the files
-        __move_file__(info["model"][1], "rvc_assets/" + __get_file_name__(info["model"][1]))
-        __move_file__(info["model"][2], "rvc_assets/" + __get_file_name__(info["model"][2]))
-
-        # Update the info
-        mPath = __get_file_name__(info["model"][1])
-        mIndex = f"{os.getcwd()}/rvc_assets/{__get_file_name__(info['model'][2])}"
-
-        # Load the model
-        __load_model__(mPath, mIndex, info["model"][3], i)
+        __prepare_model__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid

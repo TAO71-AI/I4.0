@@ -4,16 +4,19 @@ import ai_config as cfg
 
 __models__: dict[int, tuple[AutoModelForQuestionAnswering, AutoTokenizer, str]] = {}
 
+def __load_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+        
+    # Load the model and add it to the list of models
+    model, tokenizer, device = cfg.LoadModel("qa", Index, AutoModelForQuestionAnswering, AutoTokenizer)
+    __models__[Index] = (model, tokenizer, device)
+
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("qa"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-        
-        # Load the model and add it to the list of models
-        model, tokenizer, device = cfg.LoadModel("qa", i, AutoModelForQuestionAnswering, AutoTokenizer)
-        __models__[i] = (model, tokenizer, device)
+        __load_model__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -28,8 +31,8 @@ def __offload_model__(Index: int) -> None:
     __models__.pop(Index)
 
 def Inference(Index: int, Context: str, Question: str) -> str:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Tokenize the question and context
     inputs = __models__[Index][1](Question, Context, return_tensors = "pt")

@@ -12,18 +12,21 @@ def __get_random_color__() -> tuple[int, int, int]:
     # Get a random color (RGB)
     return (random.randint(0, 255), random.randint(0, 255), random.randint(0, 255))
 
+def __load_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+        
+    # Load the model and get the info
+    model, processor, device = cfg.LoadModel("od", Index, AutoModelForObjectDetection, AutoImageProcessor)
+
+    # Add the model to the list of models
+    __models__[Index] = (model, processor, device)
+
 def LoadModels() -> None:
     # For each model of this service
     for i in range(len(cfg.GetAllInfosOfATask("od"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-        
-        # Load the model and get the info
-        model, processor, device = cfg.LoadModel("od", i, AutoModelForObjectDetection, AutoImageProcessor)
-
-        # Add the model to the list of models
-        __models__[i] = (model, processor, device)
+        __load_model__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -38,8 +41,8 @@ def __offload_model__(Index: int) -> None:
     __models__.pop(Index)
 
 def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str]:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Check the image type
     if (type(Img) == str):

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "I4_0-Client-PY",
-    version = "12.0.0",
+    version = "13.0.0",
     description = "Client Python bindings for I4.0.",
     author = "TAO71-AI",
     url = "https://github.com/TAO71-AI/I4.0",
@@ -12,7 +12,8 @@ setup(
         "websockets==13.1",
         "asyncio",
         "pyaudio",
-        "cryptography>=44.0.0,<45.0.0"
+        "cryptography>=44.0.0,<45.0.0",
+        "numpy"
     ],
     classifiers = [
         "Programming Language :: Python :: 3",

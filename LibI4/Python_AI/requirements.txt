@@ -19,7 +19,7 @@ cryptography>=44.0.0,<45.0.0
 requests
 beautifulsoup4
 duckduckgo-search>=7.0.2
-soundfile
+soundfile<0.13.0,>=0.12.1
 scipy
 opencv-python
 Pillow
@@ -33,9 +33,9 @@ pydub
 bitsandbytes
 psutil
 pyyaml
-omegaconf<2.1,>=2.0.5
+omegaconf>=2.2,<2.4
 Cython
-antlr4-python3-runtime==4.8
+antlr4-python3-runtime==4.9.*
 
 # Requirements for inference
 gpt4all==2.8.2

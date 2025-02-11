@@ -5,7 +5,7 @@ import Inference.Mixed.MultimodalChatbot.hf as hf
 # Import some other libraries
 from collections.abc import Iterator
 import psutil
-import os
+import base64
 
 # Import I4.0's utilities
 import ai_config as cfg
@@ -78,8 +78,8 @@ def LoadModels() -> None:
         __load_model__(i)
 
 def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompts: list[str], Conversation: list[str] = ["", ""]) -> Iterator[str]:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Get the data from the files
     files = []
@@ -88,8 +88,8 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
         with open(file["data"], "rb") as f:
             files.append({
                 "type": file["type"],
-                file["type"]: f"file://{os.getcwd()}/{file['data']}"
-                #file["type"]: f"data:{file['type']};base64,{base64.b64encode(f.read()).decode("utf-8")}"
+                #file["type"]: f"file://{os.getcwd()}/{file['data']}"
+                file["type"]: f"data:{file['type']};base64,{base64.b64encode(f.read()).decode('utf-8')}"
             })
 
     # Strip the prompt and set the system prompts
@@ -100,15 +100,18 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
     contentForModel = [{"role": "system", "content": [{"type": "text", "text": SystemPrompts}]}]
 
     # Get the conversation of the user
-    conversation = conv.GetConversationFromUser(Conversation[0], True)
+    conversation = conv.GetConversation(Conversation[0], Conversation[1]).copy()
 
     # For each message in the conversation
-    for msg in range(conversation.GetLengthOfConversation(Conversation[1])):
+    for msg in conversation:
+        # Get the role and content
+        role = msg["role"]
+        content = msg["content"]
+
         # Get the file data
-        msgFileData = conversation.GetFromID(Conversation[1], msg)
         msgFiles = []
 
-        for mF in msgFileData["content"]:
+        for mF in content:
             # Check if the file type
             if (mF["type"] in ["audio", "image", "video"]):
                 # Add as a file
@@ -118,10 +121,7 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
                 msgFiles.append({"type": mF["type"], mF["type"]: mF[mF["type"]]})
 
         # Append the message in the new template to contentForModel
-        contentForModel.append({
-            "role": msgFileData["role"],
-            "content": msgFiles
-        })
+        contentForModel.append({"role": role, "content": msgFiles})
 
     # Set the prompt that will be displayed
     contentToShow = "### Conversation:\n"

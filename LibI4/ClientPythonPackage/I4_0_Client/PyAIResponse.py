@@ -17,6 +17,11 @@ Connected: str = ""
 # WebSocket variables
 ClientSocket: websockets.WebSocketClientProtocol | None = None
 
+# Keys
+PublicKey: bytes | None = None
+PrivateKey: bytes | None = None
+ServerPublicKey: bytes | None = None
+
 # Actions
 OnConnectingToServerAction: Callable[[str], None] | None = None
 OnConnectedToServerAction: Callable[[str], None] | None = None
@@ -28,13 +33,13 @@ def GetTasks() -> dict[int, list[Service]]:
     # Return a copy of the tasks
     return ServersTasks.copy()
 
-async def __connect_str__(Server: str) -> None:
-    global ClientSocket, Connected
+async def __connect_str__(Server: str, Port: int = 8060) -> None:
+    global ClientSocket, Connected, PublicKey, PrivateKey, ServerPublicKey
 
     # Check if the keys have been generated
-    if (len(Encryption.PublicKey) == 0 or len(Encryption.PrivateKey) == 0):
+    if (PublicKey is None or PrivateKey is None):
         # Generate keys
-        Encryption.__create_keys__()
+        PrivateKey, PublicKey = Encryption.CreateKeys()
 
     # Disconnect from any other server
     await Disconnect()
@@ -44,7 +49,7 @@ async def __connect_str__(Server: str) -> None:
         OnConnectingToServerAction(Server)
 
     # Create socket and connect
-    ClientSocket = await websockets.connect(f"ws://{Server}:8060", max_size = None)
+    ClientSocket = await websockets.connect(f"ws://{Server}:{Port}", max_size = None)
 
     # Wait until it's connected
     for _ in range(50):
@@ -59,22 +64,22 @@ async def __connect_str__(Server: str) -> None:
     Connected = Server
 
     # Get the public key from the server
-    serverPubKey = await SendAndReceive("get_public_key".encode("utf-8"), False)
-    Encryption.ServerPublicKey = serverPubKey
+    if (ServerPublicKey is None):
+        ServerPublicKey = await SendAndReceive("get_public_key".encode("utf-8"), False)
 
     # Invoke the action
     if (OnConnectedToServerAction != None):
         OnConnectedToServerAction(Server)
 
-async def __connect_int__(Server: int) -> None:
+async def __connect_int__(Server: int, Port: int = 8060) -> None:
     if (Server < 0 or Server >= len(Conf.Servers)):
         # The server ID is invalid
         raise Exception("Invalid server ID.")
 
     # Connect to the server
-    await __connect_str__(Conf.Servers[Server])
+    await __connect_str__(Conf.Servers[Server], Port)
 
-async def Connect(Server: str | int) -> None:
+async def Connect(Server: str | int, Port: int = 8060) -> None:
     """
     This will connect the user to a server.
     If the user is alredy connected to a server, this will disconnect it first.
@@ -82,10 +87,10 @@ async def Connect(Server: str | int) -> None:
 
     if (type(Server) == str):
         # Connect to a server by string
-        await __connect_str__(Server)
+        await __connect_str__(Server, Port)
     elif (type(Server) == int):
         # Connect to a server by ID
-        await __connect_int__(Server)
+        await __connect_int__(Server, Port)
     else:
         # Invalid server type
         raise Exception("Invalid server type.")
@@ -95,7 +100,7 @@ async def Disconnect() -> None:
     This will disconnect the user from the server.
     If the user is not connected to any server this will not do anything.
     """
-    global ClientSocket, Connected
+    global ClientSocket, Connected, ServerPublicKey
 
     if (ClientSocket != None):
         try:
@@ -115,6 +120,9 @@ async def Disconnect() -> None:
     # Delete the connected server
     Connected = ""
 
+    # Delete the server public key
+    ServerPublicKey = None
+
 async def __receive_from_server__() -> bytes:
     # Receive from the server
     data = await ClientSocket.recv()
@@ -130,7 +138,7 @@ async def __receive_from_server__() -> bytes:
     # Return the bytes
     return data
 
-async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
+async def SendAndReceive(Data: bytes | str, Encrypt: bool = True) -> bytes:
     """
     This will send a message to the server and wait for it's response.
     The user must be connected to a server before using this.
@@ -139,11 +147,16 @@ async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
     # Check if you're connected
     if (not IsConnected()):
         raise Exception("Connect to a server first.")
+    
+    # Convert the data to bytes
+    if (isinstance(Data, str)):
+        Data = Data.encode("utf-8")
 
     # Encrypt the data
     if (Encrypt):
         OriginalData = Data
-        Data = Encryption.EncryptMessage(Data, Encryption.ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
+        Data = Encryption.EncryptMessage(Data, ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
+        Data = json.dumps({"Hash": Conf.HashAlgorithm, "Message": Data.decode("utf-8")}).encode("utf-8")
 
     # Send the data
     await ClientSocket.send(Data)
@@ -156,7 +169,7 @@ async def SendAndReceive(Data: bytes, Encrypt: bool = True) -> bytes:
 
     # Decrypt the data
     if (Encrypt):
-        received = Encryption.DecryptMessage(received, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
+        received = Encryption.DecryptMessage(received, PrivateKey, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
 
     # Invoke the action
     if (OnReceiveDataAction != None):
@@ -180,7 +193,7 @@ async def GetServicesFromServer() -> list[Service]:
         "Service": "get_all_services",
         "Prompt": "",
         "Files": {},
-        "PublicKey": Encryption.PublicKey.decode("utf-8")
+        "PublicKey": PublicKey.decode("utf-8")
     }).encode("utf-8"), True)
     receivedData = received.decode("utf-8")
     jsonData = json.loads(receivedData)
@@ -276,7 +289,7 @@ async def SendAndWaitForStreaming(Data: str) -> AsyncIterator[dict[str, any]]:
 
         # Wait for receive
         responseBytes = await __receive_from_server__()
-        responseStr = Encryption.DecryptMessage(responseBytes, Encryption.__parse_hash__(Conf.HashAlgorithm))
+        responseStr = Encryption.DecryptMessage(responseBytes, PrivateKey, Encryption.__parse_hash__(Conf.HashAlgorithm))
         response = json.loads(responseStr)
 
     yield response
@@ -297,17 +310,18 @@ async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Asy
         "Service": Service,
         "Conversation": Conf.Chatbot_Conversation,
         "Index": Index,
-        "PublicKey": Encryption.PublicKey.decode("utf-8")
+        "PublicKey": PublicKey.decode("utf-8")
     })
 
     # Return the response (probably serialized)
     async for token in SendAndWaitForStreaming(jsonData):
         yield token
 
-async def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], VisionService: Service, Index: int, ForceNoConnect: bool, SVisionPrompts: list[str]) -> None:
+async def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], VisionService: Service, Index: int, ForceNoConnect: bool) -> str:
     # Try to send the message
     res = AutoGetResponseFromServer("", Files, VisionService, Index, ForceNoConnect, False)
     img = 0
+    response = ""
 
     # For each response
     async for token in res:
@@ -317,8 +331,10 @@ async def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]
             break
 
         # Get the response from the service
-        SVisionPrompts[img] += Template.replace("[IMAGE_ID]", str(img + 1)).replace("[RESPONSE]", str(token["response"]))
         img += 1
+        response += Template.replace("[IMAGE_ID]", str(img + 1)).replace("[RESPONSE]", str(token["response"]))
+    
+    return response
 
 async def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], ServerService: Service, Index: int = -1, ForceNoConnect: bool = False, FilesPath: bool = True) -> AsyncIterator[dict[str, any]]:
     """
@@ -413,13 +429,13 @@ async def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], Se
 
         if (chatbotMultimodal != None and not chatbotMultimodal and len(files) > 0):
             # Is not multimodal and files length is > 0, apply simulated vision template
-            sVisionPrompts = ["" for _ in range(len(files))]
+            simulatedVisionPrompt = ""
 
             # Get response from Img2Text
             if (Conf.Chatbot_SimulatedVision_Image2Text):
                 try:
                     # Try to send the message
-                    await __execute_simulated_vision__("### Image [IMAGE_ID] (description): [RESPONSE]\n", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect, sVisionPrompts)
+                    simulatedVisionPrompt += await __execute_simulated_vision__("> Image [IMAGE_ID] (description): [RESPONSE]\n", files, Service.ImageToText, Conf.Chatbot_SimulatedVision_Image2Text_Index, ForceNoConnect)
                 except:
                     # Ignore error
                     pass
@@ -428,13 +444,10 @@ async def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], Se
             if (Conf.Chatbot_SimulatedVision_ObjectDetection):
                 try:
                     # Try to send the message
-                    await __execute_simulated_vision__("### Image [IMAGE_ID] (objects detected with position, in JSON format): [RESPONSE]\n", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect, sVisionPrompts)
+                    simulatedVisionPrompt += await __execute_simulated_vision__("> Image [IMAGE_ID] (list of objects detected and positions): [RESPONSE]\n", files, Service.ObjectDetection, Conf.Chatbot_SimulatedVision_ObjectDetection_Index, ForceNoConnect)
                 except:
                     # Ignore error
                     pass
-
-            # Save the user's prompt
-            simulatedVisionPrompt = "".join(sVisionPrompts)
 
             # Replace the system prompts
             systemPrompt += f"\n{simulatedVisionPrompt}"
@@ -450,7 +463,7 @@ async def AutoGetResponseFromServer(Prompt: str, Files: list[dict[str, str]], Se
         "SystemPrompts": systemPrompt.strip(),
         "UseDefaultSystemPrompts": Conf.Chatbot_AllowServerSystemPrompts,
         "Index": Index,
-        "PublicKey": Encryption.PublicKey.decode("utf-8"),
+        "PublicKey": PublicKey.decode("utf-8"),
         "AllowedTools": Conf.AllowedTools
     })
 

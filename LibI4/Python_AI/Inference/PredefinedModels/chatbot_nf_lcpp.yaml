@@ -26,7 +26,7 @@ qwen2.5-0.5b-instruct:
         f16: "Qwen2.5-0.5B-Instruct-f16.gguf"            # 0.99 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen"
+    template: "qwen2"
     notes: "A very small model, good for simple things and only in english; you may experience problems using it in another language. Recommended only if you have less than 4GB of RAM."
 
 qwen2.5-1.5b-instruct:
@@ -51,7 +51,7 @@ qwen2.5-1.5b-instruct:
         f16: "Qwen2.5-1.5B-Instruct-f16.gguf"            # 3.09 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen"
+    template: "qwen2"
     notes: "A small model but can do more things than the 0.5B version. Only in English; you may experience problems using it in another language. Recommended only if you have 4 GB of RAM."
 
 qwen2.5-3b-instruct:
@@ -76,7 +76,7 @@ qwen2.5-3b-instruct:
         f16: "Qwen2.5-3B-Instruct-f16.gguf"            # 5.31 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen"
+    template: "qwen2"
     notes: "A small model but decent model. Recommended if you have 8 GB of RAM."
 
 qwen2.5-7b-instruct:
@@ -101,7 +101,7 @@ qwen2.5-7b-instruct:
         f16: "Qwen2.5-7B-Instruct-f16.gguf"            # 15.2 GB
         default: "f16"
         recommended: "q8_0"
-    template: "qwen"
+    template: "qwen2"
     notes: "A good model, recommended if you have 16 GB of RAM."
 
 qwen2.5-14b-instruct:
@@ -126,7 +126,7 @@ qwen2.5-14b-instruct:
         f16: "Qwen2.5-14B-Instruct-f16.gguf"            # 29.5 GB
         default: "f16"
         recommended: "q6_k_l"
-    template: "qwen"
+    template: "qwen2"
     notes: "A very good model, recommended if you have 32 GB of RAM."
 
 qwen2.5-32b-instruct:
@@ -151,7 +151,7 @@ qwen2.5-32b-instruct:
         # F16 not available right now
         default: "q8_0"
         recommended: "q6_k_l"
-    template: "qwen"
+    template: "qwen2"
     notes: "A very good model, recommended if you have 32 GB of RAM."
 
 rombos-llm-v2.6-qwen-14b:
@@ -176,7 +176,7 @@ rombos-llm-v2.6-qwen-14b:
         f16: "Rombos-LLM-V2.6-Qwen-14b-f16.gguf"            # 29.5 GB
         default: "f16"
         recommended: "q6_k_l"
-    template: "qwen"
+    template: "qwen2"
     notes: "Fine-tune of Qwen2.5-14B-Instruct. Use this one instead of the default model; it's much better. Recommended if you have 32GB of RAM."
 
 mistral-nemo-instruct-2407:
@@ -268,7 +268,7 @@ smollm2-1.7b-instruct:
         f16: "SmolLM2-1.7B-Instruct-f16.gguf"            # 3.42 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen"
+    template: "qwen2"
     notes: "Prefer using Qwen 1.5B instead."
 
 smollm2-360m-instruct:
@@ -293,7 +293,7 @@ smollm2-360m-instruct:
         f16: "SmolLM2-360M-Instruct-f16.gguf"            # 0.73 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen"
+    template: "qwen2"
     notes: "Do not use this model unless you have 2 GB of RAM."
 
 smollm2-135m-instruct:
@@ -318,7 +318,7 @@ smollm2-135m-instruct:
         f16: "SmolLM2-135M-Instruct-f16.gguf"            # 0.27 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen"
+    template: "qwen2"
     notes: "Do not use this model unless you have 1 GB of RAM."
 
 llama-3.1-8b-instruct:
@@ -461,7 +461,7 @@ marco-o1:
         f32: "Marco-o1-f32.gguf"            # 30.5 GB
         default: "f16"
         recommended: "q8_0"
-    template: "qwen"
+    template: "qwen2"
     notes: "Fine-tune of Qwen 7B, uses reasoning."
 
 qwq-32b-preview:
@@ -484,5 +484,148 @@ qwq-32b-preview:
         q6_k_l: "QwQ-32B-Preview-Q6_K_L.gguf"      # 27.3 GB
         q8_0: "QwQ-32B-Preview-Q8_0.gguf"          # 34.8 GB
         # F16 not available right now
-    template: "qwen"
+    template: "qwen2"
     notes: "Similar to Qwen 32B, uses reasoning."
+
+deepseek-r1-distill-qwen-1.5b:
+    # License: MIT
+    repo: "bartowski/DeepSeek-R1-Distill-Qwen-1.5B-GGUF"
+    model:
+        q2_k: "DeepSeek-R1-Distill-Qwen-1.5B-Q2_K.gguf"         # 0.75 GB
+        q2_k_l: "DeepSeek-R1-Distill-Qwen-1.5B-Q2_K_L.gguf"     # 0.98 GB
+        q3_k_s: "DeepSeek-R1-Distill-Qwen-1.5B-Q3_K_S.gguf"     # 0.86 GB
+        q3_k_m: "DeepSeek-R1-Distill-Qwen-1.5B-Q3_K_M.gguf"     # 0.92 GB
+        q3_k_l: "DeepSeek-R1-Distill-Qwen-1.5B-Q3_K_L.gguf"     # 0.98 GB
+        q3_k_xl: "DeepSeek-R1-Distill-Qwen-1.5B-Q3_K_XL.gguf"   # 1.18 GB
+        q4_k_s: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_S.gguf"     # 1.07 GB
+        q4_k_m: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf"     # 1.12 GB
+        q4_k_l: "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_L.gguf"     # 1.29 GB
+        q5_k_s: "DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_S.gguf"     # 1.26 GB
+        q5_k_m: "DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_M.gguf"     # 1.29 GB
+        q5_k_l: "DeepSeek-R1-Distill-Qwen-1.5B-Q5_K_L.gguf"     # 1.43 GB
+        q6_k: "DeepSeek-R1-Distill-Qwen-1.5B-Q6_K.gguf"         # 1.46 GB
+        q6_k_l: "DeepSeek-R1-Distill-Qwen-1.5B-Q6_K_L.gguf"     # 1.58 GB
+        q8_0: "DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf"         # 1.89 GB
+        f16: "DeepSeek-R1-Distill-Qwen-1.5B-f16.gguf"           # 3.56 GB
+        f32: "DeepSeek-R1-Distill-Qwen-1.5B-f32.gguf"           # 7.11 GB
+    template: "qwen2"
+    notes: "Distilled from Qwen 1.5B, uses reasoning."
+
+deepseek-r1-distill-qwen-7b:
+    # License: MIT
+    repo: "bartowski/DeepSeek-R1-Distill-Qwen-7B-GGUF"
+    model:
+        q2_k: "DeepSeek-R1-Distill-Qwen-7B-Q2_K.gguf"           # 3.02 GB
+        q2_k_l: "DeepSeek-R1-Distill-Qwen-7B-Q2_K_L.gguf"       # 3.55 GB
+        q3_k_s: "DeepSeek-R1-Distill-Qwen-7B-Q3_K_S.gguf"       # 3.49 GB
+        q3_k_m: "DeepSeek-R1-Distill-Qwen-7B-Q3_K_M.gguf"       # 3.81 GB
+        q3_k_l: "DeepSeek-R1-Distill-Qwen-7B-Q3_K_L.gguf"       # 4.09 GB
+        q3_k_xl: "DeepSeek-R1-Distill-Qwen-7B-Q3_K_XL.gguf"     # 4.57 GB
+        q4_k_s: "DeepSeek-R1-Distill-Qwen-7B-Q4_K_S.gguf"       # 4.46 GB
+        q4_k_m: "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf"       # 4.68 GB
+        q4_k_l: "DeepSeek-R1-Distill-Qwen-7B-Q4_K_L.gguf"       # 5.09 GB
+        q5_k_s: "DeepSeek-R1-Distill-Qwen-7B-Q5_K_S.gguf"       # 5.32 GB
+        q5_k_m: "DeepSeek-R1-Distill-Qwen-7B-Q5_K_M.gguf"       # 5.44 GB
+        q5_k_l: "DeepSeek-R1-Distill-Qwen-7B-Q5_K_L.gguf"       # 5.78 GB
+        q6_k: "DeepSeek-R1-Distill-Qwen-7B-Q6_K.gguf"           # 6.25 GB
+        q6_k_l: "DeepSeek-R1-Distill-Qwen-7B-Q6_K_L.gguf"       # 6.52 GB
+        q8_0: "DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf"           # 8.10 GB
+        f16: "DeepSeek-R1-Distill-Qwen-7B-f16.gguf"             # 15.2 GB
+        f32: "DeepSeek-R1-Distill-Qwen-7B-f32.gguf"             # 30.5 GB
+    template: "qwen2"
+    notes: "Distilled from Qwen 7B, uses reasoning."
+
+deepseek-r1-distill-qwen-14b:
+    # License: MIT
+    repo: "bartowski/DeepSeek-R1-Distill-Qwen-14B-GGUF"
+    model:
+        q2_k: "DeepSeek-R1-Distill-Qwen-14B-Q2_K.gguf"          # 5.77 GB
+        q2_k_l: "DeepSeek-R1-Distill-Qwen-14B-Q2_K_L.gguf"      # 6.53 GB
+        q3_k_s: "DeepSeek-R1-Distill-Qwen-14B-Q3_K_S.gguf"      # 6.66 GB
+        q3_k_m: "DeepSeek-R1-Distill-Qwen-14B-Q3_K_M.gguf"      # 7.34 GB
+        q3_k_l: "DeepSeek-R1-Distill-Qwen-14B-Q3_K_L.gguf"      # 7.92 GB
+        q3_k_xl: "DeepSeek-R1-Distill-Qwen-14B-Q3_K_XL.gguf"    # 8.61 GB
+        q4_k_s: "DeepSeek-R1-Distill-Qwen-14B-Q4_K_S.gguf"      # 8.57 GB
+        q4_k_m: "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf"      # 8.99 GB
+        q4_k_l: "DeepSeek-R1-Distill-Qwen-14B-Q4_K_L.gguf"      # 9.57 GB
+        q5_k_s: "DeepSeek-R1-Distill-Qwen-14B-Q5_K_S.gguf"      # 10.3 GB
+        q5_k_m: "DeepSeek-R1-Distill-Qwen-14B-Q5_K_M.gguf"      # 10.5 GB
+        q5_k_l: "DeepSeek-R1-Distill-Qwen-14B-Q5_K_L.gguf"      # 11.0 GB
+        q6_k: "DeepSeek-R1-Distill-Qwen-14B-Q6_K.gguf"          # 12.1 GB
+        q6_k_l: "DeepSeek-R1-Distill-Qwen-14B-Q6_K_L.gguf"      # 12.5 GB
+        q8_0: "DeepSeek-R1-Distill-Qwen-14B-Q8_0.gguf"          # 15.7 GB
+        f16: "DeepSeek-R1-Distill-Qwen-14B-f16.gguf"            # 26.6 GB
+        # F32 not available right now
+    template: "qwen2"
+    notes: "Distilled from Qwen 14B, uses reasoning."
+
+deepseek-r1-distill-qwen-32b:
+    # License: MIT
+    repo: "bartowski/DeepSeek-R1-Distill-Qwen-32B-GGUF"
+    model:
+        q2_k: "DeepSeek-R1-Distill-Qwen-32B-Q2_K.gguf"          # 12.3 GB
+        q2_k_l: "DeepSeek-R1-Distill-Qwen-32B-Q2_K_L.gguf"      # 13.1 GB
+        q3_k_s: "DeepSeek-R1-Distill-Qwen-32B-Q3_K_S.gguf"      # 14.4 GB
+        q3_k_m: "DeepSeek-R1-Distill-Qwen-32B-Q3_K_M.gguf"      # 15.9 GB
+        q3_k_l: "DeepSeek-R1-Distill-Qwen-32B-Q3_K_L.gguf"      # 17.3 GB
+        q3_k_xl: "DeepSeek-R1-Distill-Qwen-32B-Q3_K_XL.gguf"    # 17.9 GB
+        q4_k_s: "DeepSeek-R1-Distill-Qwen-32B-Q4_K_S.gguf"      # 18.8 GB
+        q4_k_m: "DeepSeek-R1-Distill-Qwen-32B-Q4_K_M.gguf"      # 19.9 GB
+        q4_k_l: "DeepSeek-R1-Distill-Qwen-32B-Q4_K_L.gguf"      # 20.4 GB
+        q5_k_s: "DeepSeek-R1-Distill-Qwen-32B-Q5_K_S.gguf"      # 22.6 GB
+        q5_k_m: "DeepSeek-R1-Distill-Qwen-32B-Q5_K_M.gguf"      # 23.3 GB
+        q5_k_l: "DeepSeek-R1-Distill-Qwen-32B-Q5_K_L.gguf"      # 23.7 GB
+        q6_k: "DeepSeek-R1-Distill-Qwen-32B-Q6_K.gguf"          # 26.9 GB
+        q6_k_l: "DeepSeek-R1-Distill-Qwen-32B-Q6_K_L.gguf"      # 27.3 GB
+        q8_0: "DeepSeek-R1-Distill-Qwen-32B-Q8_0.gguf"          # 34.8 GB
+        # BF16 not available right now
+    template: "qwen2"
+    notes: "Distilled from Qwen 32B, uses reasoning."
+
+phi-4:
+    # License: MIT
+    repo: "bartowski/phi-4-GGUF"
+    model:
+        q2_k: "phi-4-Q2_K.gguf"         # 5.55 GB
+        q2_k_l: "phi-4-Q2_K_L.gguf"     # 6.05 GB
+        q3_k_s: "phi-4-q3_K_S.gguf"     # 6.50 GB
+        q3_k_m: "phi-4-Q3_K_M.gguf"     # 7.36 GB
+        q3_k_l: "phi-4-Q3_K_L.gguf"     # 7.93 GB
+        q3_k_xl: "phi-4-Q3_K_XL.gguf"   # 8.38 GB
+        q4_k_s: "phi-4-Q4_K_S.gguf"     # 8.44 GB
+        q4_k_m: "phi-4-Q4_K_M.gguf"     # 9.05 GB
+        q4_k_l: "phi-4-Q4_K_L.gguf"     # 9.43 GB
+        q5_k_s: "phi-4-Q5_K_S.gguf"     # 10.2 GB
+        q5_k_m: "phi-4-Q5_K_M.gguf"     # 10.6 GB
+        q5_k_l: "phi-4-Q5_K_L.gguf"     # 10.9 GB
+        q6_k: "phi-4-Q6_K.gguf"         # 12.0 GB
+        q6_k_l: "phi-4-Q6_K_L.gguf"     # 12.3 GB
+        q8_0: "phi-4-Q8_0.gguf"         # 15.6 GB
+        f16: "phi-4-f16.gguf"           # 29.3 GB
+        # F32 not available right now
+    template: "phi3"
+    notes: "A very good model, recommended if you have 32 GB of RAM."
+
+mistral-small-24b-instruct-2501:
+    # License: Apache-2.0
+    repo: "bartowski/Mistral-Small-24B-Instruct-2501-GGUF"
+    model:
+        q2_k: "Mistral-Small-24B-Instruct-2501-Q2_K.gguf"           # 8.89 GB
+        q2_k_l: "Mistral-Small-24B-Instruct-2501-Q2_K_L.gguf"       # 9.55 GB
+        q3_k_s: "Mistral-Small-24B-Instruct-2501-Q3_K_S.gguf"       # 10.4 GB
+        q3_k_m: "Mistral-Small-24B-Instruct-2501-Q3_K_M.gguf"       # 11.5 GB
+        q3_k_l: "Mistral-Small-24B-Instruct-2501-Q3_K_L.gguf"       # 12.4 GB
+        q3_k_xl: "Mistral-Small-24B-Instruct-2501-Q3_K_XL.gguf"     # 13.0 GB
+        q4_k_s: "Mistral-Small-24B-Instruct-2501-Q4_K_S.gguf"       # 13.6 GB
+        q4_k_m: "Mistral-Small-24B-Instruct-2501-Q4_K_M.gguf"       # 14.3 GB
+        q4_k_l: "Mistral-Small-24B-Instruct-2501-Q4_K_L.gguf"       # 14.8 GB
+        q5_k_s: "Mistral-Small-24B-Instruct-2501-Q5_K_S.gguf"       # 16.3 GB
+        q5_k_m: "Mistral-Small-24B-Instruct-2501-Q5_K_M.gguf"       # 16.8 GB
+        q5_k_l: "Mistral-Small-24B-Instruct-2501-Q5_K_L.gguf"       # 17.2 GB
+        q6_k: "Mistral-Small-24B-Instruct-2501-Q6_K.gguf"           # 19.4 GB
+        q6_k_l: "Mistral-Small-24B-Instruct-2501-Q6_K_L.gguf"       # 19.7 GB
+        q8_0: "Mistral-Small-24B-Instruct-2501-Q8_0.gguf"           # 25.0 GB
+        f16: "Mistral-Small-24B-Instruct-2501-f16.gguf"             # 47.2 GB
+        # F32 not available right now
+    template: ""
+    notes: ""

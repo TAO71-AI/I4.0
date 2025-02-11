@@ -3,9 +3,9 @@ from collections.abc import Iterator
 import Inference.Text.chatbot as cb
 import Inference.Text.text_classification as tc
 import Inference.Text.translation as tns
-import Inference.Images.ai_generate_image as agi
+import Inference.Images.ai_generate_image as text2img
 import Inference.Images.ai_img_to_text as itt
-import Inference.Audio.ai_generate_audio as aga
+import Inference.Audio.ai_generate_audio as text2audio
 import Inference.Mixed.ai_filters as filters
 import Inference.Images.ai_depth_estimation as de
 import Inference.Images.ai_object_detection as od
@@ -113,10 +113,10 @@ def LoadAllModels() -> None:
     tc.LoadModels()
     tns.LoadModels()
     tns.LoadClassifiers()
-    agi.LoadModels()
+    text2img.LoadModels()
     itt.LoadModels()
     sr.LoadModels()
-    aga.LoadModels()
+    text2audio.LoadModels()
     filters.LoadModels()
     de.LoadModels()
     od.LoadModels()
@@ -143,13 +143,13 @@ def __offload_model__(Service: str, Index: int) -> None:
     elif (Service == "ld"):
         tns.__offload_classifier__(Index)
     elif (Service == "text2img"):
-        agi.__offload_model__(Index)
+        text2img.__offload_model__(Index)
     elif (Service == "img2text"):
         itt.__offload_model__(Index)
     elif (Service == "speech2text"):
         sr.__offload_model__(Index)
     elif (Service == "text2audio"):
-        aga.__offload_model__(Index)
+        text2audio.__offload_model__(Index)
     elif (Service == "nsfw_filter-text"):
         filters.__offload_text__(Index)
     elif (Service == "nsfw_filter-image"):
@@ -192,14 +192,23 @@ def OffloadAll(Exclude: dict[str, list[int]]) -> None:
             # It isn't, offload
             __offload_model__(task, index)
 
-def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int) -> Iterator[str]:
+def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[str]:
     # Delete empty conversation
-    conv.GetConversationFromUser("", True).DeleteConversation("")
+    conv.DeleteConversation("", "")
 
-    # Get context size of the chatbot
-    minLength = 10
-    maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]
-    maxLength = int(maxLength / 2) if (maxLength >= 8000) else maxLength - 1
+    # Set limits
+    minLength = cfg.current_data["internet"]["min_length"]
+    maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]              # Chatbot context length - len(ExtraSystemPrompts) - 22 - len(Question) - 1
+    maxLength -= len(cbbasics.GetDefaultSystemPrompts())                # Default I4.0 system prompts
+    maxLength -= len(cbbasics.GetPersonalitySystemPrompts(AIArgs))      # I4.0 personality system prompts
+    maxLength -= len(ExtraSystemPrompts)                                # Extra system prompts defined by the user
+    maxLength -= len(cfg.current_data["custom_system_messages"])        # Extra system prompts defined by the server
+    maxLength -= 22                                                     # Internet template
+    maxLength -= 1                                                      # Just to make sure the ctx is not exceed
+
+    # Check if max length is less than/equal to 0
+    if (maxLength <= 0):
+        raise Exception("Context length of the model is too small!")
 
     # Search over internet
     if (SearchSystem == "websites" or SearchSystem == "website"):
@@ -218,37 +227,37 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
     elif (SearchSystem == "news"):
         # Search for news
         internetResults = internet.Search__News(SearchPrompt, Count)
-        internetResponse = "".join([res + "\n" for res in internetResults])
+        internetResponse = "\n".join(internetResults)
 
         # Check if internet response length is 0
         if (len(internetResponse.strip()) == 0):
             # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count, AIArgs, ExtraSystemPrompts, UseDefaultSystemPrompts)
         else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
     elif (SearchSystem == "chat"):
         # Obtain the response from the chat
         internetResponse = internet.Search__Chat(f"{SearchPrompt}\n{Question}", cfg.current_data["internet_chat"])
-        internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
+        internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
     elif (SearchSystem == "maps"):
         # Search for nearby places
         internetResults = internet.Search__Maps(SearchPrompt, 15, Count)
-        internetResponse = "".join([res + "\n" for res in internetResults])
+        internetResponse = "\n".join(internetResults)
         
         # Check if internet response length is 0
         if (len(internetResponse.strip()) == 0):
             # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count)
+            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count, AIArgs, ExtraSystemPrompts, UseDefaultSystemPrompts)
         else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, 0)
+            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
     else:
         # Raise error
         raise ValueError("Invalid SearchSystem. Use 'websites', 'answers', 'news', 'chat' or 'maps'.")
 
     # Return the response
-    return MakePrompt(Index, "Internet: " + internetResponse + "\nQuestion: " + Question, [], "chatbot", "", [], ["", ""], [False, False])
+    return MakePrompt(Index, f"Internet:\n{internetResponse}\n\nQuestion: {Question}", [], "chatbot", AIArgs, ExtraSystemPrompts, ["", ""], UseDefaultSystemPrompts, [])
 
-def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None, AllowedTools: list[str] | str | None = None) -> Iterator[dict[str]]:
+def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None, AllowedTools: list[str] | str | None = None) -> Iterator[dict[str]]:
     # Define I4.0's personality
     if (AIArgs == None):
         AIArgs = cfg.current_data["ai_args"].split("+")
@@ -266,8 +275,17 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     elif (type(Conversation[1]) != str):
         raise ValueError("Conversation [1] MUST be a string.")
 
+    # Get the info of the model
+    info = cfg.GetInfoOfTask(Service, Index)
+
     # Set system prompts
     sp = []
+
+    # Get the tools
+    tools = cbbasics.GetTools(AllowedTools)
+
+    if (len(tools.strip()) > 0):
+        sp.append(tools)
 
     # Get the personality
     sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
@@ -290,22 +308,16 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     if (len(cfg.current_data["custom_system_messages"].strip()) > 0 and UseDefaultSystemPrompts[1]):
         sp += cfg.current_data["custom_system_messages"].split("\n")
     
+    # Check if the info contains information about the model and it's not empty
+    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"]).strip()) > 0 and UseDefaultSystemPrompts[1]):
+        # Add the model info to the model
+        sp.append(str(info["model_info"]))
+    
     # Add extra system prompts
     if ((type(ExtraSystemPrompts) == list or type(ExtraSystemPrompts) == list[str]) and len(ExtraSystemPrompts) > 0):
         sp += ExtraSystemPrompts
     elif (len(ExtraSystemPrompts) > 0):
         sp.append(str(ExtraSystemPrompts))
-    
-    # Get the tools
-    sp.append(cbbasics.GetTools(AllowedTools) + "\n\n")
-
-    # Get the info of the model
-    info = cfg.GetInfoOfTask(Service, Index)
-
-    # Check if the info contains information about the model and it's not empty
-    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"]).strip()) > 0 and UseDefaultSystemPrompts[1]):
-        # Add the model info to the model
-        sp.append(str(info["model_info"]))
     
     if (cfg.current_data["use_dynamic_system_args"]):
         # Get dynamic system prompts (for current date, etc.)
@@ -314,6 +326,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
         # Add sprompts
         sp += [
+            "",
             f"The current date is {cDate.day} of {calendar.month_name[cDate.month]}, {cDate.year}.",
             f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
         ]
@@ -328,7 +341,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Check if the length of the memories is higher than 0
     if (len(mems) > 0):
         # It is
-        sp.append("")
+        sp.append("\n")
 
         # For each memory
         for mem in range(len(mems)):
@@ -436,6 +449,11 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         
         # Get the response of file 0
         response = RecognizeAudio(Index, Files[0]["data"])
+
+        # Check if the language is unknown and at least one language detector is available
+        if (response["lang"] == "unknown" and len(cfg.GetAllInfosOfATask("ld")) > 0):
+            # Detect the language
+            response["lang"] = DetectLanguage(random.randint(0, len(cfg.GetAllInfosOfATask("ld")) - 1), response["text"])
 
         # Return the response
         yield {"response": response, "files": []}
@@ -573,7 +591,7 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
 
 def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Get generated images
-    imgs_response = agi.Inference(Index, Prompt)
+    imgs_response = text2img.Inference(Index, Prompt)
     images = []
 
     # Generate images
@@ -594,7 +612,7 @@ def EstimateDepth(Index: int, Img: str) -> str:
 
 def GenerateAudio(Index: int, Prompt: str) -> str:
     # Get generated audio
-    aud_response = aga.GenerateAudio(Index, Prompt)
+    aud_response = text2audio.GenerateAudio(Index, Prompt)
 
     # Return generated audio
     return base64.b64encode(aud_response).decode("utf-8")

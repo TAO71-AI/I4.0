@@ -21,11 +21,11 @@ Python: 3.8 should be compatible, but 3.11 is more tested.
 ### Clients
 CPU: Any CPU. Due to encryption we recommend a 2+ cores CPU or set the encryption to a fastest one.
 
-RAM: ~128 MB should be enough (NOTE: We are not including the RAM required for the OS here).
+RAM: ~512 MB or ~384 MB should be enough (NOTE: We are not including the RAM required for the OS here).
 
 OS: Any OS that supports Python 3.8 or higher.
 
-Python: At least 3.8.
+Python: At least 3.8 (only tested on Python 3.11 and Python 3.13).
 
 # License
 TAO71 License 111
@@ -36,5 +36,5 @@ TAO71 License 111
 Programmer of I4.0.
 
 ## Dinolt
-[![DINOLT](https://github.com/TAO71-AI/I4.0/blob/main/Assets/Contributors_Helpers/DINOLT.jpg?raw=true)](https://www.youtube.com/@GoldenClassicsStudios)
+[![DINOLT](https://github.com/TAO71-AI/I4.0/blob/main/Assets/Contributors_Helpers/DINOLT.jpg?raw=true)](https://www.youtube.com/@DinLadyCartoon)
 I4.0's designer, created all the images of I4.0.

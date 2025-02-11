@@ -20,7 +20,7 @@ VULKAN_INFO=$(vulkaninfo)
 INTEL_GPU_VARS="/opt/intel/oneapi/setvars.sh"       # Only used if you have a Intel GPU.
 
 PYTORCH_PKG="torch torchaudio torchvision"
-PYTORCH_WHL="--extra-index-url https://download.pytorch.org/whl/cpu"      # PyTorch CPU version.
+PYTORCH_WHL="https://download.pytorch.org/whl/cpu"                  # PyTorch CPU version.
 LCPP_WHL="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"               # LlamaCPP (Python) CPU version.
 SDCPP_WHL="-DGGML_OPENBLAS=ON"                                      # StableDiffusionCPP (Python) CPU version.
 
@@ -132,7 +132,7 @@ elif echo "$GPU_INFO" | grep -i intel; then                                 # EX
         LCPP_WHL="-DGGML_VULKAN=on"
     elif [ $FORCE_CPU_LLAMA -ne 1 ]; then
         echo "   Building LLaMA-CPP-Python with SYCL support..."
-        LCPP_WHL="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx"
+        LCPP_WHL="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=on"
     else
         echo "   Building LLaMA-CPP-Python with CPU support only..."
     fi
@@ -169,21 +169,21 @@ echo -e "\e[1m > Updating PIP... \e[0m"
 
 # 3. Install PyTorch.
 echo -e "\e[1m > Installing PyTorch... \e[0m"
-"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS "$TORCH_PKG" $PYTORCH_WHL
+"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS $PYTORCH_PKG --index-url "$PYTORCH_WHL"
 
 rm -rf RVC/
 git clone --branch intel_support --single-branch https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git ./RVC     # TAO71-AI's fork; NVIDIA, AMD and Intel GPUs support.
 #git clone --branch develop --single-branch https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git ./RVC       # Original repository; NVIDIA and AMD GPUs support only.
 cd RVC
-pip install --upgrade --editable ./ --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
+"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS --editable ./ --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
 cd ..
 rm -rf RVC/
 
 rm -rf fairseq/
-pip uninstall -y fairseq
+"$PIP_CMD" uninstall -y fairseq
 git clone --branch main --single-branch https://github.com/Tps-F/fairseq.git ./fairseq
 cd fairseq
-pip install --upgrade --editable ./ --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
+"$PIP_CMD" install --upgrade $EXTRA_PIP_ARGS --editable ./ --verbose --index-url "$PYTORCH_WHL" --extra-index-url "https://pypi.org/simple"
 cd ..
 rm -rf fairseq/
 

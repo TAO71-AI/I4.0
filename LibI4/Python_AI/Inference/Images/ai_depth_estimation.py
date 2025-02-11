@@ -38,8 +38,8 @@ def __offload_model__(Index: int) -> None:
     __models__.pop(Index)
 
 def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Check the type of the image
     if (type(Image) == str):

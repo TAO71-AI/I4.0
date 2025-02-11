@@ -1,60 +1,66 @@
-# Import libraries
-import json
+# Import I4.0 utilities
+from server_basics import ExecuteCommandOnDatabase, cfg
 
-Memories: dict[str, list[str]] = {}
+def GetMemories(User: str) -> list[str]:
+    """
+    Gets the memories from the DB.
+    """
+    # Get all the memories from the database
+    results = ExecuteCommandOnDatabase(f"SELECT {cfg.current_data['db']['memories']['memory']} FROM {cfg.current_data['db']['memories']['table']} WHERE {cfg.current_data['db']['memories']['user']} = %s", [User])
+    memories = []
 
-def AddMemory(Key: str, Memory: str):
-    # Check if the key exists in the memories
-    if (Key not in Memories):
-        # Doesn't exists in memory, create it
-        Memories[Key] = []
+    # For each result
+    for result in results:
+        # Get the memory
+        memories.append(str(result[cfg.current_data["db"]["memories"]["memory"]]))
     
-    # Save the memory
-    Memories[Key].append(Memory)
+    # Return the memories
+    return memories
 
-def RemoveMemories(Key: str) -> None:
-    # Check if the key exists in the memories
-    if (Key in Memories):
-        # Exists in memory, remove it
-        Memories.pop(Key)
+def GetMemory(User: str, MemoryIndex: int) -> str:
+    """
+    Get a single memory from the DB
+    """
+    # Get all the memories
+    mems = GetMemories(User)
 
-def RemoveMemory(Key: str, Index: int) -> None:
-    # Check if the key and memory exists
-    if (Key in Memories and Index >= 0 and Index < len(Memories[Key])):
-        # Exists, delete it
-        Memories[Key].pop(Index)
-    elif (Key in Memories):
-        # Invalid index
-        raise ValueError("Invalid memory index. Can't delete memory.")
-
-def SaveMemories() -> None:
-    # Save the memories into a file
-    with open("memories.json", "w+") as f:
-        f.write(json.dumps(Memories))
-        f.close()
-
-def LoadMemories() -> dict[str, list[str]]:
-    global Memories
-
-    # Load the memories from a file
-    try:
-        # Try to read the file and load the memories
-        with open("memories.json", "r") as f:
-            mems = json.loads(f.read())
-            Memories = mems
-
-            return mems
-    except FileNotFoundError:
-        # File doesn't exist, create an empty dictionary
-        return {}
+    # Check if the memory exists
+    if (len(mems) > MemoryIndex):
+        # Exists! Return the memory
+        return mems[MemoryIndex]
     
-def GetMemories(Key: str) -> list[str]:
-    # Check if the key exists
-    if (Key in Memories):
-        # Return the memories
-        return Memories[Key]
-    
-    # Key doesn't exist, return an empty list
-    return []
+    # Doesn't exist!
+    return ""
 
-LoadMemories()
+def SaveMemory(User: str, Memory: str | list[str] | dict[str, list[str]]) -> None:
+    """
+    Saves a memory to the DB.
+    """
+    # Parse the type of memory
+    if (isinstance(Memory, list)):
+        for memory in Memory:
+            SaveMemory(User, memory)
+            
+        return
+    elif (isinstance(Memory, dict)):
+        for user in list(Memory.keys()):
+            SaveMemory(user, Memory[user])
+        
+        return
+    elif (not isinstance(Memory, str)):
+        raise Exception("Invalid memory data.")
+    
+    # Execute the command
+    ExecuteCommandOnDatabase(f"INSERT INTO {cfg.current_data['db']['memories']['table']} ({cfg.current_data['db']['memories']['user']}, {cfg.current_data['db']['memories']['memory']}) VALUES (%s, %s)", [User, Memory])
+
+def DeleteMemory(User: str, Memory: str) -> None:
+    """
+    Deletes a memory from the DB.
+    """
+    ExecuteCommandOnDatabase(f"DELETE FROM {cfg.current_data['db']['memories']['table']} WHERE {cfg.current_data['db']['memories']['user']} = %s AND {cfg.current_data['db']['conversations']['memory']} = %s", [User, Memory])
+
+def DeleteMemories(User: str) -> None:
+    """
+    Deletes all the memories from the DB.
+    """
+    ExecuteCommandOnDatabase(f"DELETE FROM {cfg.current_data['db']['memories']['table']} WHERE {cfg.current_data['db']['memories']['user']} = %s", [User])

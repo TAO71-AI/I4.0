@@ -1,50 +1,23 @@
-from cryptography.hazmat.primitives.asymmetric import rsa, padding
-from cryptography.hazmat.primitives import serialization, hashes
-import os
-import random
-import time
-import json
-import datetime
-import base64
-import pymysql as mysql
-import pymysql.cursors as mysql_c
+# Import I4.0 utilities
+import encryption as enc
 import ai_config as cfg
 
-default_tokens: int = 2000
-use_mysql: bool = cfg.current_data["keys_db"]["use"] if (type(cfg.current_data["keys_db"]["use"]) == bool) else (str(cfg.current_data["keys_db"]["use"]).lower() == "true")
-mysql_connection = None
-mysql_cursor = None
-saving: bool = False
-reading: bool = False
+# Import libraries
+import random
+import datetime
+import json
+import websockets
+import asyncio
+import os
+import concurrent.futures
 
-if (not os.path.exists("API/")):
-    os.mkdir("API/")
+# Create variables
+DefaultTokens: int = 0
+KeyLength: int = 150
+ServerPrivateKey: bytes | None = None
+ServerPublicKey: bytes | None = None
 
-def ReloadDB() -> None:
-    global mysql_connection, mysql_cursor
-
-    if (use_mysql):
-        mysql_connection = mysql.connect(
-            host = cfg.current_data["keys_db"]["server"],
-            user = cfg.current_data["keys_db"]["user"],
-            password = cfg.current_data["keys_db"]["password"],
-            database = cfg.current_data["keys_db"]["database"],
-            cursorclass = mysql_c.DictCursor
-        )
-        mysql_cursor = mysql_connection.cursor()
-
-def Init() -> None:
-    global default_tokens
-
-    if (not os.path.exists("API/")):
-        os.mkdir("API/")
-    
-    if (default_tokens < 0):
-        default_tokens = 1
-    
-    ReloadDB()
-
-def GetCurrentDateDict() -> dict[str, str]:
+def __get_current_datetime__() -> dict[str, str]:
     return {
         "day": str(datetime.datetime.now().day),
         "month": str(datetime.datetime.now().month),
@@ -53,152 +26,219 @@ def GetCurrentDateDict() -> dict[str, str]:
         "minute": str(datetime.datetime.now().minute)
     }
 
-def GenerateKey(tokens: int = -1, daily_key: bool = False) -> dict:
-    Init()
+def __create_keys__() -> None:
+    global ServerPublicKey, ServerPrivateKey
 
-    if (tokens < 0):
-        tokens = default_tokens
-    
-    char_list = "abcdefghijklmnopqrstuvwxyz"
-    char_list += char_list.upper() + "0123456789!·$%&()=?@#¬[]-_.:,;"
-    key = ""
-    key_data = {}
+    if (ServerPublicKey is not None and ServerPrivateKey is not None):
+        return
 
-    for _ in range(15):
-        try:
-            key += char_list[random.randint(0, len(char_list) - 1)]
-        except:
-            key += "0"
-    
-    if (os.path.exists("API/" + key + ".key")):
-        return GenerateKey(tokens, daily_key)
-    
-    default_key = {
-        "tokens": tokens
-    }
-    
-    key_data["tokens"] = tokens
-    key_data["key"] = key
-    key_data["daily"] = "true" if (daily_key) else "false"
-    key_data["date"] = GetCurrentDateDict()
-    key_data["default"] = default_key
-    key_data["admin"] = False
-    SaveKey(key_data)
-    
-    return key_data
-
-def SaveKey(key_data: dict, UseMySQL: bool | None = None, Err: int = 0) -> None:
-    global saving
-
-    if (UseMySQL and use_mysql):
-        try:
-            mysql_cursor.execute("UPDATE " + cfg.current_data["keys_db"]["table"] + " SET tokens = '" + str(key_data["tokens"]) + "', date = '" + json.dumps(key_data["date"]).replace("\'", "\"") + "' WHERE akey = '" + str(key_data["key"]) + "'")
-            mysql_connection.commit()
-        except:
-            if (Err == 0):
-                ReloadDB()
-                return SaveKey(key_data, True, 1)
-
-    try:
-        if (key_data["user_id"] > 0 and use_mysql):
-            raise Exception()
-
-        while (saving):
-            time.sleep(0.05)
-
-        saving = True
-
-        with open("API/" + key_data["key"] + ".key", "w+") as f:
-            f.write(json.dumps(key_data))
-            f.close()
-
-        saving = False
+    if (os.path.exists("db_pub.pem") and os.path.exists("db_pri.pem")):
+        with open("db_pub.pem", "rb") as f:
+            ServerPublicKey = f.read()
         
-        if (UseMySQL == None):
-            SaveKey(key_data, True)
+        with open("db_pri.pem", "rb") as f:
+            ServerPrivateKey = f.read()
+    else:
+        print("Public or private keys not found. Creating new keys.")
+        ServerPrivateKey, ServerPublicKey = enc.CreateKeys()
+
+        with open("db_pub.pem", "wb") as f:
+            f.write(ServerPublicKey)
+        
+        with open("db_pri.pem", "wb") as f:
+            f.write(ServerPrivateKey)
+
+async def AsyncExecuteCommandOnDatabase(Command: str, Objects: list[any] | None = None) -> list[any]:
+    """
+    Executes a command on the database.
+    """
+    # Get the keys
+    __create_keys__()
+
+    # Get the port
+    try:
+        port = cfg.current_data["server_port"] + 1
     except:
-        saving = False
+        port = 8061
 
-def GetAllKeys(UseMySQL: bool | None = None, Err: int = 0) -> list[dict]:
-    global reading
+    # Connect to the database server
+    client: websockets.WebSocketClientProtocol = await websockets.connect(f"ws://{cfg.current_data['db']['host']}:{port}", max_size = None)
 
-    Init()
+    # Create the JSON string
+    data = {
+        "Command": Command,
+        "Objects": Objects
+    }
+    data = json.dumps(data)
+
+    # Encrypt the data using the public server key file
+    hash = enc.__parse_hash__(cfg.current_data["db"]["hash"])
+    data = enc.EncryptMessage(data, ServerPublicKey, hash)
+
+    # Convert to bytes
+    data = data.encode("utf-8")
+
+    # Send the data
+    await client.send(data)
+
+    # Receive the response
+    response = await client.recv()
+
+    # Decrypt the response
+    response = enc.DecryptMessage(response, ServerPrivateKey, hash)
+
+    # Close the connection
+    await client.close()
+
+    # Check the response
+    if (response == "ERROR"):
+        # Return an error
+        raise Exception("Error on the database server.")
+
+    # Return the response
+    return cfg.JSONDeserializer(response)
+
+def ExecuteCommandOnDatabase(Command: str, Objects: list[any] | None = None) -> list[any]:
+    """
+    Executes a command on the database using asyncio.
+    """
+    def __execute_command_on_db__() -> list[any]:
+        # Create new event loop
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        try:
+            # Execute the command on the database
+            result = loop.run_until_complete(AsyncExecuteCommandOnDatabase(Command, Objects))
+        finally:
+            loop.close()
+        
+        # Return the result
+        return result
+
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future = executor.submit(__execute_command_on_db__)
+        result = future.result()
+    
+    if (isinstance(result, str) and result == "ERROR"):
+        raise Exception("Error on the server.")
+    
+    return result
+
+def CreateKey(Tokens: int | None = None, IsDaily: bool = False) -> dict[str, any]:
+    """
+    Creates a new key.
+    """
+    # Check if the tokens are none
+    if (Tokens is None):
+        # Use the default tokens
+        Tokens = DefaultTokens
+    
+    # Check key length
+    if (KeyLength <= 0):
+        # Set the key length to 150
+        KeyLength = 150
+    
+    # Create variables
+    charList = "abcdefghijklmnopqrstuvwxyz"
+    charList += charList.upper() + "0123456789!·$%&()=?@#¬[]-_.:,;"
+    keyData = {
+        "tokens": Tokens,
+        "key": "",
+        "daily": IsDaily,
+        "date": __get_current_datetime__(),
+        "default": {
+            "tokens": Tokens
+        },
+        "admin": False
+    }
+
+    # Generate a unique key
+    for _ in range(KeyLength):
+        # Add a random char to the key
+        keyData["key"] += charList[random.randint(0, len(charList) - 1)]
+
+    # Save the key
+    SaveKey(keyData)
+
+    # Return the key data
+    return keyData
+
+def SaveKey(KeyData: dict[str, any] | None) -> None:
+    """
+    Saves a key to the DB.
+    """
+    # Check if the key is none
+    if (KeyData is None):
+        return
+
+    # Get values
+    key = str(KeyData["key"])
+    tokens = float(KeyData["tokens"])
+    daily = bool(KeyData["daily"])
+    date = json.dumps(KeyData["date"])
+    default = json.dumps(KeyData["default"])
+    admin = bool(KeyData["admin"])
+
+    # Check if the key already exists
+    results = ExecuteCommandOnDatabase(f"SELECT * FROM {cfg.current_data['db']['keys']['table']} WHERE {cfg.current_data['db']['keys']['key']} = %s LIMIT 1", [key])
+
+    # Check if the key was found
+    if (len(results) > 0):
+        # Found!
+        # Update the key
+        ExecuteCommandOnDatabase(f"UPDATE {cfg.current_data['db']['keys']['table']} SET {cfg.current_data['db']['keys']['tokens']} = %s, {cfg.current_data['db']['keys']['daily']} = %s, {cfg.current_data['db']['keys']['date']} = %s, {cfg.current_data['db']['keys']['default']} = %s, {cfg.current_data['db']['keys']['admin']} = %s WHERE {cfg.current_data['db']['keys']['key']} = %s", [tokens, daily, date, default, admin, key])
+    else:
+        # Not found, create
+        ExecuteCommandOnDatabase(f"INSERT INTO {cfg.current_data['db']['keys']['table']} ({cfg.current_data['db']['keys']['key']}, {cfg.current_data['db']['keys']['tokens']}, {cfg.current_data['db']['keys']['daily']}, {cfg.current_data['db']['keys']['date']}, {cfg.current_data['db']['keys']['default']}, {cfg.current_data['db']['keys']['admin']}) VALUES (%s, %s, %s, %s, %s, %s)", [key, tokens, daily, date, default, admin])
+
+def GetKey(Key: str) -> dict[str, any]:
+    """
+    Gets a key from the DB.
+    """
+    # Get the key
+    results = ExecuteCommandOnDatabase(f"SELECT * FROM {cfg.current_data['db']['keys']['table']} WHERE {cfg.current_data['db']['keys']['key']} = %s LIMIT 1", [Key])
+    result = results[0]
+
+    key = str(result[cfg.current_data["db"]["keys"]["key"]])
+    tokens = float(result[cfg.current_data["db"]["keys"]["tokens"]])
+    daily = bool(result[cfg.current_data["db"]["keys"]["daily"]])
+    date = cfg.JSONDeserializer(str(result[cfg.current_data["db"]["keys"]["date"]]))
+    default = cfg.JSONDeserializer(str(result[cfg.current_data["db"]["keys"]["default"]]))
+    admin = bool(result[cfg.current_data["db"]["keys"]["admin"]])
+
+    # Parse the key
+    keyData = {
+        "tokens": tokens,
+        "key": key,
+        "daily": daily,
+        "date": date,
+        "default": default,
+        "admin": admin
+    }
+
+    # Return the key data
+    return keyData
+
+def GetKeys() -> list[dict[str, any]]:
+    """
+    Gets all the keys from the DB.
+    """
+    # Get all key names
+    results = ExecuteCommandOnDatabase(f"SELECT {cfg.current_data['db']['keys']['key']} FROM {cfg.current_data['db']['keys']['table']}")
     keys = []
 
-    if (UseMySQL and use_mysql):
-        try:
-            mysql_cursor.execute("SELECT * FROM " + cfg.current_data["keys_db"]["table"])
-            results = mysql_cursor.fetchall()
-
-            for db_key in results:
-                try:
-                    key_data = {
-                        "tokens": float(db_key[1]),
-                        "key": db_key[2],
-                        "daily": int(db_key[3]) == 1 or str(db_key[3]).lower() == "true",
-                        "date": json.loads(db_key[4]),
-                        "default": {
-                            "tokens": float(db_key[5])
-                        },
-                        "admin": int(db_key[6]) == 1 or str(db_key[6]).lower() == "true"
-                    }
-                    keys.append(key_data)
-                except:
-                    continue
-            
-            return keys
-        except:
-            if (Err == 0):
-                ReloadDB()
-                return GetAllKeys(True, 1)
-
-    while (reading):
-        time.sleep(0.05)
-
-    reading = True
-
-    try:
-        for key in os.listdir("API/"):
-            with open(f"API/{key}", "r") as f:
-                content: dict = json.loads(f.read())
-                f.close()
-
-                if (list(content.keys()).count("admin") == 0):
-                    content["admin"] = False
-
-                keys.append(content)
-        
-        reading = False
-    except:
-        reading = False
-
-    if (UseMySQL == None):
-        keys += GetAllKeys(True)
+    # For each result
+    for result in results:
+        # Get the key
+        keys.append(GetKey(result[cfg.current_data["db"]["keys"]["key"]]))
     
+    # Return the keys
     return keys
 
-def GetKey(key: str) -> dict:
-    Init()
-    keys = GetAllKeys()
-
-    for akey in keys:
-        if (akey["key"] == key):
-            return akey
-    
-    raise Exception("Invalid key.")
-
-def DeleteKey(key: str) -> None:
-    Init()
-
-    if (not os.path.exists("API/" + key + ".key")):
-        return
-    
-    os.remove("API/" + key + ".key")
-
-def StopDB() -> None:
-    if (use_mysql):
-        try:
-            mysql_cursor.close()
-            mysql_connection.close()
-        except:
-            pass
+def DeleteKey(Key: str) -> None:
+    """
+    Deletes a key from the DB.
+    """
+    # Delete the key from the DB
+    ExecuteCommandOnDatabase(f"DELETE FROM {cfg.current_data['db']['keys']['table']} WHERE {cfg.current_data['db']['keys']['key']} = %s", [Key])

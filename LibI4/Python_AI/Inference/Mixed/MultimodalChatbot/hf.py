@@ -30,7 +30,7 @@ def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVisi
         modelExtraKWargs = None
     
     # Check if the processor's extra kwargs are empty
-    if (len(modelExtraKWargs) == 0):
+    if (len(processorExtraKWargs) == 0):
         # They're, delete
         processorExtraKWargs = None
 

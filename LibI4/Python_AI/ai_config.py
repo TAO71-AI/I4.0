@@ -14,15 +14,38 @@ __config_data__: dict[str] = {
     "custom_system_messages": "",                                                               # Sets a custom system prompt from the server.
     "custom_api_admin_system_messages": "",                                                     # Sets a custom system prompt if the user's key is set as admin.
     "custom_api_nadmin_system_messages": "",                                                    # Sets a custom system prompt if the user's key is NOT set as admin.
-    "system_messages_in_first_person": False,                                                   # [DEPRECATED, soon will be deleted] Replaces `you're`, `you`... with `I'm`, `I`...
     "use_default_system_messages": True,                                                        # Use pre-defined system prompt.
-    "keys_db": {                                                                                # Allows the usage of a database for the API keys.
-        "use": "false",                                                                             # Sync API keys with database.
-        "server": "127.0.0.1",                                                                      # Database server IP.
-        "user": "root",                                                                             # Database user.
+    "db": {                                                                                     # Database. NOTE: From now on all the servers MUST HAVE a database in order to work as expected.
+        "host": "127.0.0.1",                                                                        # Database host server.
+        "user": "",                                                                                 # Database username.
         "password": "",                                                                             # Database password.
-        "database": "",                                                                             # Database name.
-        "table": "keys"                                                                             # Database table.
+        "db": "",                                                                                   # Database name.
+        "hash": "sha512",                                                                           # Hash algorithm to use, `sha512` is recommended.
+        "keys": {                                                                                   # Database: Keys.
+            "table": "",                                                                                # Name of the table.
+            "key": "key",                                                                               # Name of the parameter "key".
+            "tokens": "tokens",                                                                         # Name of the parameter "tokens".
+            "daily": "daily",                                                                           # Name of the parameter "daily".
+            "date": "key_date",                                                                         # Name of the parameter "date".
+            "default": "default",                                                                       # Name of the parameter "default".
+            "admin": "admin"                                                                            # Name of the parameter "admin".
+        },
+        "conversations": {                                                                          # Database: Conversations.
+            "table": "",                                                                                # Name of the table.
+            "user": "key",                                                                              # Name of the parameter "user".
+            "conversation_name": "conv_name",                                                           # Name of the parameter "conversation_name".
+            "conversation_data": "conv_data"                                                            # Name of the parameter "conversation_data".
+        },
+        "memories": {                                                                               # Database: Memories.
+            "table": "",                                                                                # Name of the table.
+            "user": "key",                                                                              # Name of the parameter "user".
+            "memory": "memory"                                                                          # Name of the parameter "memory".
+        }
+    },
+    "internet": {
+        "min_length": 10,
+        "min_results": 1,
+        "max_results": 3
     },
     "enabled_tools": "image_generation audio_generation internet memory",
     # ^-- I4.0 tools.
@@ -31,6 +54,7 @@ __config_data__: dict[str] = {
     "ban_if_nsfw": True,                                                                        # Bans the API key if a NSFW prompt is detected (requires `force_api_key` to be true).
     "ban_if_nsfw_ip": True,                                                                     # Bans the IP of the user if a NSFW prompt is detected.
     "use_local_ip": False,                                                                      # Disables the public IP address use for the server (only accepts connections from `127.0.0.1`, recommended for personal use).
+    "server_port": 8060,                                                                        # Port of the server.
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
     "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
@@ -39,11 +63,7 @@ __config_data__: dict[str] = {
     "clear_cache_time": 300,                                                                    # Time (in seconds) to wait before clearing the cache. Set to 0 to disable.
     "clear_queue_time": 600,                                                                    # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
     "allowed_hashes": [                                                                         # Allowed hashes for receive data. See documentation for more information.
-        # SHA-2
         "sha224", "sha256", "sha384", "sha512",
-
-        # SHA-3
-        "sha3-224", "sha3-256", "sha3-384", "sha3-512"
     ],
     "models": [                                                                                 # Models to be used.
         # Examples:
@@ -510,20 +530,20 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
     # Return the model, tokenizer and device where the model is loaded
     return (model, tokenizer, dev)
 
-def JSONDeserializer(SerilizedText: str) -> dict:
+def JSONDeserializer(SerializedText: str) -> dict[any, any] | list[any]:
     try:
         # Try to return the result loaded using JSON
-        return json.loads(SerilizedText)
+        return json.loads(SerializedText)
     except:
         # Error, check if the text starts and ends with "{" and "}"
-        if (SerilizedText.startswith("{") and SerilizedText.endswith("}")):
+        if ((SerializedText.startswith("{") and SerializedText.endswith("}")) or (SerializedText.startswith("[") and SerializedText.endswith("]"))):
             # It does
             try:
                 # Try to return the result loaded using eval
-                return eval(SerilizedText)
+                return eval(SerializedText)
             except:
                 # Error, return the result loaded using JSON, but replacing the quotes with double quotes
-                return json.loads(SerilizedText.replace("\'", "\""))
+                return json.loads(SerializedText.replace("\'", "\""))
         
         # Return an error message
         raise Exception("No valid text.")
@@ -576,3 +596,9 @@ def GetInfoOfTask(Service: str, Index: int) -> dict[str, any] | None:
 
 # Load the config
 current_data = ReadConfig()
+
+# Check if the database is invalid
+if (len(current_data["db"]["host"].strip()) == 0 or len(current_data["db"]["user"].strip()) == 0 or len(current_data["db"]["db"].strip()) == 0):
+    # Invalid DB
+    SaveConfig(current_data)
+    raise Exception("Invalid database configuration. Since v13.0.0 a MySQL database is required.")

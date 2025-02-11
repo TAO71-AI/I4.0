@@ -9,31 +9,37 @@ import ai_config as cfg
 __models_text__: dict[int, tuple[AutoModelForSequenceClassification, AutoTokenizer, str, dict[str, any]]] = {}
 __models_image__: dict[int, tuple[Pipeline, str, dict[str, any]]] = {}
 
+def __load_text_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models_text__.keys())):
+        return
+
+    # Load the model
+    model, tokenizer, device = cfg.LoadModel("nsfw_filter-text", Index, AutoModelForSequenceClassification, AutoTokenizer)
+
+    # Add the model to the list
+    __models_text__[Index] = (model, tokenizer, device, cfg.GetInfoOfTask("nsfw_filter-text", Index))
+
+def __load_image_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models_image__.keys())):
+        return
+
+    # Load the model
+    pipe, device = cfg.LoadPipeline("image-classification", "nsfw_filter-image", Index)
+
+    # Add the model to the list
+    __models_image__[Index] = (pipe, device, cfg.GetInfoOfTask("nsfw_filter-image", Index))
+
 def LoadTextModels() -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("nsfw_filter-text"))):
-        # Check if the model is already loaded
-        if (i in list(__models_text__.keys())):
-            continue
-
-        # Load the model
-        model, tokenizer, device = cfg.LoadModel("nsfw_filter-text", i, AutoModelForSequenceClassification, AutoTokenizer)
-
-        # Add the model to the list
-        __models_text__[i] = (model, tokenizer, device, cfg.GetInfoOfTask("nsfw_filter-text", i))
+        __load_text_model__(i)
 
 def LoadImageModels() -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("nsfw_filter-image"))):
-        # Check if the model is already loaded
-        if (i in list(__models_image__.keys())):
-            continue
-
-        # Load the model
-        pipe, device = cfg.LoadPipeline("image-classification", "nsfw_filter-image", i)
-
-        # Add the model to the list
-        __models_image__[i] = (pipe, device, cfg.GetInfoOfTask("nsfw_filter-image", i))
+        __load_image_model__(i)
 
 def LoadModels() -> None:
     # Load both text and image filters
@@ -65,8 +71,8 @@ def __offload_image__(Index: int) -> None:
     __models_image__.pop(Index)
 
 def InferenceText(Prompt: str, Index: int) -> bool:
-    # Load the models
-    LoadTextModels()
+    # Load the model
+    __load_text_model__(Index)
 
     # Set model, tokenizer, device and info
     model, tokenizer, device, info = __models_text__[Index]
@@ -85,8 +91,8 @@ def InferenceText(Prompt: str, Index: int) -> bool:
     return predicted_class == info["nsfw_label"].lower()
 
 def InferenceImage(Prompt: str | Image.Image, Index: int) -> bool:
-    # Load the models
-    LoadImageModels()
+    # Load the model
+    __load_image_model__(Index)
 
     # Check the image variable type
     if (type(Prompt) == str):

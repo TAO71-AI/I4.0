@@ -5,16 +5,19 @@ import ai_config as cfg
 
 __models__: dict[int, tuple[AutoModelForTextToWaveform, AutoProcessor, str]] = {}
 
+def __load_model__(Index: int) -> None:
+    # Check if the model is already loaded
+    if (Index in list(__models__.keys())):
+        return
+        
+    # Load the model and add it to the list of models
+    model, processor, device = cfg.LoadModel("text2audio", Index, AutoModelForTextToWaveform, AutoProcessor)
+    __models__[Index] = (model, processor, device)
+
 def LoadModels() -> None:
     # For each model
     for i in range(len(cfg.GetAllInfosOfATask("text2audio"))):
-        # Check if the model is already loaded
-        if (i in list(__models__.keys())):
-            continue
-        
-        # Load the model and add it to the list of models
-        model, processor, device = cfg.LoadModel("text2audio", i, AutoModelForTextToWaveform, AutoProcessor)
-        __models__[i] = (model, processor, device)
+        __load_model__(i)
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -29,8 +32,8 @@ def __offload_model__(Index: int) -> None:
     __models__.pop(Index)
 
 def GenerateAudio(Index: int, Prompt: str) -> bytes:
-    # Load the models
-    LoadModels()
+    # Load the model
+    __load_model__(Index)
 
     # Cut the prompt
     if (Prompt.startswith("\"") or Prompt.startswith("'")):
