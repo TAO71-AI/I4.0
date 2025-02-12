@@ -14,7 +14,7 @@ def __get_random_color__() -> tuple[int, int, int]:
 
 def __load_model__(Index: int) -> None:
     # Check if the model is already loaded
-    if (Index in list(__models__.keys())):
+    if (Index in list(__models__.keys()) and __models__[Index] is not None):
         return
         
     # Load the model and get the info
@@ -30,7 +30,7 @@ def LoadModels() -> None:
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
-    if (Index not in list(__models__.keys())):
+    if (Index not in list(__models__.keys()) or __models__[Index] is None):
         # Not valid, return
         return
     

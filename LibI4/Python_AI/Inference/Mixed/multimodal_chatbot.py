@@ -14,6 +14,11 @@ import conversation_multimodal as conv
 __models__: dict[int, tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
+    # Check if the model is loaded
+    if (Index in list(__models__.keys()) and __models__[Index] is not None):
+        return
+
+    # Get info about the model
     info = cfg.GetInfoOfTask("chatbot", Index)
     device = cfg.GetAvailableGPUDeviceForTask("chatbot", Index) if (cfg.current_data["force_device_check"]) else info["device"]
     processor = None

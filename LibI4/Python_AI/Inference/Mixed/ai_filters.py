@@ -11,7 +11,7 @@ __models_image__: dict[int, tuple[Pipeline, str, dict[str, any]]] = {}
 
 def __load_text_model__(Index: int) -> None:
     # Check if the model is already loaded
-    if (Index in list(__models_text__.keys())):
+    if (Index in list(__models_text__.keys()) and __models_text__[Index] is not None):
         return
 
     # Load the model
@@ -22,7 +22,7 @@ def __load_text_model__(Index: int) -> None:
 
 def __load_image_model__(Index: int) -> None:
     # Check if the model is already loaded
-    if (Index in list(__models_image__.keys())):
+    if (Index in list(__models_image__.keys()) and __models_image__[Index] is not None):
         return
 
     # Load the model

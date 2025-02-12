@@ -21,6 +21,11 @@ import conversation_multimodal as conv
 __models__: dict[int, tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
+    # Check if the model is loaded
+    if (Index in list(__models__.keys()) and __models__[Index] is not None):
+        return
+
+    # Get info about the model
     info = cfg.GetInfoOfTask("chatbot", Index)
     device = cfg.GetAvailableGPUDeviceForTask("chatbot", Index) if (cfg.current_data["force_device_check"]) else info["device"]
     tokenizer = None
@@ -77,7 +82,7 @@ def __load_model__(Index: int) -> None:
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
-    if (Index not in list(__models__.keys())):
+    if (Index not in list(__models__.keys()) or __models__[Index] is None):
         # Not valid, return
         return
     

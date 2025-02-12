@@ -8,7 +8,7 @@ __classifiers__: dict[int, Pipeline] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is already loaded
-    if (Index in list(__models__.keys())):
+    if (Index in list(__models__.keys()) and __models__[Index] is not None):
         return
         
     # Get the info of the model
@@ -27,7 +27,7 @@ def __load_model__(Index: int) -> None:
 
 def __load_classifier__(Index: int) -> None:
     # Check if the model is already loaded
-    if (Index in list(__classifiers__.keys())):
+    if (Index in list(__classifiers__.keys()) and __classifiers__[Index] is not None):
         return
         
     # Load the model
@@ -48,7 +48,7 @@ def LoadClassifiers() -> None:
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
-    if (Index not in list(__models__.keys())):
+    if (Index not in list(__models__.keys()) or __models__[Index] is None):
         # Not valid, return
         return
     
@@ -60,7 +60,7 @@ def __offload_model__(Index: int) -> None:
 
 def __offload_classifier__(Index: int) -> None:
     # Check the index is valid
-    if (Index not in list(__classifiers__.keys())):
+    if (Index not in list(__classifiers__.keys()) or __classifiers__[Index] is None):
         # Not valid, return
         return
     

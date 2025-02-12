@@ -158,7 +158,7 @@ def DownloadAssets() -> None:
 
 def __prepare_model__(Index: int) -> None:
     # Check if the model is already loaded
-    if (Index in list(__models__.keys())):
+    if (Index in list(__models__.keys()) and __models__[Index] is not None):
         return
 
     # Get the info
@@ -187,7 +187,7 @@ def LoadModels(AllowDownloads: bool = True) -> None:
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
-    if (Index not in list(__models__.keys())):
+    if (Index not in list(__models__.keys()) or __models__[Index] is None):
         # Not valid, return
         return
     
