@@ -58,7 +58,7 @@ __config_data__: dict[str] = {
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
     "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
-    "internet_chat": "mixtral-8x7b",                                                            # Chatbot model to use (NOT LOCALLY) if I4.0 uses the internet chatbot command.
+    "internet_chat": "llama-3.3-70b",                                                           # Chatbot model to use (NOT LOCALLY) if I4.0 uses the internet chatbot command.
     "offload_time": 3600,                                                                       # Time (in seconds) to wait before offloading a model that has not been used. Set to 0 to disable.
     "clear_cache_time": 300,                                                                    # Time (in seconds) to wait before clearing the cache. Set to 0 to disable.
     "clear_queue_time": 600,                                                                    # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
@@ -259,12 +259,13 @@ __config_data__: dict[str] = {
         #}
         #
         #
-        # NOTE: You can also add some optional parameters for each model, expample:
+        # NOTE: You can also add some optional parameters for each model, example:
         #{
         #    "service": "sc",
         #    "model": "MODEL REPOSITORY",
         #    "device": "cpu",
         #    "price": 1.5,
+        #    
         #    "description": "DESCRIPTION HERE",
         #    "model_info": "",  # This is some extra info about the model that will be sent to the model when inference via System Prompts.
         #    "dtype": "fp16",

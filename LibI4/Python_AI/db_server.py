@@ -35,6 +35,13 @@ def ConnectToDB(ForceReconnect: bool = False) -> None:
         # Connected and force reconnect is false, return
         return
     
+    # Disconnect from the DB
+    try:
+        DisconnectFromDB()
+    except:
+        # Ignore any errors during the disconnection
+        pass
+    
     # Connect to the DB
     DBConnection = mysql.connect(
         host = "127.0.0.1",         # DATABASE MUST BE HOSTED ON THE SAME SERVER
@@ -58,6 +65,43 @@ def DisconnectFromDB() -> None:
         
         # Set the connection to None
         DBConnection = None
+
+def ExecuteCommand(Command: str, Objects: tuple | None) -> str:
+    # Define globals
+    global State
+
+    # Set state to true
+    State = True
+
+    # Create cursor
+    cursor: mysql_c.Cursor = DBConnection.cursor()
+    
+    # Check if the key already exists
+    cursor.execute(Command, Objects)
+    results: list[any] | None = cursor.fetchall()
+
+    # Confirm the action
+    DBConnection.commit()
+
+    # Close the cursor
+    cursor.close()
+
+    # Set state to false
+    State = False
+
+    # Convert the results to a list
+    if (isinstance(results, tuple)):
+        results = list(results)
+    elif (results is None):
+        results = []
+    elif (not isinstance(results, list)):
+        results = [results]
+        
+    # Dump the results
+    results = json.dumps(results)
+
+    # Return the response
+    return results
 
 async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
     # Define globals
@@ -106,38 +150,22 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
         # Connect to the DB
         ConnectToDB(False)
 
-        # Set state to true
-        State = True
-
-        # Create cursor
-        cursor: mysql_c.Cursor = DBConnection.cursor()
-
-        # Check if the key already exists
-        cursor.execute(command, objects)
-        results: list[any] | None = cursor.fetchall()
-
-        # Confirm the action
-        DBConnection.commit()
-
-        # Close the cursor
-        cursor.close()
-
-        # Set state to false
-        State = False
-
-        # Convert the results to a list
-        if (isinstance(results, tuple)):
-            results = list(results)
-        elif (results is None):
-            results = []
-        elif (not isinstance(results, list)):
-            results = [results]
+        # Get the response
+        try:
+            response = ExecuteCommand(command, objects)
+        except mysql.err.InterfaceError:
+            # Error connecting to the DB, try to re-connect
+            try:
+                ConnectToDB(True)
+            except:
+                # Error re-connecting to the DB, print
+                print("Error re-connecting to the DB. Ignoring...")
+            
+            # Try to execute the command again
+            response = ExecuteCommand(command, objects)
         
-        # Dump the results
-        results = json.dumps(results)
-
         # Encrypt the results
-        response = enc.EncryptMessage(results, ServerPublicKey, hash)
+        response = enc.EncryptMessage(response, ServerPublicKey, hash)
 
         # Send the response
         await Client.send(response)

@@ -332,7 +332,7 @@ async def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]
 
         # Get the response from the service
         img += 1
-        response += Template.replace("[IMAGE_ID]", str(img + 1)).replace("[RESPONSE]", str(token["response"]))
+        response += Template.replace("[IMAGE_ID]", str(img)).replace("[RESPONSE]", str(token["response"]))
     
     return response
 

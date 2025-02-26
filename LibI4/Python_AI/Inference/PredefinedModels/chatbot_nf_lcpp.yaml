@@ -629,3 +629,51 @@ mistral-small-24b-instruct-2501:
         # F32 not available right now
     template: ""
     notes: ""
+
+deepscaler-1.5b-preview:
+    # License: MIT
+    repo: "bartowski/agentica-org_DeepScaleR-1.5B-Preview-GGUF"
+    model:
+        q2_k: "agentica-org_DeepScaleR-1.5B-Preview-Q2_K.gguf"           # 0.75 GB
+        q2_k_l: "agentica-org_DeepScaleR-1.5B-Preview-Q2_K_L.gguf"       # 0.98 GB
+        q3_k_s: "agentica-org_DeepScaleR-1.5B-Preview-Q3_K_S.gguf"       # 0.86 GB
+        q3_k_m: "agentica-org_DeepScaleR-1.5B-Preview-Q3_K_M.gguf"       # 0.92 GB
+        q3_k_l: "agentica-org_DeepScaleR-1.5B-Preview-Q3_K_L.gguf"       # 0.98 GB
+        q3_k_xl: "agentica-org_DeepScaleR-1.5B-Preview-Q3_K_XL.gguf"     # 1.18 GB
+        q4_k_s: "agentica-org_DeepScaleR-1.5B-Preview-Q4_K_S.gguf"       # 1.07 GB
+        q4_k_m: "agentica-org_DeepScaleR-1.5B-Preview-Q4_K_M.gguf"       # 1.12 GB
+        q4_k_l: "agentica-org_DeepScaleR-1.5B-Preview-Q4_K_L.gguf"       # 1.29 GB
+        q5_k_s: "agentica-org_DeepScaleR-1.5B-Preview-Q5_K_S.gguf"       # 1.26 GB
+        q5_k_m: "agentica-org_DeepScaleR-1.5B-Preview-Q5_K_M.gguf"       # 1.29 GB
+        q5_k_l: "agentica-org_DeepScaleR-1.5B-Preview-Q5_K_L.gguf"       # 1.43 GB
+        q6_k: "agentica-org_DeepScaleR-1.5B-Preview-Q6_K.gguf"           # 1.46 GB
+        q6_k_l: "agentica-org_DeepScaleR-1.5B-Preview-Q6_K_L.gguf"       # 1.58 GB
+        q8_0: "agentica-org_DeepScaleR-1.5B-Preview-Q8_0.gguf"           # 1.89 GB
+        f16: "agentica-org_DeepScaleR-1.5B-Preview-f16.gguf"             # 3.56 GB
+        f32: "agentica-org_DeepScaleR-1.5B-Preview-f32.gguf"             # 7.11 GB
+    template: "qwen2"
+    notes: "Very good and small reasoning model."
+
+virtuoso-small-v2:
+    # License: Apache-2.0
+    repo: "bartowski/arcee-ai_Virtuoso-Small-v2-GGUF"
+    model:
+        q2_k: "arcee-ai_Virtuoso-Small-v2-Q2_K.gguf"        # 5.77 GB
+        q2_k_l: "arcee-ai_Virtuoso-Small-v2-Q2_K_L.gguf"    # 6.53 GB
+        q3_k_s: "arcee-ai_Virtuoso-Small-v2-Q3_K_S.gguf"    # 6.66 GB
+        q3_k_m: "arcee-ai_Virtuoso-Small-v2-Q3_K_M.gguf"    # 7.34 GB
+        q3_k_l: "arcee-ai_Virtuoso-Small-v2-Q3_K_L.gguf"    # 7.92 GB
+        q3_k_xl: "arcee-ai_Virtuoso-Small-v2-Q3_K_XL.gguf"  # 8.60 GB
+        q4_k_s: "arcee-ai_Virtuoso-Small-v2-Q3_K_XL.gguf"   # 8.57 GB
+        q4_k_m: "arcee-ai_Virtuoso-Small-v2-Q4_K_M.gguf"    # 8.99 GB
+        q4_k_l: "arcee-ai_Virtuoso-Small-v2-Q4_K_L.gguf"    # 9.56 GB
+        q5_k_s: "arcee-ai_Virtuoso-Small-v2-Q5_K_S.gguf"    # 10.3 GB
+        q5_k_m: "arcee-ai_Virtuoso-Small-v2-Q5_K_M.gguf"    # 10.5 GB
+        q5_k_l: "arcee-ai_Virtuoso-Small-v2-Q5_K_L.gguf"    # 11.0 GB
+        q6_k: "arcee-ai_Virtuoso-Small-v2-Q6_K.gguf"        # 12.1 GB
+        q6_k_l: "arcee-ai_Virtuoso-Small-v2-Q6_K_L.gguf"    # 12.5 GB
+        q8_0: "arcee-ai_Virtuoso-Small-v2-Q8_0.gguf"        # 15.7 GB
+        f16: "arcee-ai_Virtuoso-Small-v2-f16.gguf"          # 29.5 GB
+        # F32 not available right now
+    template: "qwen2"
+    notes: "Very good model!"

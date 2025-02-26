@@ -18,7 +18,7 @@ cryptography>=44.0.0,<45.0.0
 # Other requirements
 requests
 beautifulsoup4
-duckduckgo-search>=7.0.2
+duckduckgo-search>=7.5.0
 soundfile<0.13.0,>=0.12.1
 scipy
 opencv-python
@@ -30,7 +30,6 @@ emoji
 pydub
 #google-tts
 #git+https://github.com/Tps-F/fairseq.git@main
-bitsandbytes
 psutil
 pyyaml
 omegaconf>=2.2,<2.4

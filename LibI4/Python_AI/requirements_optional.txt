@@ -4,3 +4,4 @@ timm
 einops
 ctranslate2
 datasets
+bitsandbytes

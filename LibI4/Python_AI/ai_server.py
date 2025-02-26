@@ -236,8 +236,13 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         queue[Service] = []
         times[Service] = []
     
-    # Convert the key to string
-    Key["key"] = str(Key["key"])
+    # Copy the key
+    Key = Key.copy()
+
+    # Check if the key is None
+    if (Key["key"] is None):
+        # Replace with an empty string
+        Key["key"] = ""
 
     # Wait for the queue to be valid
     while (GetQueueForService(Service, Index)[0] >= 1):
@@ -266,7 +271,10 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     
     # Remove tokens
     Key["tokens"] -= cfg.GetInfoOfTask(Service, Index)["price"]
-    sb.SaveKey(Key)
+    
+    # Save the key if the key is not None
+    if (len(Key["key"]) > 0):
+        sb.SaveKey(Key)
 
     # Add the index to the models used
     try:
@@ -419,11 +427,12 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         uFiles = []
         aFiles = []
 
-        for f in Files:
-            uFiles.append({"type": f["type"], f["type"]: f["data"]})
-        
-        for f in convAssistantFiles:
-            aFiles.append({"type": f["type"], f["type"]: f["data"]})
+        if (cfg.current_data["save_conversation_files"]):
+            for f in Files:
+                uFiles.append({"type": f["type"], f["type"]: f["data"]})
+            
+            for f in convAssistantFiles:
+                aFiles.append({"type": f["type"], f["type"]: f["data"]})
 
         conversation.append({
             "role": "user",
@@ -522,7 +531,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except Exception as ex:
         # Could not get the key, create empty key
         print(f"Could not get client key. Reason: {ex}")
-        traceback.print_last()
+        traceback.print_exc()
 
         key = {"tokens": 0, "key": None, "admin": False}
     
