@@ -61,8 +61,15 @@ def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
 
     # Get the output
     prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = Image.size[::-1], mode = "bicubic", align_corners = False)
-    output = prediction.squeeze().cpu().numpy()
-    output = (output * 255 / np.max(output)).astype("uint8")
+    output = prediction.squeeze().cpu().numpy().astype(np.float32)
+    maxVal = np.max(output)
+
+    # Make sure maxVal is not infinite or 0
+    if (not np.isfinite(maxVal) or maxVal == 0):
+        maxVal = 1
+
+    # Get the output
+    output = (output * 255.0 / maxVal).clip(0, 255).astype(np.uint8)
     output = PIL.Image.fromarray(output)
 
     # Save a temporal image
