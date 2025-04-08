@@ -70,6 +70,9 @@ def __load_model__(ModelPath: str, ModelIndex: str, ModelType: str, Index: int) 
     if (device == "cuda" or device == "xpu"):
         # Use CUDA
         vc.config.use_cuda()
+    elif (device == "dml"):
+        # Use DML
+        vc.config.use_dml()
     elif (device == "mps"):
         # Use MPS
         vc.config.use_mps()

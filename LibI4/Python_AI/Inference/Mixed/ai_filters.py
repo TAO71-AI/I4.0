@@ -6,7 +6,7 @@ import torch
 # Import I4.0's utilities
 import ai_config as cfg
 
-__models_text__: dict[int, tuple[AutoModelForSequenceClassification, AutoTokenizer, str, dict[str, any]]] = {}
+__models_text__: dict[int, tuple[AutoModelForSequenceClassification, AutoTokenizer, str, str, dict[str, any]]] = {}
 __models_image__: dict[int, tuple[Pipeline, str, dict[str, any]]] = {}
 
 def __load_text_model__(Index: int) -> None:
@@ -15,10 +15,10 @@ def __load_text_model__(Index: int) -> None:
         return
 
     # Load the model
-    model, tokenizer, device = cfg.LoadModel("nsfw_filter-text", Index, AutoModelForSequenceClassification, AutoTokenizer)
+    model, tokenizer, device, dtype = cfg.LoadModel("nsfw_filter-text", Index, AutoModelForSequenceClassification, AutoTokenizer)
 
     # Add the model to the list
-    __models_text__[Index] = (model, tokenizer, device, cfg.GetInfoOfTask("nsfw_filter-text", Index))
+    __models_text__[Index] = (model, tokenizer, device, dtype, cfg.GetInfoOfTask("nsfw_filter-text", Index))
 
 def __load_image_model__(Index: int) -> None:
     # Check if the model is already loaded
@@ -75,10 +75,10 @@ def InferenceText(Prompt: str, Index: int) -> bool:
     __load_text_model__(Index)
 
     # Set model, tokenizer, device and info
-    model, tokenizer, device, info = __models_text__[Index]
+    model, tokenizer, device, dtype, info = __models_text__[Index]
 
     # Tokenize the prompt
-    inputs = tokenizer.encode(Prompt, return_tensors = "pt").to(device)
+    inputs = tokenizer.encode(Prompt, return_tensors = "pt").to(device).to(dtype)
 
     # Inference the model
     result = model(inputs).logits

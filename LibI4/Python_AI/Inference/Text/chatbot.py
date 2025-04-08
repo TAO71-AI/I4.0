@@ -18,7 +18,7 @@ import psutil
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: dict[int, tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str], dict[str, any]]] = {}
+__models__: dict[int, tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -30,9 +30,9 @@ def __load_model__(Index: int) -> None:
     device = cfg.GetAvailableGPUDeviceForTask("chatbot", Index) if (cfg.current_data["force_device_check"]) else info["device"]
     tokenizer = None
 
-    # Check if the model allows files
-    if (info["allows_files"]):
-        # It does, return since this script doesn't allows files
+    # Check if the model is multimodal
+    if (len(info["multimodal"].strip()) > 0):
+        # It is, return since this script doesn't support multimodal models
         __models__[Index] = None
         return
 
@@ -46,9 +46,25 @@ def __load_model__(Index: int) -> None:
     else:
         threads = info["threads"]
     
+    # Get batch threads and check if the number of batch threads are valid
+    if (info["b_threads"] == -1):
+        b_threads = psutil.cpu_count()
+    elif (info["b_threads"] == -2):
+        b_threads = threads
+    elif (info["b_threads"] == -3):
+        b_threads = None
+    elif (info["b_threads"] <= 0 or info["b_threads"] > psutil.cpu_count()):
+        raise Exception("Invalid number of b_threads.")
+    else:
+        b_threads = info["b_threads"]
+    
     # Check if the batch size is valid
     if (info["batch"] <= 0):
         raise Exception("Invalid batch size.")
+    
+    # Check if the ubatch size is valid
+    if (info["ubatch"] <= 0):
+        raise Exception("Invalid ubatch size.")
     
     # Set model
     if (info["type"] == "gpt4all"):
@@ -64,18 +80,18 @@ def __load_model__(Index: int) -> None:
         print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
 
         # Load the model
-        model = lcpp.LoadModel(info, threads, device)
+        model = lcpp.LoadModel(info, threads, b_threads, device)
     elif (info["type"] == "hf"):
         # Use Transformers
         # Load the model
-        model, tokenizer, dev = hf.__load_model__(info, Index)
+        model, tokenizer, dev, dtype = hf.__load_model__(info, Index)
     else:
         raise Exception("Invalid chatbot type.")
     
     # Add the model to the list
     if (tokenizer != None):
         # The model also includes a tokenizer, add it too
-        __models__[Index] = ((model, tokenizer, dev), info)
+        __models__[Index] = ((model, tokenizer, dev, dtype), info)
     else:
         # Add the model only
         __models__[Index] = (model, info)
@@ -91,7 +107,7 @@ def __offload_model__(Index: int) -> None:
         __models__[Index][0].close()
     elif (type(__models__[Index][0]) == Llama):
         __models__[Index][0].close()
-    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str]):
+    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str, str]):
         __models__[Index] = None
     
     # Delete from the models list
@@ -107,7 +123,7 @@ def LoadModels() -> None:
         # Load the model and add it to the list of models
         __load_model__(i)
 
-def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: list[str] = ["", ""]) -> Iterator[str]:
+def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Tools: list[dict[str, str | dict[str, any]]], Conversation: list[str] = ["", ""], MaxLength: int | None = None, Temperature: float | None = None) -> Iterator[str]:
     # Load the model
     __load_model__(Index)
 
@@ -169,6 +185,28 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: l
     except:
         # Error; probably `seed` is not configured. Set to None
         seed = None
+    
+    # Set the maximum length
+    if (MaxLength is None):
+        try:
+            # Get the max length
+            maxLength = __models__[Index][1]["max_length"]
+
+            # Check the max length
+            if (maxLength is None or maxLength <= 0):
+                # Invalid max length, set to the server's default
+                maxLength = cfg.current_data["max_length"]
+        except:
+            # Error; probably `max_length` is not configured. Set to the server's default
+            maxLength = cfg.current_data["max_length"]
+    else:
+        maxLength = MaxLength
+    
+    # Set the temperature
+    if (Temperature is None):
+        temp = __models__[Index][1]["temp"]
+    else:
+        temp = Temperature
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
@@ -176,13 +214,13 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Conversation: l
     # Get the model type to use
     if (type(__models__[Index][0]) == GPT4All):
         # Use GPT4All
-        return g4a.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, contentToShow)
+        return g4a.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, contentToShow, maxLength, temp)
     elif (type(__models__[Index][0]) == Llama):
         # Use Llama-CPP-Python
-        return lcpp.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, seed)
-    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str]):
+        return lcpp.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, seed, Tools, maxLength, temp)
+    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str, str]):
         # Use HF
-        return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][1], contentForModel)
+        return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][0][3], __models__[Index][1], contentForModel, maxLength, temp)
     else:
         # It's an invalid model type
         raise Exception("Invalid model.")

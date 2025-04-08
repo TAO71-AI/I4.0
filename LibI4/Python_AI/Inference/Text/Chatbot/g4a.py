@@ -1,4 +1,5 @@
-# Import LLaMA-CPP-Python
+# GPT4All is not supported anymore! Please use llama-cpp-python (lcpp) instead!
+# Import GPT4All
 from gpt4all import GPT4All
 
 # Import some other libraries
@@ -28,7 +29,7 @@ def __load_model__(Config: dict[str, any], Threads: int, Device: str) -> GPT4All
     # Return the model
     return model
 
-def __inference__(Model: GPT4All, Config: dict[str, any], ContentForModel: list[dict[str, str]], Conv: str) -> Iterator[str]:
+def __inference__(Model: GPT4All, Config: dict[str, any], ContentForModel: list[dict[str, str]], Conv: str, MaxLength: int, Temperature: float) -> Iterator[str]:
     # Transform system prompts to a string
     sp = ""
 
@@ -43,8 +44,8 @@ def __inference__(Model: GPT4All, Config: dict[str, any], ContentForModel: list[
         # Get a response from the model
         response = Model.generate(
             prompt = Conv,
-            max_tokens = cfg.current_data["max_length"],
-            temp = Config["temp"],
+            max_tokens = MaxLength,
+            temp = Temperature,
             n_batch = Config["batch"],
             streaming = True
         )

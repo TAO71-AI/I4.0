@@ -28,13 +28,15 @@ __config_data__: dict[str] = {
             "daily": "daily",                                                                           # Name of the parameter "daily".
             "date": "key_date",                                                                         # Name of the parameter "date".
             "default": "default",                                                                       # Name of the parameter "default".
-            "admin": "admin"                                                                            # Name of the parameter "admin".
+            "admin": "admin",                                                                           # Name of the parameter "admin".
+            "temporal_conversations": "temp_conversations"                                              # Name of the parameter "temporal_conversations".
         },
         "conversations": {                                                                          # Database: Conversations.
             "table": "",                                                                                # Name of the table.
             "user": "key",                                                                              # Name of the parameter "user".
             "conversation_name": "conv_name",                                                           # Name of the parameter "conversation_name".
-            "conversation_data": "conv_data"                                                            # Name of the parameter "conversation_data".
+            "conversation_data": "conv_data",                                                           # Name of the parameter "conversation_data".
+            "temporal": "temp"                                                                          # Name of the parameter "temporal".
         },
         "memories": {                                                                               # Database: Memories.
             "table": "",                                                                                # Name of the table.
@@ -47,7 +49,7 @@ __config_data__: dict[str] = {
         "min_results": 1,
         "max_results": 3
     },
-    "enabled_tools": "image_generation audio_generation internet memory",
+    "enabled_tools": "image_generation audio_generation internet memory memory-edit memory-delete",
     # ^-- I4.0 tools.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
@@ -62,9 +64,17 @@ __config_data__: dict[str] = {
     "offload_time": 3600,                                                                       # Time (in seconds) to wait before offloading a model that has not been used. Set to 0 to disable.
     "clear_cache_time": 300,                                                                    # Time (in seconds) to wait before clearing the cache. Set to 0 to disable.
     "clear_queue_time": 600,                                                                    # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
+    "clear_temporal_conversations_time": 1500,                                                  # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
     "allowed_hashes": [                                                                         # Allowed hashes for receive data. See documentation for more information.
         "sha224", "sha256", "sha384", "sha512",
     ],
+    "nokey_temporal_conversations": {                                                           # Temporal conversation dates
+        "day": 7,                                                                                   # How many days the conversation will be saved?
+        "month": 0,                                                                                 # How many months the conversation will be saved?
+        "year": 0,                                                                                  # How many years the conversation will be saved?
+        "hour": 0,                                                                                  # How many hours the conversation will be saved?
+        "minute": 0                                                                                 # How many minutes the conversation will be saved?
+    },
     "models": [                                                                                 # Models to be used.
         # Examples:
         #{
@@ -72,8 +82,10 @@ __config_data__: dict[str] = {
         #    "type": "lcpp",
         #    "ctx": 2048,
         #    "threads": -1,
+        #    "b_threads": -2,
         #    "ngl": -1,
-        #    "batch": 8,
+        #    "batch": 2048,
+        #    "ubatch": 512,
         #    "model": [
         #        "MODEL REPOSITORY (leave empty if you're going to use a path) / MODEL NAME",
         #        "MODEL FILE NAME / MODEL PATH / MODEL QUANTIZATION",
@@ -83,7 +95,7 @@ __config_data__: dict[str] = {
         #    "seed": -1,
         #    "split_mode": "(layer, row or none; default: layer)",
         #    "device": "cpu",
-        #    "allows_files": false,  # Doesn't support multimodal models
+        #    "multimodal": "",  # Doesn't support multimodal models
         #    "price": 20
         #},
         #{
@@ -91,12 +103,14 @@ __config_data__: dict[str] = {
         #    "type": "g4a",
         #    "ctx": 2048,
         #    "threads": -1,
+        #    "b_threads": -2,
         #    "ngl": -1,
-        #    "batch": 8,
+        #    "batch": 2048,
+        #    "ubatch": 512,
         #    "model": "MODEL PATH",
         #    "temp": 0.5,
         #    "device": "cpu",
-        #    "allows_files": false,  # Doesn't support multimodal models
+        #    "multimodal": "",  # Doesn't support multimodal models
         #    "price": 20
         #},
         #{
@@ -104,13 +118,15 @@ __config_data__: dict[str] = {
         #    "type": "hf",
         #    "ctx": 2048,
         #    "threads": -1,
+        #    "b_threads": -2,
         #    "ngl": -1,
-        #    "batch": 8,
+        #    "batch": 2048,
+        #    "ubatch": 512,
         #    "model": "MODEL REPOSITORY / MODEL PATH",
         #    "hf_low": False,  # False loads the model normally, True if you have low specs.
         #    "temp": 0.5,
         #    "device": "cpu",
-        #    "allows_files": (false or true),
+        #    "multimodal": "(video, image, audio; separated by spaces)",
         #    "price": 20
         #},
         #{
@@ -479,7 +495,7 @@ def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None
     # Return the pipeline and the device where the model is loaded
     return (pipe, dev)
 
-def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerType: type | None = None, ExtraKWargsModel: dict[str, any] | None = None, ExtraKWargsTokenizer: dict[str, any] | None = None) -> tuple[any, any, str]:
+def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerType: type | None = None, ExtraKWargsModel: dict[str, any] | None = None, ExtraKWargsTokenizer: dict[str, any] | None = None) -> tuple[any, any, str, str]:
     # Check the model type
     if (ModelType == None):
         # No model type specified, set a default model type
@@ -512,7 +528,7 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
     try:
         argsModel["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
     except:
-        pass
+        argsModel["torch_dtype"] = "fp32"
     
     # Set the model and tokenizer
     argsModel["pretrained_model_name_or_path"] = info["model"]
@@ -529,7 +545,7 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
     print("   Done!")
 
     # Return the model, tokenizer and device where the model is loaded
-    return (model, tokenizer, dev)
+    return (model, tokenizer, dev, argsModel["torch_dtype"])
 
 def JSONDeserializer(SerializedText: str) -> dict[any, any] | list[any]:
     try:

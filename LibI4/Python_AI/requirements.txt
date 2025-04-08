@@ -35,6 +35,7 @@ pyyaml
 omegaconf>=2.2,<2.4
 Cython
 antlr4-python3-runtime==4.9.*
+I4_0-Client-PY
 
 # Requirements for inference
 gpt4all==2.8.2
@@ -42,7 +43,7 @@ llama-cpp-python
 stable-diffusion-cpp-python
 SpeechRecognition==3.10.4
 openai-whisper>=20240930
-qwen-vl-utils
+qwen-omni-utils[decord]
 #git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
 #git+https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git@intel_support  # For Intel GPUs
 #styletts2~=0.1.6

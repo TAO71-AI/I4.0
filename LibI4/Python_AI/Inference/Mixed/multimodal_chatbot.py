@@ -11,7 +11,7 @@ import base64
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: dict[int, tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str], dict[str, any]]] = {}
+__models__: dict[int, tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -23,9 +23,9 @@ def __load_model__(Index: int) -> None:
     device = cfg.GetAvailableGPUDeviceForTask("chatbot", Index) if (cfg.current_data["force_device_check"]) else info["device"]
     processor = None
 
-    # Check if the model allows files
-    if (not info["allows_files"]):
-        # It doesn't, return since this script ONLY allows files
+    # Check if the model is multimodal
+    if (len(info["multimodal"].strip()) == 0):
+        # It isn't, return since this script ONLY supports multimodal models
         __models__[Index] = None
         return
 
@@ -47,14 +47,14 @@ def __load_model__(Index: int) -> None:
     if (info["type"] == "hf"):
         # Use Transformers
         # Load the model
-        model, processor, dev = hf.__load_model__(info, Index)
+        model, processor, dev, dtype = hf.__load_model__(info, Index)
     else:
-        raise Exception("Invalid chatbot type.")
+        raise Exception(f"Invalid chatbot type '{info['type']}'.")
     
     # Add the model to the list
     if (processor != None):
         # The model also includes a tokenizer, add it too
-        __models__[Index] = ((model, processor, dev), info)
+        __models__[Index] = ((model, processor, dev, dtype), info)
     else:
         # Add the model only
         __models__[Index] = (model, info)
@@ -66,7 +66,7 @@ def __offload_model__(Index: int) -> None:
         return
     
     # Offload the model
-    if (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForVision2Seq, AutoProcessor, str]):
+    if (isinstance(__models__[Index][0], tuple)):
         __models__[Index] = None
     
     # Delete from the models list
@@ -82,7 +82,7 @@ def LoadModels() -> None:
         # Load the model and add it to the list of models
         __load_model__(i)
 
-def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompts: list[str], Conversation: list[str] = ["", ""]) -> Iterator[str]:
+def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompts: list[str], Tools: list[dict[str, str | dict[str, any]]], Conversation: list[str] = ["", ""], MaxLength: int | None = None, Temperature: float | None = None) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Load the model
     __load_model__(Index)
 
@@ -93,7 +93,6 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
         with open(file["data"], "rb") as f:
             files.append({
                 "type": file["type"],
-                #file["type"]: f"file://{os.getcwd()}/{file['data']}"
                 file["type"]: f"data:{file['type']};base64,{base64.b64encode(f.read()).decode('utf-8')}"
             })
 
@@ -118,10 +117,10 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
 
         for mF in content:
             # Check if the file type
-            if (mF["type"] in ["audio", "image", "video"]):
+            if (mF["type"] in __models__[Index][1]["multimodal"].strip().split(" ")):
                 # Add as a file
                 msgFiles.append({"type": mF["type"], mF["type"]: f"data:{mF['type']};base64,{mF[mF['type']][5:]}"})
-            else:
+            elif (mF["type"] == "text"):
                 # Add as a text
                 msgFiles.append({"type": mF["type"], mF["type"]: mF[mF["type"]]})
 
@@ -147,16 +146,38 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
         elif (msg["role"] == "assistant"):
             contentToShow += f"Assistant: {textMsg}\n"
 
-    contentForModel.append({"role": "user", "content": [file for file in files] + [{"type": "text", "text": Prompt}]})
+    contentForModel.append({"role": "user", "content": files + [{"type": "text", "text": Prompt}]})
     contentToShow += f"\n\n### USER: {Prompt}"
+
+    # Set the maximum length
+    if (MaxLength is None):
+        try:
+            # Get the max length
+            maxLength = __models__[Index][1]["max_length"]
+
+            # Check the max length
+            if (maxLength is None or maxLength <= 0):
+                # Invalid max length, set to the server's default
+                maxLength = cfg.current_data["max_length"]
+        except:
+            # Error; probably `max_length` is not configured. Set to the server's default
+            maxLength = cfg.current_data["max_length"]
+    else:
+        maxLength = MaxLength
+    
+    # Set the temperature
+    if (Temperature is None):
+        temp = __models__[Index][1]["temp"]
+    else:
+        temp = Temperature
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
     
     # Get the model type to use
-    if (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForVision2Seq, AutoProcessor, str]):
+    if (isinstance(__models__[Index][0], tuple)):
         # Use HF
-        return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][1], contentForModel)
+        return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][0][3], __models__[Index][1], contentForModel, maxLength, temp)
     else:
         # It's an invalid model type
         raise Exception("Invalid model.")

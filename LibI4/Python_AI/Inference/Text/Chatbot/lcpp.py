@@ -5,12 +5,13 @@ from llama_cpp import Llama, LLAMA_SPLIT_MODE_LAYER, LLAMA_SPLIT_MODE_ROW, LLAMA
 from huggingface_hub import hf_hub_download
 from collections.abc import Iterator
 import os
+import json
 
 # Import I4.0's utilities
 import Inference.PredefinedModels.models as models
 import ai_config as cfg
 
-def __load_model__(Config: dict[str, any], Repo: str, Model: str, ChatTemplate: str | None, Threads: int, Device: str) -> Llama:
+def __load_model__(Config: dict[str, any], Repo: str, Model: str, ChatTemplate: str | None, Threads: int, BatchThreads: int, Device: str) -> Llama:
     # Set split mode
     try:
         # Get the split mode
@@ -43,12 +44,12 @@ def __load_model__(Config: dict[str, any], Repo: str, Model: str, ChatTemplate: 
         verbose = False,
         n_gpu_layers = Config["ngl"] if (Device != "cpu") else 0,
         n_batch = Config["batch"],
-        n_ubatch = Config["batch"],
+        n_ubatch = Config["ubatch"],
         split_mode = splitMode,
         chat_format = ChatTemplate if (ChatTemplate != None and len(ChatTemplate) > 0) else None,
         logits_all = True,
         n_threads = Threads,
-        n_threads_batch = Threads
+        n_threads_batch = BatchThreads
     )
 
     # Check if the model is a local file
@@ -69,7 +70,7 @@ def __load_model__(Config: dict[str, any], Repo: str, Model: str, ChatTemplate: 
     # Return the model
     return model
 
-def __load_custom_model__(Config: dict[str, any], Threads: int, Device: str) -> Llama:
+def __load_custom_model__(Config: dict[str, any], Threads: int, BatchThreads: int, Device: str) -> Llama:
     # Get the model path
     modelRepo = Config["model"][0]
     modelName = Config["model"][1]
@@ -83,7 +84,7 @@ def __load_custom_model__(Config: dict[str, any], Threads: int, Device: str) -> 
     # ]
 
     # Load and return the model
-    return __load_model__(Config, modelRepo, modelName, modelTemplate, Threads, Device)
+    return __load_model__(Config, modelRepo, modelName, modelTemplate, Threads, BatchThreads, Device)
 
 def __get_quantization_and_repo_from_dict__(Dict: dict[str, any], DesiredQuantization: str) -> str:
     # Get quantization
@@ -119,7 +120,7 @@ def __get_model_from_pretrained__(Name: str, ModelQuantization: str) -> tuple[st
     # Return the data
     return (modelPath, models.Chatbot_NF_LCPP[Name]["template"])
 
-def __load_predefined_model__(Config: dict[str, any], Threads: int, Device: str) -> Llama:
+def __load_predefined_model__(Config: dict[str, any], Threads: int, BatchThreads: int, Device: str) -> Llama:
     # Model is expected to be:
     # [
     #     "Model name",
@@ -131,24 +132,26 @@ def __load_predefined_model__(Config: dict[str, any], Threads: int, Device: str)
     modelPath, modelTemplate = __get_model_from_pretrained__(Config["model"][0], Config["model"][1])
 
     # Load the model
-    return __load_model__(Config, "", modelPath, modelTemplate, Threads, Device)
+    return __load_model__(Config, "", modelPath, modelTemplate, Threads, BatchThreads, Device)
 
-def LoadModel(Config: dict[str, any], Threads: int, Device: str) -> Llama:
+def LoadModel(Config: dict[str, any], Threads: int, BatchThreads: int, Device: str) -> Llama:
     try:
         # Try to load using the predefined list
-        return __load_predefined_model__(Config, Threads, Device)
+        return __load_predefined_model__(Config, Threads, BatchThreads, Device)
     except ValueError:
         # Error; invalid model
         # Load as a custom one
-        return __load_custom_model__(Config, Threads, Device)
+        return __load_custom_model__(Config, Threads, BatchThreads, Device)
 
-def __inference__(Model: Llama, Config: dict[str, any], ContentForModel: list[dict[str, str]], Seed: int | None) -> Iterator[str]:
+def __inference__(Model: Llama, Config: dict[str, any], ContentForModel: list[dict[str, str]], Seed: int | None, Tools: list[dict[str, str | dict[str, any]]], MaxLength: int, Temperature: float) -> Iterator[str]:
     # Get a response from the model
     response = Model.create_chat_completion(
         messages = ContentForModel,
-        temperature = Config["temp"],
-        max_tokens = cfg.current_data["max_length"],
+        temperature = Temperature,
+        max_tokens = MaxLength,
         seed = Seed,
+        tools = Tools,
+        tool_choice = None,
         stream = True
     )
 
@@ -162,8 +165,15 @@ def __inference__(Model: Llama, Config: dict[str, any], ContentForModel: list[di
         t = token["choices"][0]["delta"]["content"]
         print(t, end = "", flush = True)
 
+        # Get the tools
+        try:
+            for tool in token["choices"][0]["delta"]["tool_calls"]:
+                yield json.dumps(tool["function"])
+        except:
+            pass
+
         # Yield the token
         yield t
-        
+    
     # Print an empty message when done
     print("", flush = True)

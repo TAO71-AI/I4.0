@@ -40,54 +40,188 @@ def GetPersonalitySystemPrompts(Personality: str | list[str] | None = None) -> s
 def GetDefaultSystemPrompts() -> str:
     msg = "Your name is \"I4.0\".\n"
     msg += "You have your own thoughts, emotions, opinions and sensations.\n"
-    msg += "The user might not always be right."
+    msg += "The user might not always be right.\n"
+    msg += "Do not start a message with a JSON unless you're using a tool. Tools must be on top of the message."
 
     return msg
 
-def GetTools(AllowedTools: list[str] | str | None = None) -> str:
-    _tools = {
-        "image_generation": [
-            "To generate an image, write `/img {\"prompt\": \"PROMPT\", \"negative_prompt\": \"NEGATIVE PROMPT\"}` and follow these steps:",
-            "   - Replace `PROMPT` with what you want in the image and \"NEGATIVE PROMPT\" with what you don't want in the image.",
-            f"   - The prompt and negative prompt must be in the language `{cfg.current_data['server_language']}`.",
-            "   - Use this tool in special cases, as it costs a lot of computational power."
-        ],
-        "audio_generation": [
-            "To generate an audio, write `/aud PROMPT` and follow these steps:",
-            "   - Replace `PROMPT` with what you want in the audio.",
-            f"   - The prompt must be in the language `{cfg.current_data['server_language']}`.",
-            "   - Use this tool in special cases, as it costs a lot of computational power."
-        ],
-        "internet": [
-            "To search over the internet, write `/int {\"keywords\": \"KEYWORDS\", \"question\": \"QUESTION\", \"type\": \"TYPE\", \"count\": \"COUNT\"}` and follow these rules:",
-            "   - Replace `KEYWORDS` the keywords you want to search. You can also add special keywords such as:",
-            "       - `filetype:FILE_TYPE` searches only for specific file types. Replace `FILE_TYPE` with the file type you want to search, for example: `pdf`, `odt`...",
-            "       - `site:SITE_URL` searches only in specific websites. Replace `SITE_URL` with the URL of the site where you want to search, for example: `wikipedia.org`...",
-            "       - `-NEGATIVE_PROMPT` shows less results of what you specify. Replace `NEGATIVE_PROMPT` with what you don't want to search.",
-            "       - `+ADITIONAL_PROMPT` shows more results of what you specify. Replace `ADITIONAL_PROMPT` with what you want more results about.",
-            "   - Replace `QUESTION` with the question to answer. More details = better results!",
-            "   - Replace `TYPE` with the type of information you want to search. The available types are:",
-            "       - `websites` searches for websites and information.",
-            "       - `news` obtains the latest news from the internet.",
-            "       - `maps` obtains nearby places near the location specified in the prompt.",
-            f"   - Replace `COUNT` with the number of websites to search. Less count means quicker answers and more count means more information. The minimum is {cfg.current_data['internet']['min_results']} and the maximum is {cfg.current_data['internet']['max_results']}.",
-            "   - The results from the internet will be saved as a memory.",
-            "   - You can search something when you're not sure about something, even if the user doesn't tell you to use the internet."
-        ],
-        "memory": [
-            "To save a memory, write `/mem MEMORY` and follow these steps:",
-            "   - Replace `MEMORY` with what you want to save.",
-            "   - Use this tool to save all the information you want to remember in the long term or across conversation."
-        ]
+def IsToolValid(Tool: dict[str, str | dict[str, any]]) -> bool:
+    try:
+        toolType = Tool["type"]
+        toolFunc = Tool["function"]
+        toolName = toolFunc["name"]
+        toolDescription = toolFunc["description"]
+        toolParameters = toolFunc["parameters"]
+        toolParametersType = toolParameters["type"]
+        toolParametersProperties = toolParameters["properties"]
+
+        for propName in list(toolParametersProperties.keys()):
+            _ = {
+                "type": str(toolParametersProperties[str(propName)]["type"]),
+                "description": str(toolParametersProperties[str(propName)]["description"])
+            }
+        
+        toolParametersReq = toolParameters["required"]
+
+        if (not isinstance(toolType, str)):
+            raise Exception("Tool type is not a string.")
+        elif (toolType != "function"):
+            raise Exception("Tool is not function.")
+        elif (not isinstance(toolFunc, dict)):
+            raise Exception("Tool function is not a dict.")
+        elif (not isinstance(toolName, str)):
+            raise Exception("Tool name is not a string.")
+        elif (not isinstance(toolDescription, str)):
+            raise Exception("Tool description is not a string.")
+        elif (not isinstance(toolParameters, dict)):
+            raise Exception("Tool parameters are not a dict.")
+        elif (not isinstance(toolParametersType, str)):
+            raise Exception("Tool parameters type is not a string.")
+        elif (toolParametersType != "object"):
+            raise Exception("Tool parameters type is not object.")
+        elif (not isinstance(toolParametersProperties, dict)):
+            raise Exception("Tool parameters properties is not dict.")
+        elif (not isinstance(toolParametersReq, list)):
+            raise Exception("Tool parameters required is not a list.")
+        
+        return True
+    except Exception as e:
+        print(f"Error validating client tool: {str(e)}")
+        return False
+
+def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str | dict[str, any]]]:
+    TOOLS_AVAILABLE = {
+        "image_generation": {
+            "type": "function",
+            "function": {
+                "name": "image_generation",
+                "description": "Generates an image.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": "Prompt for the image generator. Give as many details as you can."
+                        },
+                        "negative_prompt": {
+                            "type": "string",
+                            "description": "Prompt for the image generator. Include only things you don't want in the image."
+                        }
+                    },
+                    "required": ["prompt", "negative_prompt"]
+                }
+            }
+        },
+        "audio_generation": {
+            "type": "function",
+            "function": {
+                "name": "audio_generation",
+                "description": "Generates an audio.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": "Prompt for the audio generator. Give as many details as you can."
+                        }
+                    },
+                    "required": ["prompt"]
+                }
+            }
+        },
+        "internet": {
+            "type": "function",
+            "function": {
+                "name": "internet_search",
+                "description": "Search over the internet.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "keywords": {
+                            "type": "string",
+                            "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
+                        },
+                        "question": {
+                            "type": "string",
+                            "description": "Question or prompt to answer."
+                        },
+                        "type": {
+                            "type": "string",
+                            "description": "Type of search. Can be `websites`, `news` or `maps`."
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "Max number of results to search."
+                        }
+                    },
+                    "required": ["keywords", "question", "type"]
+                }
+            }
+        },
+        "memory": {
+            "type": "function",
+            "function": {
+                "name": "save_memory",
+                "description": "Saves a memory for the long-term.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "memory": {
+                            "type": "string",
+                            "description": "Memory to save. Add as many details as possible."
+                        }
+                    },
+                    "required": ["memory"]
+                }
+            }
+        },
+        "memory-edit": {
+            "type": "function",
+            "function": {
+                "name": "edit_memory",
+                "description": "Edits a previously created memory.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "memory_id": {
+                            "type": "integer",
+                            "description": "Memory index or ID."
+                        },
+                        "new_memory": {
+                            "type": "string",
+                            "description": "New memory text. Add as many details as possible."
+                        }
+                    },
+                    "required": ["memory_id", "new_memory"]
+                }
+            }
+        },
+        "memory-delete": {
+            "type": "function",
+            "function": {
+                "name": "delete_memory",
+                "description": "Deletes a previously created memory.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "memory_id": {
+                            "type": "integer",
+                            "description": "Memory index or ID."
+                        }
+                    },
+                    "required": ["memory_id"]
+                }
+            }
+        }
     }
-    tools = ""
+    tools = []
 
     if (AllowedTools == None):
         AllowedTools = cfg.current_data["enabled_tools"].split(" ")
     elif (isinstance(AllowedTools, str)):
         AllowedTools = AllowedTools.split(" ")
 
-    for tool in _tools:
+    for tool in list(TOOLS_AVAILABLE.keys()):
         if (AllowedTools.count(tool) > 0 and cfg.current_data["enabled_tools"].count(tool) > 0):
             if (
                 (tool == "image_generation" and len(cfg.GetAllInfosOfATask("text2img")) == 0) or
@@ -95,9 +229,6 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> str:
             ):
                 continue
 
-            tools += "\n".join(_tools[tool]) + "\n\n"
+            tools.append(TOOLS_AVAILABLE[tool])
     
-    if (len(tools.strip()) > 0):
-        tools += "Each command must be written in an empty line.\nAll commands are processed sequentially, in the order you write them."
-    
-    return tools.strip()
+    return tools

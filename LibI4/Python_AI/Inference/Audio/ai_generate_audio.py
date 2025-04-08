@@ -3,7 +3,7 @@ import soundfile as sf
 import os
 import ai_config as cfg
 
-__models__: dict[int, tuple[AutoModelForTextToWaveform, AutoProcessor, str]] = {}
+__models__: dict[int, tuple[AutoModelForTextToWaveform, AutoProcessor, str, str]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is already loaded
@@ -11,8 +11,8 @@ def __load_model__(Index: int) -> None:
         return
         
     # Load the model and add it to the list of models
-    model, processor, device = cfg.LoadModel("text2audio", Index, AutoModelForTextToWaveform, AutoProcessor)
-    __models__[Index] = (model, processor, device)
+    model, processor, device, dtype = cfg.LoadModel("text2audio", Index, AutoModelForTextToWaveform, AutoProcessor)
+    __models__[Index] = (model, processor, device, dtype)
 
 def LoadModels() -> None:
     # For each model
@@ -43,7 +43,7 @@ def GenerateAudio(Index: int, Prompt: str) -> bytes:
         Prompt = Prompt[:-1]
 
     # Tokenize the prompt
-    inputs = __models__[Index][1](text = [Prompt], return_tensors = "pt").to(__models__[Index][2])
+    inputs = __models__[Index][1](text = [Prompt], return_tensors = "pt").to(__models__[Index][2]).to(__models__[Index][3])
 
     # Inference the model
     result = __models__[Index][0].generate(**inputs, do_sample = True)

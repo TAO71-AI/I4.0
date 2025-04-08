@@ -129,7 +129,7 @@ def __offload_model__(Service: str, Index: int) -> None:
     # Call the function to offload of the model
     if (Service == "chatbot"):
         # Check if the chatbot is multimodal or not
-        if (cfg.GetInfoOfTask("chatbot", Index)["allows_files"]):
+        if (len(cfg.GetInfoOfTask("chatbot", Index)["multimodal"].strip()) > 0):
             # It is
             mmcb.__offload_model__(Index)
             pass
@@ -192,13 +192,13 @@ def OffloadAll(Exclude: dict[str, list[int]]) -> None:
             # It isn't, offload
             __offload_model__(task, index)
 
-def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[str]:
+def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[dict[str, any]]:
     # Delete empty conversation
     conv.DeleteConversation("", "")
 
     # Set limits
     minLength = cfg.current_data["internet"]["min_length"]
-    maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]              # Chatbot context length - len(ExtraSystemPrompts) - 22 - len(Question) - 1
+    maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]              # Chatbot context length
     maxLength -= len(cbbasics.GetDefaultSystemPrompts())                # Default I4.0 system prompts
     maxLength -= len(cbbasics.GetPersonalitySystemPrompts(AIArgs))      # I4.0 personality system prompts
     maxLength -= len(ExtraSystemPrompts)                                # Extra system prompts defined by the user
@@ -257,7 +257,7 @@ def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, Search
     # Return the response
     return MakePrompt(Index, f"Internet:\n{internetResponse}\n\nQuestion: {Question}", [], "chatbot", AIArgs, ExtraSystemPrompts, ["", ""], UseDefaultSystemPrompts, [])
 
-def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None, AllowedTools: list[str] | str | None = None) -> Iterator[dict[str]]:
+def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None, AllowedTools: list[str] | str | None = None, ExtraTools: list[dict[str, str | dict[str, any]]] = [], MaxLength: int | None = None, Temperature: float | None = None) -> Iterator[dict[str, any]]:
     # Define I4.0's personality
     if (AIArgs == None):
         AIArgs = cfg.current_data["ai_args"].split("+")
@@ -265,12 +265,12 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         AIArgs = AIArgs.split("+")
     
     # Check conversation to prevent errors
-    if (Conversation[0] == None):
+    if (Conversation[0] is None):
         Conversation[0] = ""
     elif (type(Conversation[0]) != str):
         raise ValueError("Conversation [0] MUST be a string.")
     
-    if (Conversation[1] == None):
+    if (Conversation[1] is None):
         Conversation[1] = ""
     elif (type(Conversation[1]) != str):
         raise ValueError("Conversation [1] MUST be a string.")
@@ -284,8 +284,14 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Get the tools
     tools = cbbasics.GetTools(AllowedTools)
 
-    if (len(tools.strip()) > 0):
-        sp.append(tools)
+    # Get the extra tools
+    for etool in ExtraTools:
+        if (cbbasics.IsToolValid(etool)):
+            tools.append(etool)
+    
+    # Add system prompt if tools > 0
+    if (len(tools) > 0):
+        sp.append("You can use multiple tools in the same response.")
 
     # Get the personality
     sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
@@ -392,12 +398,12 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     # Check service
     if (Service == "chatbot" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get chatbot response
-        if (cfg.GetInfoOfTask(Service, Index)["allows_files"]):
+        if (len(cfg.GetInfoOfTask(Service, Index)["multimodal"].strip()) > 0):
             # Use multimodal chatbot
-            textResponse = mmcb.Inference(Index, Prompt, Files, sp, Conversation)
+            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature)
         else:
             # Use normal chatbot
-            textResponse = cb.Inference(Index, Prompt, sp, Conversation)
+            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature)
 
         # For every token
         for token in textResponse:

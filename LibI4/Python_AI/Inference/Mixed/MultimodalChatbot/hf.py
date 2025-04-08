@@ -1,16 +1,15 @@
 # Import HuggingFace Transformers
 from transformers import AutoModelForVision2Seq, AutoProcessor, TextIteratorStreamer
-from qwen_vl_utils import process_vision_info
+from qwen_omni_utils import process_mm_info
 
 # Import some other libraries
 from collections.abc import Iterator
 import threading
-import torch
 
 # Import I4.0's utilities
 import ai_config as cfg
 
-def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVision2Seq, AutoProcessor, str]:
+def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVision2Seq, AutoProcessor, str, str]:
     modelExtraKWargs = {}
     processorExtraKWargs = {
         "min_pixels": 256 * 28 * 28,
@@ -36,14 +35,14 @@ def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVisi
 
     return cfg.LoadModel("chatbot", Index, AutoModelForVision2Seq, AutoProcessor, modelExtraKWargs, processorExtraKWargs)
 
-def __inference__(Model: AutoModelForVision2Seq, Processor: AutoProcessor, Device: str, Config: dict[str, any], ContentForModel: list[dict[str, list[dict[str, str]]]]) -> Iterator[str]:
+def __inference__(Model: AutoModelForVision2Seq, Processor: AutoProcessor, Device: str, Dtype: str, Config: dict[str, any], ContentForModel: list[dict[str, list[dict[str, str]]]], MaxLength: int, Temperature: float) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Apply the chat template using the processor
     text = Processor.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
 
     # Tokenize the prompt
-    image_inputs, video_inputs = process_vision_info(ContentForModel)  # Should work for all models, even if it's not a Qwen model
-    inputs = Processor(text = [text], images = image_inputs, videos = video_inputs, padding = True, return_tensors = "pt")  # Doesn't support audios for now
-    inputs = inputs.to(Device)
+    audio_inputs, image_inputs, video_inputs = process_mm_info(ContentForModel, use_audio_in_video = True)  # Should work for all models, even if it's not a Qwen model
+    inputs = Processor(text = text, audios = audio_inputs, images = image_inputs, videos = video_inputs, padding = True, return_tensors = "pt")  # Doesn't support audios for now
+    inputs = inputs.to(Device).to(Dtype)
 
     # Set streamer
     streamer = TextIteratorStreamer(Processor)
@@ -51,8 +50,8 @@ def __inference__(Model: AutoModelForVision2Seq, Processor: AutoProcessor, Devic
     # Set inference args
     generationKwargs = dict(
         **inputs,
-        temperature = Config["temp"],
-        max_new_tokens = cfg.current_data["max_length"],
+        temperature = Temperature,
+        max_new_tokens = MaxLength,
         streamer = streamer,
         do_sample = True
     )

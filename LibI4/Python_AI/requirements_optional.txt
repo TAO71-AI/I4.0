@@ -1,7 +1,0 @@
-# NOTE: This requirements are OPTIONAL, but to don't have errors when using HuggingFace's models, please download them.
-sacremoses
-timm
-einops
-ctranslate2
-datasets
-bitsandbytes

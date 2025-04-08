@@ -2,7 +2,7 @@ from transformers import AutoModelForQuestionAnswering, AutoTokenizer
 import torch
 import ai_config as cfg
 
-__models__: dict[int, tuple[AutoModelForQuestionAnswering, AutoTokenizer, str]] = {}
+__models__: dict[int, tuple[AutoModelForQuestionAnswering, AutoTokenizer, str, str]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is already loaded
@@ -10,8 +10,8 @@ def __load_model__(Index: int) -> None:
         return
         
     # Load the model and add it to the list of models
-    model, tokenizer, device = cfg.LoadModel("qa", Index, AutoModelForQuestionAnswering, AutoTokenizer)
-    __models__[Index] = (model, tokenizer, device)
+    model, tokenizer, device, dtype = cfg.LoadModel("qa", Index, AutoModelForQuestionAnswering, AutoTokenizer)
+    __models__[Index] = (model, tokenizer, device, dtype)
 
 def LoadModels() -> None:
     # For each model of this service
@@ -36,7 +36,7 @@ def Inference(Index: int, Context: str, Question: str) -> str:
 
     # Tokenize the question and context
     inputs = __models__[Index][1](Question, Context, return_tensors = "pt")
-    inputs = inputs.to(__models__[Index][2])
+    inputs = inputs.to(__models__[Index][2]).to(__models__[Index][3])
 
     # Inference the model
     with torch.no_grad():

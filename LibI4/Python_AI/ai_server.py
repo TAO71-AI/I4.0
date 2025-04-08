@@ -91,6 +91,20 @@ def __offload_loop__() -> None:
         # Run the garbage collector
         gc.collect()
 
+def __clear_temporal_conversations_loop__() -> None:
+    # Check if clear temporal conversations time is less or equal to 0
+    if (cfg.current_data["clear_temporal_conversations_time"] <= 0):
+        # Do not clear the temporal conversations
+        return
+    
+    # While the server is running
+    while (started):
+        # Wait the specified time
+        time.sleep(cfg.current_data["clear_temporal_conversations_time"])
+
+        # Clear all the temporal conversations
+        conv.ClearTemporalConversations()
+
 def SaveOldData() -> None:
     # Print
     if (os.path.exists("API/") or os.path.exists("Conversations/") or os.path.exists("memories.json")):
@@ -148,7 +162,7 @@ def SaveOldData() -> None:
                 convers = cfg.JSONDeserializer(f.read())
 
                 # Try to save the conversations
-                conv.SaveConversation(convers["User"], convers["Conv"])
+                conv.SaveConversation(convers["User"], convers["Conv"], None)
             except Exception as ex:
                 # Error parsing the JSON, continue with the next file
                 print(f"Error parsing conversation file '{file}'. Ignoring. Error: {ex}")
@@ -230,7 +244,7 @@ def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     
     return (users, t)
 
-def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str | None, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None, AllowedTools: str | list[str] | None) -> Iterator[dict[str, any]]:
+def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str | None, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None, AllowedTools: str | list[str] | None, ExtraTools: list[dict[str, str | dict[str, any]]], MaxLength: int | None, Temperature: float | None) -> Iterator[dict[str, any]]:
     # Make sure the key of the service exists
     if (Service not in list(queue.keys())):
         queue[Service] = []
@@ -283,9 +297,12 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         modelsUsed[Service] = [Index]
 
     # Process the prompt and get a response
-    response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts, AllowedTools)
+    response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts, AllowedTools, ExtraTools, MaxLength, Temperature)
     fullResponse = ""
     responseFiles = []
+    tools = []
+    tempTool = ""
+    firstToken = True
 
     # Start timer
     timer = time.time()
@@ -319,7 +336,21 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         # Restart the timer
         timer = time.time()
 
+        # Check if the chatbot is using a tool
+        if (((firstToken and token["response"].startswith("{")) or (token["response"] == "<tool_call>")) or len(tempTool) > 0):
+            tempTool += token["response"]
+
+            if (token["response"].endswith("}") and not tempTool.startswith("<tool_call>")):
+                tools.append(tempTool[:tempTool.rfind("}") + 1])
+                tempTool = ""
+            elif (token["response"] == "</tool_call>" and tempTool.startswith("<tool_call>")):
+                tools.append(tempTool[11:-12])
+                tempTool = ""
+            
+            continue
+
         # Yield the token
+        firstToken = False
         yield token
 
     # Remove the user from the queue
@@ -332,94 +363,114 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
     fullResponse = fullResponse.strip()
     convAssistantFiles = []
 
-    # For each command
-    for line in fullResponse.split("\n"):
-        # Check if the line starts and/or ends with quotes, then remove them
-        while (line.startswith("\"") or line.startswith("\'") or line.startswith("`")):
-            line = line[1:]
-            
-        while (line.endswith("\"") or line.endswith("\'") or line.endswith("`")):
-            line = line[:-1]
-                
-        # Strip the line
-        line = line.strip()
+    # For each tool used
+    for toolStr in tools:
+        # Remove special tokens
+        while (toolStr.startswith("<tool_call>")):
+            toolStr = toolStr[11:]
+        
+        while (toolStr.endswith("</tool_call>")):
+            toolStr = toolStr[:-12]
 
-        if (line.lower().startswith("/img ")):
-            # Generate image command
+        # Parse the JSON
+        try:
+            tool = cfg.JSONDeserializer(toolStr)
+        except Exception as ex:
+            print(str(ex))
+            continue
+
+        if (tool["name"] == "image_generation"):
+            # Generate image tool
             # Get the prompt
-            cmd = line[5:].strip()
+            pr = tool["arguments"]["prompt"]
+            npr = tool["arguments"]["negative_prompt"]
 
             # Generate the image and append it to the files
-            cmdResponse = __infer__("text2img", GetAutoIndex("text2img"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools)
+            toolResponse = __infer__("text2img", GetAutoIndex("text2img"), json.dumps({
+                "prompt": pr,
+                "negative_prompt": npr
+            }), [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools, ExtraTools, MaxLength, Temperature)
 
             # Append all the files
-            for token in cmdResponse:
+            for token in toolResponse:
                 # Append the image to the convAssistantFiles
                 convAssistantFiles += token["files"]
                 
-                yield {"response": "\n[IMAGES]\n", "files": token["files"], "ended": False}
-        elif (line.lower().startswith("/aud ")):
-            # Generate audio command
+                yield {"response": "", "files": token["files"], "ended": False}
+        elif (tool["name"] == "audio_generation"):
+            # Generate audio tool
             # Get the prompt
-            cmd = line[5:].strip()
+            pr = tool["arguments"]["prompt"]
 
             # Generate the audio and append it to the files
-            cmdResponse = __infer__("text2audio", GetAutoIndex("text2audio"), cmd, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools)
+            toolResponse = __infer__("text2audio", GetAutoIndex("text2audio"), pr, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools, ExtraTools, MaxLength, Temperature)
 
             # Append all the files
-            for token in cmdResponse:
+            for token in toolResponse:
                 # Append the audio to the convAssistantFiles
                 convAssistantFiles += token["files"]
 
-                yield {"response": "\n[AUDIOS]\n", "files": token["files"], "ended": False}
-        elif (line.lower().startswith("/int ")):
-            # Internet (websites, answers, news, chat and maps) search command
-            # Get the prompt
-            cmd = line[5:].strip()
-                    
-            # Deserialize the prompt
+                yield {"response": "", "files": token["files"], "ended": False}
+        elif (tool["name"] == "internet_search"):
+            # Internet (websites, answers, news, chat and maps) search tool
+            # Get the variables
+            keywords = tool["arguments"]["keywords"]
+            question = tool["arguments"]["question"]
+            searchType = tool["arguments"]["type"]
+
             try:
-                cmd = cfg.JSONDeserializer(cmd)
-                cmdP = cmd["keywords"].strip()
-                cmdQ = cmd["question"].strip()
-                cmdS = cmd["type"].strip()
-                
-                try:
-                    cmdC = int(cmd["count"])
-
-                    if (cmdC > cfg.current_data["internet"]["max_results"]):
-                        cmdC = cfg.current_data["internet"]["max_results"]
-                    elif (cmdC <= cfg.current_data["internet"]["min_results"]):
-                        cmdC = cfg.current_data["internet"]["min_results"]
-                except:
-                    cmdC = cmdC = cfg.current_data["internet"]["min_results"]
+                searchCount = int(tool["arguments"]["count"])
             except:
-                # Could not deserialize the prompt, ignoring
-                continue
+                searchCount = cfg.current_data["internet"]["min_results"]
+            
+            # Check if the search count is valid
+            if (searchCount > cfg.current_data["internet"]["max_results"]):
+                searchCount = cfg.current_data["internet"]["max_results"]
+            elif (searchCount <= cfg.current_data["internet"]["min_results"]):
+                searchCount = cfg.current_data["internet"]["min_results"]
 
-            # Generate the image and append it to the files
-            cmdResponse = cb.GetResponseFromInternet(Index, cmdP, cmdQ, cmdS, cmdC, AIArgs, SystemPrompts, UseDefaultSystemPrompts)
+            # Get the response from internet
+            toolResponse = cb.GetResponseFromInternet(Index, keywords, question, searchType, searchCount, AIArgs, SystemPrompts, UseDefaultSystemPrompts)
             text = ""
 
             # Yield another line
             yield {"response": "\n", "files": [], "ended": False}
 
-            for token in cmdResponse:
+            # Save and yield the tokens
+            for token in toolResponse:
                 text += token["response"]
                 yield {"response": token["response"], "files": token["files"], "ended": False}
-            
-            # Replace lines with spaces
-            text = text.replace("\n", " ")
 
-            # Create a memory with the information
-            memories.SaveMemory(Key["key"], f"Internet: {text}")
-        elif (line.lower().startswith("/mem ")):
-            # Save memory command
+            # Add to the memories
+            memories.SaveMemory(Key["key"], f"Internet response for prompt '{keywords}': '{text}'.")
+        elif (tool["name"] == "save_memory"):
+            # Save memory tool
             # Get the prompt
-            cmd = line[5:].strip()
+            mem = tool["arguments"]["memory"]
 
             # Save the memory
-            memories.SaveMemory(Key["key"], cmd)
+            memories.SaveMemory(Key["key"], mem)
+        elif (tool["name"] == "edit_memory"):
+            # Edit memory tool
+            # Get the ID and new memory
+            memID = tool["arguments"]["memory_id"]
+            newMem = tool["arguments"]["new_memory"]
+
+            # Delete the previous memory
+            memories.DeleteMemory(Key["key"], memories.GetMemory(Key["key"], memID))
+
+            # Create a new memory
+            memories.SaveMemory(Key["key"], newMem)
+        elif (tool["name"] == "delete_memory"):
+            # Delete memory tool
+            # Get the memory ID
+            memID = tool["arguments"]["memory_id"]
+
+            # Delete the memory
+            memories.DeleteMemory(Key["key"], memories.GetMemory(Key["key"], memID))
+        else:
+            # Unknown tool. Send to the client
+            yield {"response": f"Unknown tool: {json.dumps(tool)}", "files": [], "ended": False}
     
     # Save messages in the conversation if the service is a chatbot
     if (Service == "chatbot"):
@@ -447,7 +498,7 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
             ]
         })
 
-        conv.SaveConversation(Key["key"], (Conversation, conversation))
+        conv.SaveConversation(Key["key"], (Conversation, conversation), Key["temporal_conversations"])
 
 def CheckIfHasEnoughTokens(Service: str, Index: int, KeyTokens: float) -> bool:
     # Get price
@@ -499,7 +550,7 @@ def GetAutoIndex(Service: str) -> int:
 
 def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str, any]]:
     # Get some required variables
-    service = Prompt["Service"]
+    service = str(Prompt["Service"])
 
     try:
         # Try to get the key
@@ -519,7 +570,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 date_diff = date - key_date
 
                 # If a day or more has passed since the last use of the key, reset the tokens and the day
-                if (date_diff.total_seconds() >= 86400):
+                if (date_diff.total_seconds() >= 86400 and key["tokens"] < key["default"]["tokens"]):
                     key["tokens"] = key["default"]["tokens"]
                     key["date"] = sb.__get_current_datetime__()
 
@@ -531,29 +582,27 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except Exception as ex:
         # Could not get the key, create empty key
         print(f"Could not get client key. Reason: {ex}")
-        traceback.print_exc()
-
-        key = {"tokens": 0, "key": None, "admin": False}
+        key = {"tokens": 0, "key": None, "admin": False, "temporal_conversations": cfg.current_data["nokey_temporal_conversations"]}
     
     # Get some "optional" variables
     try:
         # Try to get conversation
-        conversation = Prompt["Conversation"]
+        conversation = str(Prompt["Conversation"])
     except:
         # If an error occurs, set to default
         conversation = "default"
     
     try:
         # Try to get the prompt and files
-        prompt = Prompt["Prompt"]
-        files = Prompt["Files"]
+        prompt = str(Prompt["Prompt"])
+        files = list(Prompt["Files"])
     except:
         # If any of this variables is missing, return an error
         yield {"response": "ERROR: Missing variables.", "files": [], "ended": True}
         
     try:
         # Try to get AI args
-        aiArgs = Prompt["AIArgs"]
+        aiArgs = str(Prompt["AIArgs"])
     except:
         # If an error occurs, set to default
         aiArgs = None
@@ -578,14 +627,14 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
 
     try:
         # Try to get the index of the model to use
-        index = Prompt["Index"]
+        index = int(Prompt["Index"])
     except:
         # If an error occurs, set to default
         index = -1
     
     try:
         # Try to get the client's public key
-        clientPublicKey = Prompt["PublicKey"]
+        clientPublicKey = str(Prompt["PublicKey"])
     except:
         # If an error occurs, set to default
         clientPublicKey = None
@@ -596,6 +645,27 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except:
         # If an error occurs, set to default
         aTools = None
+    
+    try:
+        # Try to get the extra tools
+        eTools = list(Prompt["ExtraTools"])
+    except:
+        # If an error occurs, set to default
+        eTools = []
+    
+    try:
+        # Try to get the max length
+        maxLength = int(Prompt["MaxLength"])
+    except:
+        # If an error occurs, set to default
+        maxLength = None
+    
+    try:
+        # Try to get the temperature
+        temperature = float(Prompt["Temperature"])
+    except:
+        # If an error occurs, set to default
+        temperature = None
     
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
@@ -652,7 +722,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Check files length and service
             if (len(files) == 0 or service == "chatbot"):
                 # Execute the service with all the files
-                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools)
+                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools, eTools, maxLength, temperature)
 
                 # For each token
                 for inf_t in inf:
@@ -662,7 +732,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # For each file
                 for file in files:
                     # Execute the service with the current file
-                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools)
+                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools, eTools, maxLength, temperature)
 
                     # For each token
                     for inf_t in inf:
@@ -1137,6 +1207,10 @@ async def StartServer() -> None:
     # Create thread for the model offloading
     offloadThread = threading.Thread(target = __offload_loop__)
     offloadThread.start()
+
+    # Create thread for the temporal conversations
+    tempConvsThread = threading.Thread(target = __clear_temporal_conversations_loop__)
+    tempConvsThread.start()
 
     # Set the IP
     ip = "127.0.0.1" if (cfg.current_data["use_local_ip"]) else "0.0.0.0"

@@ -1,5 +1,6 @@
 from cryptography.hazmat.primitives.asymmetric import rsa, padding
 from cryptography.hazmat.primitives import serialization, hashes
+from concurrent.futures import ThreadPoolExecutor
 import base64
 
 def __parse_hash__(HashName: str) -> hashes.HashAlgorithm | None:
@@ -59,13 +60,10 @@ def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes
         # Error decoding the message, return the message (probably isn't encrypted)
         return Message
 
-    # Create the chunks list
-    decChunks = []
-
-    for chunk in Message:
-        # Decrypt using the private key
-        message = prKey.decrypt(
-            chunk,
+    # Decrypt the chunks
+    def dec(Chunk: bytes) -> bytes:
+        return prKey.decrypt(
+            Chunk,
             padding.OAEP(
                 mgf = padding.MGF1(algorithm = HashAlgorithm),
                 algorithm = HashAlgorithm,
@@ -73,8 +71,8 @@ def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes
             )
         )
 
-        # Append into the chunks list
-        decChunks.append(message)
+    with ThreadPoolExecutor() as executor:
+        decChunks = list(executor.map(dec, Message))
 
     # Return the message
     return b"".join(decChunks).decode("utf-8")
@@ -96,14 +94,14 @@ def EncryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes
     puKeySize = puKey.key_size // 8
     hashSize = HashAlgorithm.digest_size
     maxMessageSize = puKeySize - 2 * hashSize - 2
+    
+    # Split the message into chunks
+    chunks = __split_message__(Message, maxMessageSize)
 
-    # Create the chunks list
-    encChunks = []
-
-    for chunk in __split_message__(Message, maxMessageSize):
-        # Encrypt using the public key
-        message = puKey.encrypt(
-            chunk,
+    # Encrypt the chunks
+    def enc(Chunk: bytes) -> str:
+        encrypted = puKey.encrypt(
+            Chunk,
             padding.OAEP(
                 mgf = padding.MGF1(algorithm = HashAlgorithm),
                 algorithm = HashAlgorithm,
@@ -111,8 +109,10 @@ def EncryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes
             )
         )
 
-        # Append into the chunks list
-        encChunks.append(base64.b64encode(message).decode("utf-8"))
+        return base64.b64encode(encrypted).decode("utf-8")
+
+    with ThreadPoolExecutor() as executor:
+        encChunks = list(executor.map(enc, chunks))
 
     # Return the message
     return "|".join(encChunks)

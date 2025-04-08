@@ -6,7 +6,7 @@ import numpy as np
 import os
 import ai_config as cfg
 
-__models__: dict[int, tuple[AutoModelForDepthEstimation, AutoImageProcessor, str]] = {}
+__models__: dict[int, tuple[AutoModelForDepthEstimation, AutoImageProcessor, str, str]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -14,10 +14,10 @@ def __load_model__(Index: int) -> None:
         return
 
     # Load the model
-    model, processor, device = cfg.LoadModel("de", Index, AutoModelForDepthEstimation, AutoImageProcessor)
+    model, processor, device, dtype = cfg.LoadModel("de", Index, AutoModelForDepthEstimation, AutoImageProcessor)
 
     # Add the model to the list of models
-    __models__[Index] = (model, processor, device)
+    __models__[Index] = (model, processor, device, dtype)
 
 def LoadModels() -> None:
     # For each model of this service
@@ -52,7 +52,7 @@ def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
     
     # Tokenize the image and move to the device
     inputs = __models__[Index][1](images = [Image], return_tensors = "pt")
-    inputs = inputs.to(__models__[Index][2])
+    inputs = inputs.to(__models__[Index][2]).to(__models__[Index][3])
 
     # Inference the model
     with torch.no_grad():

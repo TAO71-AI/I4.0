@@ -150,7 +150,8 @@ def CreateKey(Tokens: int | None = None, IsDaily: bool = False) -> dict[str, any
         "default": {
             "tokens": Tokens
         },
-        "admin": False
+        "admin": False,
+        "temporal_conversations": None
     }
 
     # Generate a unique key
@@ -179,6 +180,11 @@ def SaveKey(KeyData: dict[str, any] | None) -> None:
     date = json.dumps(KeyData["date"])
     default = json.dumps(KeyData["default"])
     admin = bool(KeyData["admin"])
+    
+    try:
+        tempConv = json.dumps(KeyData["temporal_conversations"])
+    except:
+        tempConv = None
 
     # Check if the key already exists
     results = ExecuteCommandOnDatabase(f"SELECT * FROM {cfg.current_data['db']['keys']['table']} WHERE {cfg.current_data['db']['keys']['key']} = %s LIMIT 1", [key])
@@ -187,10 +193,10 @@ def SaveKey(KeyData: dict[str, any] | None) -> None:
     if (len(results) > 0):
         # Found!
         # Update the key
-        ExecuteCommandOnDatabase(f"UPDATE {cfg.current_data['db']['keys']['table']} SET {cfg.current_data['db']['keys']['tokens']} = %s, {cfg.current_data['db']['keys']['daily']} = %s, {cfg.current_data['db']['keys']['date']} = %s, {cfg.current_data['db']['keys']['default']} = %s, {cfg.current_data['db']['keys']['admin']} = %s WHERE {cfg.current_data['db']['keys']['key']} = %s", [tokens, daily, date, default, admin, key])
+        ExecuteCommandOnDatabase(f"UPDATE {cfg.current_data['db']['keys']['table']} SET {cfg.current_data['db']['keys']['tokens']} = %s, {cfg.current_data['db']['keys']['daily']} = %s, {cfg.current_data['db']['keys']['date']} = %s, {cfg.current_data['db']['keys']['default']} = %s, {cfg.current_data['db']['keys']['admin']} = %s, {cfg.current_data['db']['keys']['temporal_conversations']} = %s WHERE {cfg.current_data['db']['keys']['key']} = %s", [tokens, daily, date, default, admin, tempConv, key])
     else:
         # Not found, create
-        ExecuteCommandOnDatabase(f"INSERT INTO {cfg.current_data['db']['keys']['table']} ({cfg.current_data['db']['keys']['key']}, {cfg.current_data['db']['keys']['tokens']}, {cfg.current_data['db']['keys']['daily']}, {cfg.current_data['db']['keys']['date']}, {cfg.current_data['db']['keys']['default']}, {cfg.current_data['db']['keys']['admin']}) VALUES (%s, %s, %s, %s, %s, %s)", [key, tokens, daily, date, default, admin])
+        ExecuteCommandOnDatabase(f"INSERT INTO {cfg.current_data['db']['keys']['table']} ({cfg.current_data['db']['keys']['key']}, {cfg.current_data['db']['keys']['tokens']}, {cfg.current_data['db']['keys']['daily']}, {cfg.current_data['db']['keys']['date']}, {cfg.current_data['db']['keys']['default']}, {cfg.current_data['db']['keys']['admin']}, {cfg.current_data['db']['keys']['temporal_conversations']}) VALUES (%s, %s, %s, %s, %s, %s, %s)", [key, tokens, daily, date, default, admin, tempConv])
 
 def GetKey(Key: str) -> dict[str, any]:
     """
@@ -198,6 +204,10 @@ def GetKey(Key: str) -> dict[str, any]:
     """
     # Get the key
     results = ExecuteCommandOnDatabase(f"SELECT * FROM {cfg.current_data['db']['keys']['table']} WHERE {cfg.current_data['db']['keys']['key']} = %s LIMIT 1", [Key])
+    
+    if (len(results) == 0):
+        raise Exception("No key found.")
+    
     result = results[0]
 
     key = str(result[cfg.current_data["db"]["keys"]["key"]])
@@ -207,6 +217,11 @@ def GetKey(Key: str) -> dict[str, any]:
     default = cfg.JSONDeserializer(str(result[cfg.current_data["db"]["keys"]["default"]]))
     admin = bool(result[cfg.current_data["db"]["keys"]["admin"]])
 
+    try:
+        tempConv = cfg.JSONDeserializer(str(result[cfg.current_data["db"]["keys"]["temporal_conversations"]]))
+    except:
+        tempConv = None
+
     # Parse the key
     keyData = {
         "tokens": tokens,
@@ -214,7 +229,8 @@ def GetKey(Key: str) -> dict[str, any]:
         "daily": daily,
         "date": date,
         "default": default,
-        "admin": admin
+        "admin": admin,
+        "temporal_conversations": tempConv
     }
 
     # Return the key data

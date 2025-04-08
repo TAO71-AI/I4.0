@@ -3,7 +3,7 @@ import emoji
 import random
 import ai_config as cfg
 
-__models__: dict[int, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str, dict[str, any]]] = {}
+__models__: dict[int, tuple[AutoModelForSeq2SeqLM, AutoTokenizer, str, str, dict[str, any]]] = {}
 __classifiers__: dict[int, Pipeline] = {}
 
 def __load_model__(Index: int) -> None:
@@ -20,10 +20,10 @@ def __load_model__(Index: int) -> None:
         raise Exception(f"Invalid language for model {info['model']}. Expected 'INPUT LANGUAGE-OUTPUT LANGUAGE'; got '{info['lang']}'.")
 
     # Load the model
-    model, tokenizer, device = cfg.LoadModel("tr", Index, AutoModelForSeq2SeqLM, AutoTokenizer)
+    model, tokenizer, device, dtype = cfg.LoadModel("tr", Index, AutoModelForSeq2SeqLM, AutoTokenizer)
 
     # Add the model to the list of models
-    __models__[Index] = (model, tokenizer, device, info)
+    __models__[Index] = (model, tokenizer, device, dtype, info)
 
 def __load_classifier__(Index: int) -> None:
     # Check if the model is already loaded
@@ -77,7 +77,7 @@ def GetAvailableLanguages() -> list[str]:
     # For each model
     for _, model in __models__.items():
         # Get the language and add it to the list
-        langs.append(model[3]["lang"])
+        langs.append(model[4]["lang"])
     
     # Return the list
     return langs
@@ -95,7 +95,7 @@ def InferenceModel(Index: int, Prompt: str) -> str:
     response = ""
 
     # Get the model to use
-    model, tokenizer, device, _ = __models__[Index]
+    model, tokenizer, device, dtype, _ = __models__[Index]
 
     # For each line
     for line in Prompt:
@@ -106,7 +106,7 @@ def InferenceModel(Index: int, Prompt: str) -> str:
             continue
 
         # Tokenize the line
-        inputs = tokenizer.encode(line.strip(), return_tensors = "pt").to(device)
+        inputs = tokenizer.encode(line.strip(), return_tensors = "pt").to(device).to(dtype)
 
         # Generate the response
         translationResponse = model.generate(inputs)

@@ -6,7 +6,7 @@ import os
 import random
 import ai_config as cfg
 
-__models__: dict[int, tuple[AutoModelForObjectDetection, AutoImageProcessor, str]] = {}
+__models__: dict[int, tuple[AutoModelForObjectDetection, AutoImageProcessor, str, str]] = {}
 
 def __get_random_color__() -> tuple[int, int, int]:
     # Get a random color (RGB)
@@ -18,10 +18,10 @@ def __load_model__(Index: int) -> None:
         return
         
     # Load the model and get the info
-    model, processor, device = cfg.LoadModel("od", Index, AutoModelForObjectDetection, AutoImageProcessor)
+    model, processor, device, dtype = cfg.LoadModel("od", Index, AutoModelForObjectDetection, AutoImageProcessor)
 
     # Add the model to the list of models
-    __models__[Index] = (model, processor, device)
+    __models__[Index] = (model, processor, device, dtype)
 
 def LoadModels() -> None:
     # For each model of this service
@@ -67,7 +67,7 @@ def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str]:
 
     # Tokenize the image
     inputs = __models__[Index][1](images = [image], return_tensors = "pt")
-    inputs = inputs.to(__models__[Index][2])
+    inputs = inputs.to(__models__[Index][2]).to(__models__[Index][3])
 
     # Inference the model
     outputs = __models__[Index][0](**inputs)
