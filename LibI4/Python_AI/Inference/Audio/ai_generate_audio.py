@@ -1,7 +1,10 @@
+# Import I4.0 utilities
+import ai_config as cfg
+
+# Import other libraries
+from io import BytesIO
 from transformers import AutoModelForTextToWaveform, AutoProcessor
 import soundfile as sf
-import os
-import ai_config as cfg
 
 __models__: dict[int, tuple[AutoModelForTextToWaveform, AutoProcessor, str, str]] = {}
 
@@ -48,23 +51,14 @@ def GenerateAudio(Index: int, Prompt: str) -> bytes:
     # Inference the model
     result = __models__[Index][0].generate(**inputs, do_sample = True)
     
-    # Save the audio into a temporal file
-    audio_name = "ta.wav"
-    audio_n = 0
+    # Save the audio into a buffer
+    buffer = BytesIO()
+    sf.write(buffer, result.cpu().numpy().squeeze(), __models__[Index][0].generation_config.sample_rate, format = "WAV")
 
-    while (os.path.exists(audio_name)):
-        audio_n += 1
-        audio_name = "ta_" + str(audio_n) + ".wav"
-
-    sf.write(audio_name, result.cpu().numpy().squeeze(), __models__[Index][0].generation_config.sample_rate)
-
-    # Read the bytes of the saved audio
-    with open(audio_name, "rb") as f:
-        audio = f.read()
-        f.close()
-
-    # Delete the temporal file
-    os.remove(audio_name)
+    buffer.seek(0)
+    data = buffer.getvalue()
+    
+    buffer.close()
 
     # Return the bytes of the generated audio file
-    return audio
+    return data

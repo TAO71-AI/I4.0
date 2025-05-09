@@ -1,13 +1,13 @@
-# Import libraries
-from transformers import Pipeline
-from pydub import AudioSegment
-import speech_recognition as sr
-import os
-import whisper
-
 # Import I4.0 utilities
 import Inference.Audio.SpeechRecognition.whisper_lib as whisperl
 import ai_config as cfg
+
+# Import other libraries
+from io import BytesIO
+from pydub import AudioSegment
+from transformers import Pipeline
+import whisper
+import speech_recognition as sr
 
 __models__: dict[int, tuple[whisper.Whisper | Pipeline, dict[str, any]]] = {}
 
@@ -57,29 +57,22 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
+def Inference(Index: int, Data: bytes | sr.AudioData) -> dict[str, str]:
     # Load the model
     __load_model__(Index)
 
-    # Create temporal file
-    audio_name = "tmp_whisper_audio_0.wav"
-    audio_id = 0
-
-    while (os.path.exists(audio_name)):
-        audio_id += 1
-        audio_name = "tmp_whisper_audio_" + str(audio_id) + ".wav"
-        
-    with open(audio_name, "wb") as f:
-        f.write(Data.get_wav_data())
+    # Save data into a buffer
+    data = BytesIO(Data)
+    data.seek(0)
     
     # Check the model type
     if (isinstance(__models__[Index][0], whisper.Whisper)):
         # Use whisper (library)
-        result = whisperl.Inference(__models__[Index][0], audio_name, __models__[Index][1]["temp"])
+        result = whisperl.Inference(__models__[Index][0], data, __models__[Index][1]["temp"])
     elif (isinstance(__models__[Index][0], Pipeline)):
         # Use transformers
         # Inference the model
-        result = __models__[Index][0](audio_name)
+        result = __models__[Index][0](data)
 
         # Set the result
         result = {
@@ -88,9 +81,11 @@ def Inference(Index: int, Data: sr.AudioData) -> dict[str, str]:
         }
     else:
         # Invalid model type
+        data.close()
         raise Exception("Invalid model type.")
     
     # Return the result
+    data.close()
     return result
 
 def GetAudioDataFromFile(FilePath: str) -> sr.AudioData:

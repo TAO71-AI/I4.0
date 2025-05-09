@@ -1,4 +1,6 @@
 # GPT4All is not supported anymore! Please use llama-cpp-python (lcpp) instead!
+# This code is deprecated. May be deleted.
+
 # Import GPT4All
 from gpt4all import GPT4All
 

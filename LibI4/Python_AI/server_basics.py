@@ -129,6 +129,9 @@ def CreateKey(Tokens: int | None = None, IsDaily: bool = False) -> dict[str, any
     """
     Creates a new key.
     """
+    # Define globals
+    global KeyLength, DefaultTokens
+
     # Check if the tokens are none
     if (Tokens is None):
         # Use the default tokens

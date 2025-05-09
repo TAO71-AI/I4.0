@@ -25,7 +25,18 @@ def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForCaus
 
     return cfg.LoadModel("chatbot", Index, AutoModelForCausalLM, AutoTokenizer, modelExtraKWargs)
 
-def __inference__(Model: AutoModelForCausalLM, Tokenizer: AutoTokenizer, Device: str, Dtype: str, Config: dict[str, any], ContentForModel: list[dict[str, str]], MaxLength: int, Temperature: float) -> Iterator[str]:
+def __inference__(
+        Model: AutoModelForCausalLM,
+        Tokenizer: AutoTokenizer,
+        Device: str,
+        Dtype: str,
+        Config: dict[str, any],
+        ContentForModel: list[dict[str, str]],
+        MaxLength: int,
+        Temperature: float,
+        TopP: float,
+        TopK: int
+    ) -> Iterator[str]:
     # Apply the chat template using the tokenizer
     text = Tokenizer.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
 
@@ -34,7 +45,7 @@ def __inference__(Model: AutoModelForCausalLM, Tokenizer: AutoTokenizer, Device:
     inputs = inputs.to(Device).to(Dtype)
 
     # Set streamer
-    streamer = TextIteratorStreamer(Tokenizer)
+    streamer = TextIteratorStreamer(Tokenizer, skip_prompt = True, skip_special_tokens = True)
 
     # Set inference args
     generationKwargs = dict(
@@ -42,7 +53,9 @@ def __inference__(Model: AutoModelForCausalLM, Tokenizer: AutoTokenizer, Device:
         temperature = Temperature,
         max_new_tokens = MaxLength,
         streamer = streamer,
-        do_sample = False
+        top_p = TopP,
+        top_k = TopK,
+        do_sample = True
     )
 
     # Create new thread for the model and generate

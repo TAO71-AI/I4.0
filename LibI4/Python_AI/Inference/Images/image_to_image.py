@@ -1,8 +1,11 @@
+# Import I4.0 utilities
+import ai_config as cfg
+
+# Import other libraries
+from io import BytesIO
 from diffusers import AutoPipelineForImage2Image
 from PIL import Image, ImageOps
-import os
 import json
-import ai_config as cfg
 
 __models__: dict[int, tuple[AutoPipelineForImage2Image, dict[str, any]]] = {}
 
@@ -81,26 +84,13 @@ def __process__(Index: int, Prompt: str, Steps: int, Image: str | Image.Image) -
 
     # For each image generated
     for image in images_generated:
-        # Save into a temporal file
-        img_name = "ti.png"
-        img_n = 0
+        buffer = BytesIO()
+        image.save(buffer, format = "PNG")
 
-        while (os.path.exists(img_name)):
-            img_n += 1
-            img_name = "ti_" + str(img_n) + ".png"
+        buffer.seek(0)
+        images.append(buffer.getvalue())
 
-        with open(img_name, "w+") as f:
-            f.close()
-        
-        image.save(img_name)
-
-        # Read the bytes of the saved image and add it to the images list
-        with open(img_name, "rb") as f:
-            images.append(f.read())
-            f.close()
-
-        # Delete the temporal file
-        os.remove(img_name)
+        buffer.close()
 
     # Return all the generated images
     return images

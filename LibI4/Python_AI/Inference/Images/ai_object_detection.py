@@ -1,10 +1,13 @@
+# Import I4.0 utilities
+import ai_config as cfg
+
+# Import other libraries
+from io import BytesIO
 from transformers import AutoImageProcessor, AutoModelForObjectDetection
 import PIL.Image
 import torch
 import cv2
-import os
 import random
-import ai_config as cfg
 
 __models__: dict[int, tuple[AutoModelForObjectDetection, AutoImageProcessor, str, str]] = {}
 
@@ -40,7 +43,7 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str]:
+def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str, str | bytes]:
     # Load the model
     __load_model__(Index)
 
@@ -93,25 +96,14 @@ def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str]:
         cv2.rectangle(cv_image, x, y, color = color, thickness = 2)
         cv2.putText(cv_image, str(label), (x[0] - 10, x[1] - 10), fontFace = cv2.FONT_HERSHEY_SIMPLEX, fontScale = 1, color = color, thickness = 2)
     
-    # Save the result image as a temporal file
-    file_name = "tmp_od_img_"
-    file_name_id = 0
+    # Save the result image in a buffer
+    success, encodedImg = cv2.imencode(".png", cv_image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
 
-    while (os.path.exists(file_name + str(file_name_id) + ".png")):
-        file_name_id += 1
+    if (not success):
+        raise RuntimeError("Could not encode image.")
     
-    cv2.imwrite(file_name + str(file_name_id) + ".png", cv_image, [cv2.IMWRITE_PNG_COMPRESSION, 9])
-    
-    # Read the bytes of the result image from the temporal file
-    with open(file_name + str(file_name_id) + ".png", "rb") as f:
-        cv_image = f.read()
-        f.close()
-
-    # Delete the temporal file
-    os.remove(file_name + str(file_name_id) + ".png")
-
     # Return the objects and image
     return {
         "objects": result,
-        "image": cv_image
+        "image": encodedImg.tobytes()
     }

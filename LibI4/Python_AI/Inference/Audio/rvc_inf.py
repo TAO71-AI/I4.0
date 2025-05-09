@@ -1,19 +1,16 @@
-# Import some utilities
+# Import I4.0 utilities
+import ai_config as cfg
+
+# Import other libraries
+from io import BytesIO
 from pathlib import Path
 from scipy.io import wavfile
-
-# Import RVC
 from rvc.modules.vc.modules import VC
-
-# Import other utilities
 import logging
 import os
 import requests
 import shutil
 import psutil
-
-# Import I4.0 utilities
-import ai_config as cfg
 
 __models__: dict[int, tuple[VC, str, str]] = {}
 
@@ -126,26 +123,17 @@ def __make_rvc__(Index: int, AudioPath: str, Protect: float, FilterRadius: int, 
         rms_mix_rate = MixRate
     )
     
-    # Write the audio file
-    output_file_name = "tmp_rvc_"
-    output_file_id = 0
-    output_file_path = output_file_name + str(output_file_id) + ".wav"
+    # Write the audio buffer
+    buffer = BytesIO()
+    wavfile.write(buffer, tgt_sr, audio_opt)
 
-    while (os.path.exists(output_file_path)):
-        output_file_id += 1
-        output_file_path = output_file_name + str(output_file_id) + ".wav"
+    buffer.seek(0)
+    data = buffer.getvalue()
     
-    wavfile.write(output_file_path, tgt_sr, audio_opt)
+    buffer.close()
 
-    # Read the output file
-    with open(output_file_path, "rb") as f:
-        audio_bytes = f.read()
-    
-    # Delete the output file
-    os.remove(output_file_path)
-
-    # Return the bytes of the generated audio file
-    return audio_bytes
+    # Return the bytes of the audio buffer
+    return data
 
 def DownloadAssets() -> None:
     # Set the asset list to download

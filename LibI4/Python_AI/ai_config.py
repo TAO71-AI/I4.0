@@ -42,14 +42,29 @@ __config_data__: dict[str] = {
             "table": "",                                                                                # Name of the table.
             "user": "key",                                                                              # Name of the parameter "user".
             "memory": "memory"                                                                          # Name of the parameter "memory".
+        },
+        "data_save": {                                                                              # Database: Data save.
+            "table": "",                                                                                # Name of the table.
+            "message_user": "message_user",                                                             # Name of the parameter "message_user".
+            "message_response": "message_response"                                                      # Name of the parameter "message_response".
+        },
+        "cache": {                                                                                  # Database: Cache.
+            "table": "",                                                                                # Name of the table.
+            "system_prompt": "system_prompt",                                                           # Name of the parameter "system_prompt".
+            "user_prompt": "user_prompt",                                                               # Name of the parameter "user_prompt".
+            "ai_response": "ai_response"                                                                # Name of the parameter "ai_response".
         }
     },
-    "internet": {
-        "min_length": 10,
-        "min_results": 1,
-        "max_results": 3
+    "internet": {                                                                               # Internet configuration.
+        "min_length": 10,                                                                           # Min length for each line.
+        "min_results": 1,                                                                           # Min number websites to search.
+        "max_results": 3,                                                                           # Max number of websites to search.
+        "research": {                                                                               # Internet research configuration.
+            "price": 40,                                                                                # Extra price of the internet research (WARNING: The tokens that this will take will be `[chatbot price] * ([internet max websites] + 1) + [this price]`).
+            "reasoning_mode": -1                                                                        # -1 = Switch automatically between using reasoning or not. 0 = ALWAYS use reasoning. 1 = NEVER use reasoning.
+        }
     },
-    "enabled_tools": "image_generation audio_generation internet memory memory-edit memory-delete",
+    "enabled_tools": "image_generation audio_generation internet internet-url internet-research memory memory-edit memory-delete",
     # ^-- I4.0 tools.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
@@ -75,6 +90,8 @@ __config_data__: dict[str] = {
         "hour": 0,                                                                                  # How many hours the conversation will be saved?
         "minute": 0                                                                                 # How many minutes the conversation will be saved?
     },
+    "allow_data_save": True,                                                                    # Allow the usage of data save.
+    "allow_response_cache": True,                                                               # Allow response cache.             WORKING ON THIS.
     "models": [                                                                                 # Models to be used.
         # Examples:
         #{
@@ -96,7 +113,8 @@ __config_data__: dict[str] = {
         #    "split_mode": "(layer, row or none; default: layer)",
         #    "device": "cpu",
         #    "multimodal": "",  # Doesn't support multimodal models
-        #    "price": 20
+        #    "price": 20,
+        #    "max_length": -1  # Use the `max_length` of the server
         #},
         #{
         #    "service": "chatbot",
@@ -111,7 +129,8 @@ __config_data__: dict[str] = {
         #    "temp": 0.5,
         #    "device": "cpu",
         #    "multimodal": "",  # Doesn't support multimodal models
-        #    "price": 20
+        #    "price": 20,
+        #    "max_length": -1  # Use the `max_length` of the server
         #},
         #{
         #    "service": "chatbot",
@@ -127,7 +146,8 @@ __config_data__: dict[str] = {
         #    "temp": 0.5,
         #    "device": "cpu",
         #    "multimodal": "(video, image, audio; separated by spaces)",
-        #    "price": 20
+        #    "price": 20,
+        #    "max_length": -1  # Use the `max_length` of the server
         #},
         #{
         #    "service": "qa",
@@ -433,7 +453,7 @@ def LoadPipeline(PipeTask: str, Task: str, Index: int, ExtraKWargs: dict[str, an
     try:
         args["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
     except:
-        pass
+        args["torch_dtype"] = torch.float32
 
     # Set the required args
     args["task"] = PipeTask
@@ -474,7 +494,7 @@ def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None
     try:
         args["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
     except:
-        pass
+        args["torch_dtype"] = torch.float32
     
     # Set the required args
     args["pretrained_model_or_path"] = info["model"]
@@ -528,7 +548,7 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
     try:
         argsModel["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
     except:
-        argsModel["torch_dtype"] = "fp32"
+        argsModel["torch_dtype"] = torch.float32
     
     # Set the model and tokenizer
     argsModel["pretrained_model_name_or_path"] = info["model"]

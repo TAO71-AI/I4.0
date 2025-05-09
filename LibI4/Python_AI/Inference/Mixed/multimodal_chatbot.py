@@ -1,5 +1,5 @@
 # Import HuggingFace chatbot
-from transformers import AutoModelForVision2Seq, AutoProcessor
+from transformers import AutoModelForImageTextToText, AutoProcessor
 import Inference.Mixed.MultimodalChatbot.hf as hf
 
 # Import some other libraries
@@ -11,7 +11,7 @@ import base64
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: dict[int, tuple[tuple[AutoModelForVision2Seq, AutoProcessor, str, str], dict[str, any]]] = {}
+__models__: dict[int, tuple[tuple[AutoModelForImageTextToText, AutoProcessor, str, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -82,7 +82,18 @@ def LoadModels() -> None:
         # Load the model and add it to the list of models
         __load_model__(i)
 
-def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompts: list[str], Tools: list[dict[str, str | dict[str, any]]], Conversation: list[str] = ["", ""], MaxLength: int | None = None, Temperature: float | None = None) -> Iterator[tuple[str, list[dict[str, any]]]]:
+def Inference(
+        Index: int,
+        Prompt: str,
+        Files: list[dict[str, str]],
+        SystemPrompts: list[str],
+        Tools: list[dict[str, str | dict[str, any]]],
+        Conversation: list[str] = ["", ""],
+        MaxLength: int | None = None,
+        Temperature: float | None = None,
+        TopP: float | None = None,
+        TopK: int | None = None
+    ) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Load the model
     __load_model__(Index)
 
@@ -163,13 +174,38 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
             # Error; probably `max_length` is not configured. Set to the server's default
             maxLength = cfg.current_data["max_length"]
     else:
+        # Set max length to the user's config
         maxLength = MaxLength
+
+        try:
+            # Check if max length is greater than the model's max length
+            if (maxLength > __models__[Index][1]["max_length"]):
+                # Set max length to the model's max length
+                maxLength = __models__[Index][1]["max_length"]
+
+                # Check the max length
+                if (maxLength is None or maxLength <= 0):
+                    # Invalid max length, set to the server's default
+                    maxLength = cfg.current_data["max_length"]
+        except:
+            # Error; probably `max_length` is not configured. Check if max length is greater than the servers's max length
+            if (maxLength > cfg.current_data["max_length"]):
+                # Set max length to the server's max length
+                maxLength = cfg.current_data["max_length"]
     
     # Set the temperature
     if (Temperature is None):
         temp = __models__[Index][1]["temp"]
     else:
         temp = Temperature
+    
+    # Set top_p
+    if (TopP is None):
+        TopP = 0.95
+    
+    # Set top_k
+    if (TopK is None):
+        TopK = 40
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
@@ -177,7 +213,18 @@ def Inference(Index: int, Prompt: str, Files: list[dict[str, str]], SystemPrompt
     # Get the model type to use
     if (isinstance(__models__[Index][0], tuple)):
         # Use HF
-        return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][0][3], __models__[Index][1], contentForModel, maxLength, temp)
+        return hf.__inference__(
+            __models__[Index][0][0],
+            __models__[Index][0][1],
+            __models__[Index][0][2],
+            __models__[Index][0][3],
+            __models__[Index][1],
+            contentForModel,
+            maxLength,
+            temp,
+            TopP,
+            TopK
+        )
     else:
         # It's an invalid model type
         raise Exception("Invalid model.")

@@ -1,5 +1,4 @@
-# Import the models
-from collections.abc import Iterator
+# Import I4.0 utilities
 import Inference.Text.chatbot as cb
 import Inference.Text.text_classification as tc
 import Inference.Text.translation as tns
@@ -11,7 +10,6 @@ import Inference.Images.ai_depth_estimation as de
 import Inference.Images.ai_object_detection as od
 import Inference.Audio.speech_recog as sr
 import Inference.Audio.rvc_inf as rvc
-import Inference.Audio.ai_vocal_separator as uvr
 import Inference.Images.image_to_image as img2img
 import Inference.Text.ai_question_answering as qa
 import Inference.Mixed.multimodal_chatbot as mmcb
@@ -20,12 +18,15 @@ import ai_config as cfg
 import conversation_multimodal as conv
 import ai_memory as memories
 import chatbot_basics as cbbasics
+import temporal_files as temp
+
+# Import other libraries
+from collections.abc import Iterator
 import PIL.Image as Image
 import base64
 import datetime
 import calendar
 import json
-import os
 import random
 
 # Please read this
@@ -44,48 +45,10 @@ nsfw_filter-image - Check if an image is NSFW.
 de - Depth Estimation.
 od - Object Detection.
 rvc - Uses RVC on an audio file.
-uvr - Uses UVR on an audio file.
+uvr - Uses UVR on an audio file.  <--- WORKING ON IT
 img2img - Image to Image.
 qa - Question Answering.
 """
-
-__cache_files__: list[str] = []
-
-def EmptyCache() -> None:
-    # Delete all the cache files
-    for file in __cache_files__:
-        try:
-            os.remove(file)
-            __cache_files__.remove(file)
-        except:
-            print(f"Could not delete cache file '{file}'. Ignoring.")
-
-def __create_file__(FileType: str, FileData: bytes | str) -> str:
-    # Set file extension
-    if (FileType == "image"):
-        ext = "png"
-    elif (FileType == "audio"):
-        ext = "wav"
-    
-    # Set file name
-    fName = f"temp_input_file_0.{ext}"
-
-    # Check if name exists
-    while (os.path.exists(fName)):
-        # It exists, change name
-        fName = f"temp_input_file_{random.randint(-99999, 99999)}.{ext}"
-    
-    # Check bytes type
-    if (type(FileData) == str):
-        # Base64 encoded, decode
-        FileData = base64.b64decode(FileData)
-
-    # Add the bytes to the file
-    with open(fName, "wb") as f:
-        f.write(FileData)
-
-    # Return the file name
-    return fName
 
 def GetServicesAndIndexes() -> dict[str, int]:
     # Create the dict
@@ -192,72 +155,219 @@ def OffloadAll(Exclude: dict[str, list[int]]) -> None:
             # It isn't, offload
             __offload_model__(task, index)
 
-def GetResponseFromInternet(Index: int, SearchPrompt: str, Question: str, SearchSystem: str, Count: int, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None) -> Iterator[dict[str, any]]:
-    # Delete empty conversation
-    conv.DeleteConversation("", "")
+def GetResponseFromInternet(
+        Index: int,
+        Keywords: str,
+        Question: str,
+        Count: int, AIArgs: str | list[str] | None,
+        ExtraSystemPrompts: list[str] | str,
+        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+        Conversation: list[str],
+        MaxLength: int | None,
+        Temperature: float | None,
+        TopP: float | None,
+        TopK: int | None
+    ) -> Iterator[dict[str, any]]:
+    # Search for websites
+    internetResults = internet.Search__Websites(Keywords, Count)
+    return GetResponseFromInternet_URL(
+        Index,
+        internetResults,
+        Question,
+        AIArgs,
+        ExtraSystemPrompts,
+        UseDefaultSystemPrompts,
+        Conversation,
+        MaxLength,
+        Temperature,
+        TopP,
+        TopK
+    )
+
+def GetResponseFromInternet_URL(
+        Index: int,
+        URL: str | list[str],
+        Question: str,
+        AIArgs: str | list[str] | None,
+        ExtraSystemPrompts: list[str] | str,
+        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+        Conversation: list[str],
+        MaxLength: int | None,
+        Temperature: float | None,
+        TopP: float | None,
+        TopK: int | None
+    ) -> Iterator[dict[str, any]]:
+    # Set system prompt
+    if (isinstance(ExtraSystemPrompts, list)):
+        ExtraSystemPrompts = "\n".join(ExtraSystemPrompts)
+    
+    if (isinstance(URL, str)):
+        sysPrompt = f"You're answering a question with the results obtained from the website `{URL}`.\n{ExtraSystemPrompts}".strip()
+    else:
+        sysPrompt = f"You're answering a question with the results obtained from internet.\n{ExtraSystemPrompts}".strip()
 
     # Set limits
     minLength = cfg.current_data["internet"]["min_length"]
     maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]              # Chatbot context length
-    maxLength -= len(cbbasics.GetDefaultSystemPrompts())                # Default I4.0 system prompts
-    maxLength -= len(cbbasics.GetPersonalitySystemPrompts(AIArgs))      # I4.0 personality system prompts
-    maxLength -= len(ExtraSystemPrompts)                                # Extra system prompts defined by the user
-    maxLength -= len(cfg.current_data["custom_system_messages"])        # Extra system prompts defined by the server
-    maxLength -= 22                                                     # Internet template
+    maxLength -= len(sysPrompt)                                         # System prompts
+    maxLength -= 51 + len(Question)                                     # Internet template
     maxLength -= 1                                                      # Just to make sure the ctx is not exceed
 
     # Check if max length is less than/equal to 0
     if (maxLength <= 0):
         raise Exception("Context length of the model is too small!")
-
-    # Search over internet
-    if (SearchSystem == "websites" or SearchSystem == "website"):
-        # Search for websites
-        internetResults = internet.Search__Websites(SearchPrompt, Count)
-        internetResponse = ""
-
-        # For each result
-        for result in internetResults:
-            try:
-                # Try to append it to the internet response
-                internetResponse += internet.ReadTextFromWebsite(result, maxLength, minLength) + "\n"
-            except:
-                # Ignore error
-                continue
-    elif (SearchSystem == "news"):
-        # Search for news
-        internetResults = internet.Search__News(SearchPrompt, Count)
-        internetResponse = "\n".join(internetResults)
-
-        # Check if internet response length is 0
-        if (len(internetResponse.strip()) == 0):
-            # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count, AIArgs, ExtraSystemPrompts, UseDefaultSystemPrompts)
-        else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
-    elif (SearchSystem == "chat"):
-        # Obtain the response from the chat
-        internetResponse = internet.Search__Chat(f"{SearchPrompt}\n{Question}", cfg.current_data["internet_chat"])
-        internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
-    elif (SearchSystem == "maps"):
-        # Search for nearby places
-        internetResults = internet.Search__Maps(SearchPrompt, 15, Count)
-        internetResponse = "\n".join(internetResults)
-        
-        # Check if internet response length is 0
-        if (len(internetResponse.strip()) == 0):
-            # It is, get the response from the websites
-            return GetResponseFromInternet(Index, SearchPrompt, Question, "websites", Count, AIArgs, ExtraSystemPrompts, UseDefaultSystemPrompts)
-        else:
-            internetResponse = internet.__apply_limit_to_text__(internetResponse, maxLength, minLength)
+    
+    # Read the website or websites
+    if (isinstance(URL, str)):
+        try:
+            internetData = f"```plaintext\n{internet.ReadTextFromWebsite(URL, maxLength, minLength)}\n```"
+        except:
+            internetData = "Error reading data from the internet."
     else:
-        # Raise error
-        raise ValueError("Invalid SearchSystem. Use 'websites', 'answers', 'news', 'chat' or 'maps'.")
-
+        for url in URL:
+            try:
+                internetData = f"Website \"{url}\":\n```plaintext\n{internet.ReadTextFromWebsite(url, maxLength, minLength)}\n```"
+            except:
+                internetData = "Error reading data from the website."
+    
     # Return the response
-    return MakePrompt(Index, f"Internet:\n{internetResponse}\n\nQuestion: {Question}", [], "chatbot", AIArgs, ExtraSystemPrompts, ["", ""], UseDefaultSystemPrompts, [])
+    return MakePrompt(
+        Index,
+        f"Internet data:\n{internetData}\nQuestion to answer: {Question}",
+        [],
+        "chatbot",
+        AIArgs,
+        sysPrompt,
+        Conversation,
+        UseDefaultSystemPrompts,
+        [],
+        [],
+        MaxLength,
+        Temperature,
+        TopP,
+        TopK
+    )
 
-def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: str, AIArgs: str | list[str] | None = None, ExtraSystemPrompts: list[str] | str = [], Conversation: list[str] = ["", ""], UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None, AllowedTools: list[str] | str | None = None, ExtraTools: list[dict[str, str | dict[str, any]]] = [], MaxLength: int | None = None, Temperature: float | None = None) -> Iterator[dict[str, any]]:
+def InternetResearch(
+        Index: int,
+        Keywords: str,
+        Question: str,
+        AIArgs: str | list[str] | None,
+        ExtraSystemPrompts: list[str] | str,
+        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+        Conversation: list[str],
+        MaxLength: int | None,
+        Temperature: float | None,
+        TopP: float | None,
+        TopK: int | None
+    ) -> Iterator[dict[str, any]]:
+    # Get the internet results
+    internetResults = internet.Search__Websites(Keywords, cfg.current_data["internet"]["max_results"])
+    internetResponses = []
+
+    # Yield a token
+    yield {"response": f"[INTERNET RESEARCH (0/{len(internetResults)})]\n", "files": []}
+
+    # For each internet result
+    for id, website in enumerate(internetResults):
+        # Clear the conversation
+        conv.DeleteConversation("", "")
+
+        # Get the chatbot response from the internet
+        response = GetResponseFromInternet_URL(
+            Index,
+            website,
+            Question,
+            "",
+            "",
+            False,
+            ["", ""],
+            None,
+            Temperature,
+            TopP,
+            TopK
+        )
+        strResponse = ""
+
+        # For each token
+        for token in response:
+            # Append to the strResponse
+            strResponse += str(token["response"])
+        
+        # Append the full response
+        internetResponses.append(strResponse.strip())
+
+        # Yield a token
+        yield {"response": f"[INTERNET RESEARCH ({id + 1}/{len(internetResults)})]\n", "files": []}
+    
+    # Set system prompt
+    if (isinstance(ExtraSystemPrompts, list)):
+        ExtraSystemPrompts = "\n".join(ExtraSystemPrompts)
+    
+    sysPrompt = f"You're answering a question with the results obtained from internet.\n{ExtraSystemPrompts}".strip()
+    
+    # Set limits and other variables
+    maxLength = cfg.GetInfoOfTask("chatbot", Index)["ctx"]              # Chatbot context length
+    maxLength -= len(sysPrompt)                                         # System prompts
+    maxLength -= 51 + len(Question)                                     # Internet template
+    maxLength -= 1                                                      # Just to make sure the ctx is not exceed
+    reasoningMode = cfg.current_data["internet"]["research"]["reasoning_mode"]
+
+    # Convert results list to string
+    results = "".join([f"Website #{wID} response:\n```plaintext\n{wRes}\n```\n" for wID, wRes in enumerate(internetResponses)])
+
+    # Check length and change the reasoning mode if needed
+    if (len(results) > maxLength and reasoningMode < 0):
+        reasoningMode = 1
+    
+    # Cut the results if the reasoning is disabled
+    while (reasoningMode == 1 and results.count("<think>") > 0 and results.count("</think>") > 0):
+        results = results[results.index("</think>") + 8:]
+    
+    # Check length and cut the response if needed
+    if (len(results) > maxLength):
+        results = results[:maxLength]
+        results = results[:results.rfind("```")]
+    
+    # Send prompt to the chatbot
+    response = MakePrompt(
+        Index,
+        f"Internet data:\n{results}\nQuestion to answer: {Question}",
+        [],
+        "chatbot",
+        AIArgs,
+        sysPrompt,
+        Conversation,
+        UseDefaultSystemPrompts,
+        [],
+        [],
+        MaxLength,
+        Temperature,
+        TopP,
+        TopK
+    )
+
+    # For each token
+    for token in response:
+        # Yield the token
+        yield token
+
+def MakePrompt(
+        Index: int,
+        Prompt: str,
+        Files: list[dict[str, str]],
+        Service: str,
+        AIArgs: str | list[str] | None = None,
+        ExtraSystemPrompts: list[str] | str = [],
+        Conversation: list[str] = ["", ""],
+        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None,
+        AllowedTools: list[str] | str | None = None,
+        ExtraTools: list[dict[str, str | dict[str, any]]] = [],
+        MaxLength: int | None = None,
+        Temperature: float | None = None,
+        TopP: float | None = None,
+        TopK: int | None = None
+    ) -> Iterator[dict[str, any]]:
     # Define I4.0's personality
     if (AIArgs == None):
         AIArgs = cfg.current_data["ai_args"].split("+")
@@ -291,20 +401,33 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
     
     # Add system prompt if tools > 0
     if (len(tools) > 0):
-        sp.append("You can use multiple tools in the same response.")
+        sp.append("To use a tool, you must write something like this:\n\"\"\"\n<tool_call>\n{function parameters}\n</tool_call>\n\"\"\"")
 
     # Get the personality
     sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
 
     # Define the use of the default system prompts
-    if (UseDefaultSystemPrompts == None):
-        UseDefaultSystemPrompts = cfg.current_data["use_default_system_messages"]
-    
-    if (type(UseDefaultSystemPrompts) == list or type(UseDefaultSystemPrompts) == list[bool] or type(UseDefaultSystemPrompts) == list[None]):
-        UseDefaultSystemPrompts = (UseDefaultSystemPrompts[0], UseDefaultSystemPrompts[1])  # Ignore any other values of the list
-    
-    if (type(UseDefaultSystemPrompts) == bool):
-        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts)
+    if (isinstance(UseDefaultSystemPrompts, list) or isinstance(UseDefaultSystemPrompts, tuple)):
+        udsp1 = udsp2 = udsp3 = cfg.current_data["use_default_system_messages"]
+        udsp4 = cfg.current_data["use_dynamic_system_args"]
+
+        if (len(UseDefaultSystemPrompts) >= 1 and UseDefaultSystemPrompts[0] is not None):
+            udsp1 = bool(UseDefaultSystemPrompts[0])
+            
+        if (len(UseDefaultSystemPrompts) >= 2 and UseDefaultSystemPrompts[1] is not None):
+            udsp2 = bool(UseDefaultSystemPrompts[1])
+            
+        if (len(UseDefaultSystemPrompts) >= 3 and UseDefaultSystemPrompts[2] is not None):
+            udsp3 = bool(UseDefaultSystemPrompts[2])
+            
+        if (len(UseDefaultSystemPrompts) >= 4 and UseDefaultSystemPrompts[3] is not None):
+            udsp4 = bool(UseDefaultSystemPrompts[3])
+
+        UseDefaultSystemPrompts = (udsp1, udsp2, udsp3, udsp4)
+    elif (isinstance(UseDefaultSystemPrompts, bool)):
+        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts)
+    else:
+        UseDefaultSystemPrompts = (cfg.current_data["use_default_system_messages"], cfg.current_data["use_default_system_messages"], cfg.current_data["use_default_system_messages"], cfg.current_data["use_dynamic_system_args"])
     
     if (UseDefaultSystemPrompts[0]):
         # Get default system prompts
@@ -315,17 +438,17 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         sp += cfg.current_data["custom_system_messages"].split("\n")
     
     # Check if the info contains information about the model and it's not empty
-    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"]).strip()) > 0 and UseDefaultSystemPrompts[1]):
+    if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"]).strip()) > 0 and UseDefaultSystemPrompts[2]):
         # Add the model info to the model
         sp.append(str(info["model_info"]))
     
     # Add extra system prompts
-    if ((type(ExtraSystemPrompts) == list or type(ExtraSystemPrompts) == list[str]) and len(ExtraSystemPrompts) > 0):
+    if (isinstance(ExtraSystemPrompts, list) and len(ExtraSystemPrompts) > 0):
         sp += ExtraSystemPrompts
     elif (len(ExtraSystemPrompts) > 0):
         sp.append(str(ExtraSystemPrompts))
     
-    if (cfg.current_data["use_dynamic_system_args"]):
+    if (UseDefaultSystemPrompts[3]):
         # Get dynamic system prompts (for current date, etc.)
         # Get the current date
         cDate = datetime.datetime.now()
@@ -374,11 +497,10 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
             raise Exception("File exceeds the maximum file size allowed by the server.")
 
         # Create file
-        f = __create_file__(file["type"], file["data"])
+        f = temp.CreateTemporalFile(file["type"], base64.b64decode(file["data"]) if (isinstance(file["data"], str)) else file["data"])
 
         # Replace from the list
         Files[Files.index(file)]["data"] = f
-        __cache_files__.append(f)
 
         # Check NSFW
         if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"  and len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0):
@@ -400,10 +522,10 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Get chatbot response
         if (len(cfg.GetInfoOfTask(Service, Index)["multimodal"].strip()) > 0):
             # Use multimodal chatbot
-            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature)
+            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK)
         else:
             # Use normal chatbot
-            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature)
+            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK)
 
         # For every token
         for token in textResponse:
@@ -583,18 +705,6 @@ def MakePrompt(Index: int, Prompt: str, Files: list[dict[str, str]], Service: st
         # Return an error
         yield {"response": "ERROR! Service not found.", "files": []}
 
-    # For each file
-    for file in Files:
-        # Remove the file from the server
-        os.remove(file["data"])
-        
-        try:
-            # Try to remove from the cache
-            __cache_files__.remove(file["data"])
-        except:
-            # Error removing the file
-            print(f"   Error removing from cache '{file['data']}'. Ignoring.")
-
 def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Get generated images
     imgs_response = text2img.Inference(Index, Prompt)
@@ -696,7 +806,7 @@ def IsImageNSFW(Image: str | Image.Image, Index: int) -> bool:
     # If not, return none
     return None
 
-def DoUVR(Index: int, AudioData: str) -> list[str]:
+"""def DoUVR(Index: int, AudioData: str) -> list[str]:
     # Convert audio data to json
     AudioData = cfg.JSONDeserializer(AudioData)
 
@@ -708,7 +818,7 @@ def DoUVR(Index: int, AudioData: str) -> list[str]:
         data[data.index(aud)] = base64.b64encode(aud).decode("utf-8")
 
     # Return the data
-    return data
+    return data"""
 
 def DoImg2Img(Index: int, Prompt: str) -> list[str]:
     # Convert image data to json

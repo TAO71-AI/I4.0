@@ -53,11 +53,16 @@ def SaveMemory(User: str, Memory: str | list[str] | dict[str, list[str]]) -> Non
     # Execute the command
     ExecuteCommandOnDatabase(f"INSERT INTO {cfg.current_data['db']['memories']['table']} ({cfg.current_data['db']['memories']['user']}, {cfg.current_data['db']['memories']['memory']}) VALUES (%s, %s)", [User, Memory])
 
-def DeleteMemory(User: str, Memory: str) -> None:
+def DeleteMemory(User: str, Memory: str | int) -> None:
     """
     Deletes a memory from the DB.
     """
-    ExecuteCommandOnDatabase(f"DELETE FROM {cfg.current_data['db']['memories']['table']} WHERE {cfg.current_data['db']['memories']['user']} = %s AND {cfg.current_data['db']['conversations']['memory']} = %s", [User, Memory])
+    # Check if the memory is and integer
+    if (isinstance(Memory, int)):
+        # Get the memory index
+        Memory = GetMemory(User, Memory)
+
+    ExecuteCommandOnDatabase(f"DELETE FROM {cfg.current_data['db']['memories']['table']} WHERE {cfg.current_data['db']['memories']['user']} = %s AND {cfg.current_data['db']['memories']['memory']} = %s", [User, Memory])
 
 def DeleteMemories(User: str) -> None:
     """

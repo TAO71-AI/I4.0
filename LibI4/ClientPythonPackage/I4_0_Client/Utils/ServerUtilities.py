@@ -7,9 +7,12 @@ import cv2
 import numpy as np
 
 # Import I4.0 utilities
-from ..ServerConnection import PublicKey, SendAndWaitForStreaming, IsConnected, FindFirstServer, Connect
-from ..Config import Conf
+from .. import ServerConnection as ServerCon
+from ..Config import Conf as Config
 from ..Service import Service, ServiceManager
+
+# Create variables
+Conf: Config = Config()
 
 class SimulatedVisionV1():
     @staticmethod
@@ -198,7 +201,7 @@ class SimulatedVisionV2():
         return frames
     
     @staticmethod
-    async def ExecuteSimulatedVision(Files: dict[str, str], ForceNoConnect: bool) -> str:
+    async def ExecuteSimulatedVision(Files: list[dict[str, str]], ForceNoConnect: bool) -> str:
         """
         Executes the simulated vision.
         """
@@ -206,7 +209,7 @@ class SimulatedVisionV2():
         simulatedVision = ""
 
         # Get only the video files
-        files = SimulatedVisionV2.SeparateFiles(list(Files.values()))
+        files = SimulatedVisionV2.SeparateFiles(Files)
 
         # For each video
         for video in files:
@@ -226,10 +229,10 @@ class SimulatedVisionV2():
             simulatedVisionFrames = {}
 
             if (Conf.SimulatedVision_v1_Image2Text_Allow):
-                simulatedVisionFrames[f"Frame {len(list(simulatedVisionFrames.keys()))} description"] = await SimulatedVisionV1.__execute_simulated_vision__("[RESPONSE]", framesD, Service.ImageToText, Conf.SimulatedVision_v1_Image2Text_Index, ForceNoConnect)
+                simulatedVisionFrames[f"Frame {len(list(simulatedVisionFrames.keys())) + 1} description"] = await SimulatedVisionV1.__execute_simulated_vision__("[RESPONSE]", framesD, Service.ImageToText, Conf.SimulatedVision_v1_Image2Text_Index, ForceNoConnect)
             
             if (Conf.SimulatedVision_v1_ObjectDetection_Allow):
-                simulatedVisionFrames[f"Frame {len(list(simulatedVisionFrames.keys()))} objects detected"] = await SimulatedVisionV1.__execute_simulated_vision__("[RESPONSE]", framesD, Service.ObjectDetection, Conf.SimulatedVision_v1_ObjectDetection_Index, ForceNoConnect)
+                simulatedVisionFrames[f"Frame {len(list(simulatedVisionFrames.keys())) + 1} objects detected"] = await SimulatedVisionV1.__execute_simulated_vision__("[RESPONSE]", framesD, Service.ObjectDetection, Conf.SimulatedVision_v1_ObjectDetection_Index, ForceNoConnect)
             
             # Append the simulated vision of the video
             simulatedVision += f"Video {files.index(video) + 1}: {json.dumps(simulatedVisionFrames)}\n"
@@ -300,6 +303,12 @@ class SimulatedAuditionV1():
         )
         return response
 
+def __update_config__() -> None:
+    """
+    Updates the configuration in the server connection.
+    """
+    ServerCon.Conf = Conf
+
 async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> AsyncIterator[dict[str, any]]:
     """
     Executes a very-basic command on the server.
@@ -307,6 +316,9 @@ async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Asy
 
     Index == -1 automatically gets the model with the smallest queue size.
     """
+
+    # Update config
+    __update_config__()
 
     # Serialize a very basic, minimum, data to send to the server
     jsonData = json.dumps({
@@ -316,13 +328,14 @@ async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Asy
         "Service": Service,
         "Conversation": Conf.Chatbot_Conversation,
         "Index": Index,
-        "PublicKey": PublicKey.decode("utf-8"),
+        "PublicKey": ServerCon.PublicKey.decode("utf-8"),
         "MaxLength": Conf.MaxLength,
-        "Temperature": Conf.Temperature
+        "Temperature": Conf.Temperature,
+        "AllowDataSave": Conf.AllowDataSave
     })
 
     # Return the response (probably serialized)
-    async for token in SendAndWaitForStreaming(jsonData):
+    async for token in ServerCon.SendAndWaitForStreaming(jsonData):
         yield token
 
 async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService: Service, Index: int = -1, ForceNoConnect: bool = False, FilesPath: bool = True) -> AsyncIterator[dict[str, any]]:
@@ -336,12 +349,15 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
     If ForceNoConnect is true, this will not connect to any server, so you must be connected to one first.
     """
 
+    # Update config
+    __update_config__()
+
     # Connect to a server
     if (not ForceNoConnect):
         # Connect to the first server to the service
-        server = await FindFirstServer(ServerService)
-        await Connect(server)
-    elif (not IsConnected()):
+        server = await ServerCon.FindFirstServer(ServerService)
+        await ServerCon.Connect(server)
+    elif (not ServerCon.IsConnected()):
         raise Exception("Please connect to a server first or set `ForceNoConnect` to false.")
 
     # Copy the files list to a new one
@@ -405,59 +421,57 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
         })
     elif (ServerService == Service.Chatbot):
         # Check if the chatbot is multimodal
-        chatbotMultimodal = None
+        chatbotMultimodal = ""
+        simulatedPrompt = ""
 
         async for token in ExecuteCommand("is_chatbot_multimodal", "", Index):
             # Check if the response is an error
-            if (token["response"].lower().startswith("error")):
+            if (token["response"].lower().startswith("error") or len(token["errors"]) > 0):
                 # Error, break the loop
                 break
 
-            # Not an error, set boolean
-            chatbotMultimodal = token["response"].lower() == "true"
+            # Not an error, set string
+            chatbotMultimodal = token["response"].lower()
 
-        if (chatbotMultimodal != None and not chatbotMultimodal and len(files) > 0):
-            # Is not multimodal and files length is > 0, apply simulated vision template
-            simulatedVisionPrompt = ""
+        if ("image" not in chatbotMultimodal):
+            # Model doesn't support images. Use Simulated Vision V1
 
-            # Get response from Img2Text (Simulated Vision V1)
+            # Use the `img2text` service if allowed in the configuration
             if (Conf.SimulatedVision_v1_Image2Text_Allow):
                 try:
-                    # Try to send the message
-                    simulatedVisionPrompt += await SimulatedVisionV1.ExecuteImageToText(files, Conf.SimulatedVision_v1_Image2Text_Index, ForceNoConnect)
+                    simulatedPrompt += await SimulatedVisionV1.ExecuteImageToText(files, ForceNoConnect)
                 except:
-                    # Ignore error
-                    pass
-
-            # Get response from ObjectDetection (Simulated Vision V1)
+                    pass  # Error. Ignore
+            
+            # Use the `od` service if allowed in the configuration
             if (Conf.SimulatedVision_v1_ObjectDetection_Allow):
                 try:
-                    # Try to send the message
-                    simulatedVisionPrompt += await SimulatedVisionV1.ExecuteObjectDetection(files, Conf.SimulatedVision_v1_ObjectDetection_Index, ForceNoConnect)
+                    simulatedPrompt += await SimulatedVisionV1.ExecuteObjectDetection(files, ForceNoConnect)
                 except:
-                    # Ignore error
-                    pass
-            
-            # Get response from Simulated Vision V2
+                    pass  # Error. Ignore
+        
+        if ("video" not in chatbotMultimodal):
+            # Model doesn't support videos. Use Simulated Vision V2
+
             if (Conf.SimulatedVision_v2_Video_Allow):
                 try:
-                    # Try to send the message
-                    simulatedVisionPrompt += await SimulatedVisionV2.ExecuteSimulatedVision(files, ForceNoConnect)
+                    simulatedPrompt += await SimulatedVisionV2.ExecuteSimulatedVision(files, ForceNoConnect)
                 except:
-                    # Ignore error
-                    pass
-            
-            # Get response from Speech2Text (Simulated Audition V1)
-            if (Conf.SimulatedAudition_v1_SpeechToText):
-                try:
-                    # Try to send the message
-                    simulatedVisionPrompt += await SimulatedAuditionV1.ExecuteSpeechToText(files, ForceNoConnect)
-                except:
-                    # Ignore error
-                    pass
+                    pass  # Error. Ignore
+        
+        if ("audio" not in chatbotMultimodal):
+            # Model doesn't support audios. Use Simulated Audition V1
 
-            # Replace the system prompts
-            systemPrompt += f"\n{simulatedVisionPrompt}"
+            # Use the `speech2text` service if allowed in the configuration
+            if (Conf.SimulatedAudition_v1_SpeechToText_Allow):
+                try:
+                    simulatedPrompt += await SimulatedAuditionV1.ExecuteSpeechToText(files, ForceNoConnect)
+                except:
+                    pass  # Error. Ignore
+
+        # Add into the system prompts
+        if (len(simulatedPrompt.strip()) > 0):
+            systemPrompt += f"\n{simulatedPrompt}"
 
     # Set prompt
     Prompt = json.dumps({
@@ -470,15 +484,18 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
         "SystemPrompts": systemPrompt.strip(),
         "UseDefaultSystemPrompts": Conf.Chatbot_AllowServerSystemPrompts,
         "Index": Index,
-        "PublicKey": PublicKey.decode("utf-8"),
+        "PublicKey": ServerCon.PublicKey.decode("utf-8"),
         "AllowedTools": Conf.AllowedTools,
         "ExtraTools": Conf.ExtraTools,
         "MaxLength": Conf.MaxLength,
-        "Temperature": Conf.Temperature
+        "Temperature": Conf.Temperature,
+        "AllowDataSave": Conf.AllowDataSave,
+        "TopP": Conf.Chatbot_TopP,
+        "TopK": Conf.Chatbot_TopK
     })
 
     # Return the response
-    async for token in SendAndWaitForStreaming(Prompt):
+    async for token in ServerCon.SendAndWaitForStreaming(Prompt):
         yield token
 
 async def GetQueueForService(QueueService: Service, Index: int = -1) -> tuple[int, int]:
@@ -531,9 +548,9 @@ async def DeleteConversation(Conversation: str | None) -> None:
         result = response["response"].lower().strip()
 
         # Check if response it's invalid
-        if (result != "conversation deleted."):
+        if (result != "conversation deleted." or len(response["errors"]) > 0):
             # It's invalid, throw an error
-            raise Exception(f"Error deleting the conversation. Got `{result}`; `conversation deleted.` expected.")
+            raise Exception(f"Error deleting the conversation. Got `{result}`; `conversation deleted.` expected. Errors: {response['errors']}")
 
         # It's a valid response, return
         return
@@ -566,9 +583,9 @@ async def DeleteMemory(Memory: int = -1) -> None:
         result = response["response"].lower().strip()
 
         # Check if response it's invalid
-        if (result != "memories deleted." and result != "memory deleted."):
+        if ((result != "memories deleted." and result != "memory deleted.") or len(response["errors"]) > 0):
             # It's invalid, throw an error
-            raise Exception(f"Error deleting the memories/memory. Got `{result}`; `memories deleted.` or `memory deleted.` expected.")
+            raise Exception(f"Error deleting the memories/memory. Got `{result}`; `memories deleted.` or `memory deleted.` expected. Errors: {response['errors']}")
 
         # It's a valid response, return
         return

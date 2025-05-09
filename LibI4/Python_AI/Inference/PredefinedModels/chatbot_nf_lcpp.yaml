@@ -1,8 +1,23 @@
-# NOTE:
-# Every quant under Q4_K_S should not be used, the results are very bad.
-# Also, prefer L (or XL for Q3_K) quants if the file size is similar, it will give you better results since it uses the Q8_0 for embed and output weights.
-# We recommend to use Q6_K, Q6_K_L and Q8_0 quants instead of the f16/f32 quants, since the results are very good and requires less compute power.
-# ^--- For small models (<=3B parameters) we recommend only using Q8_0, f16 or f32, since this gives pretty good results and, due to the small size of the model, doesn't require a lot of compute power. Using a smaller quant may give bad results.
+# A small guide to the quant you should choose:
+# Q2_K      - VERY low quality, but it's still usable for some basic tasks.
+# Q2_K_L    - Almost the same as Q2_K. The embedding and output weights are in Q8_0.
+# Q3_K_S    - Very low quality.
+# Q3_K_M    - Low quality.
+# Q3_K_L    - Can be usable.
+# Q3_K_XL   - Almost the same as Q3_K_L. The embedding and output weights are in Q8_0.
+# Q4_K_S    - Decent quality.
+# Q4_K_M    - Good quality.                                                                 <--- RECOMMENDED
+# Q4_K_L    - Almost the same as Q4_K_M. The embedding and output weights are in Q8_0.
+# Q5_K_S    - High quality.                                                                 <--- RECOMMENDED
+# Q5_K_M    - High quality. A bit more than Q5_K_S.                                         <--- RECOMMENDED
+# Q5_K_L    - Almost the same as Q5_K_M. The embedding and output weights are in Q8_0.
+# Q6_K      - Very high quality, almost like F16 or BF16.                                   <--- RECOMMENDED
+# Q6_K_L    - Almost the same as Q6_K. The embedding and output weights are in Q8_0.
+# Q8_0      - Practically the same quality as F16 or BF16. Usually is overkill.             <--- RECOMMENDED (but mostly for small models, ~3B parameters or less. For larger models, Q6_K is more recommended)
+# F16/BF16  - Overkill.
+# F32       - Overkill.
+#
+# The Q*_K_L (except Q3_K_L) and Q3_K_XL are not recommended because they require a bit more of RAM and compute power and the results are practically the same.
 
 qwen2.5-0.5b-instruct:
     # License: Apache 2.0
@@ -26,8 +41,6 @@ qwen2.5-0.5b-instruct:
         f16: "Qwen2.5-0.5B-Instruct-f16.gguf"            # 0.99 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen2"
-    notes: "A very small model, good for simple things and only in english; you may experience problems using it in another language. Recommended only if you have less than 4GB of RAM."
 
 qwen2.5-1.5b-instruct:
     # License: Apache 2.0
@@ -51,8 +64,6 @@ qwen2.5-1.5b-instruct:
         f16: "Qwen2.5-1.5B-Instruct-f16.gguf"            # 3.09 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen2"
-    notes: "A small model but can do more things than the 0.5B version. Only in English; you may experience problems using it in another language. Recommended only if you have 4 GB of RAM."
 
 qwen2.5-3b-instruct:
     # License: Qwen-research
@@ -76,8 +87,6 @@ qwen2.5-3b-instruct:
         f16: "Qwen2.5-3B-Instruct-f16.gguf"            # 5.31 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen2"
-    notes: "A small model but decent model. Recommended if you have 8 GB of RAM."
 
 qwen2.5-7b-instruct:
     # License: Apache 2.0
@@ -101,8 +110,6 @@ qwen2.5-7b-instruct:
         f16: "Qwen2.5-7B-Instruct-f16.gguf"            # 15.2 GB
         default: "f16"
         recommended: "q8_0"
-    template: "qwen2"
-    notes: "A good model, recommended if you have 16 GB of RAM."
 
 qwen2.5-14b-instruct:
     # License: Apache 2.0
@@ -126,8 +133,6 @@ qwen2.5-14b-instruct:
         f16: "Qwen2.5-14B-Instruct-f16.gguf"            # 29.5 GB
         default: "f16"
         recommended: "q6_k_l"
-    template: "qwen2"
-    notes: "A very good model, recommended if you have 32 GB of RAM."
 
 qwen2.5-32b-instruct:
     # License: Apache 2.0
@@ -151,8 +156,6 @@ qwen2.5-32b-instruct:
         # F16 not available right now
         default: "q8_0"
         recommended: "q6_k_l"
-    template: "qwen2"
-    notes: "A very good model, recommended if you have 32 GB of RAM."
 
 rombos-llm-v2.6-qwen-14b:
     # License: Apache 2.0
@@ -176,8 +179,6 @@ rombos-llm-v2.6-qwen-14b:
         f16: "Rombos-LLM-V2.6-Qwen-14b-f16.gguf"            # 29.5 GB
         default: "f16"
         recommended: "q6_k_l"
-    template: "qwen2"
-    notes: "Fine-tune of Qwen2.5-14B-Instruct. Use this one instead of the default model; it's much better. Recommended if you have 32GB of RAM."
 
 mistral-nemo-instruct-2407:
     # License: Apache 2.0
@@ -202,8 +203,6 @@ mistral-nemo-instruct-2407:
         f32: "Mistral-Nemo-Instruct-2407-f32.gguf"            # 49.0 GB
         default: "f32"
         recommended: "f16"
-    template: "mistral-instruct"
-    notes: "Not very good compared to Qwen models."
 
 mixtral-8x7b-instruct-v0.1:
     # License: Apache 2.0
@@ -223,8 +222,6 @@ mixtral-8x7b-instruct-v0.1:
         f16: "Mixtral-8x7B-Instruct-v0.1-f16.gguf"            # 100.1 GB
         default: "f16"
         recommended: "q6_k_l"
-    template: "mixtral"
-    notes: "A great MoE, but Qwen models might be better."
 
 mistral-7b-instruct-v0.3:
     # License: Apache 2.0
@@ -243,8 +240,6 @@ mistral-7b-instruct-v0.3:
         f16: "Mistral-7B-Instruct-v0.3.f16.gguf"            # 14.5 GB
         default: "f16"
         recommended: "q8_0"
-    template: "mistral-instruct"
-    notes: "Not very good compared to Qwen models."
 
 smollm2-1.7b-instruct:
     # License: Apache 2.0
@@ -268,8 +263,6 @@ smollm2-1.7b-instruct:
         f16: "SmolLM2-1.7B-Instruct-f16.gguf"            # 3.42 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen2"
-    notes: "Prefer using Qwen 1.5B instead."
 
 smollm2-360m-instruct:
     # License: Apache 2.0
@@ -293,8 +286,6 @@ smollm2-360m-instruct:
         f16: "SmolLM2-360M-Instruct-f16.gguf"            # 0.73 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen2"
-    notes: "Do not use this model unless you have 2 GB of RAM."
 
 smollm2-135m-instruct:
     # License: Apache 2.0
@@ -318,8 +309,6 @@ smollm2-135m-instruct:
         f16: "SmolLM2-135M-Instruct-f16.gguf"            # 0.27 GB
         default: "f16"
         recommended: "f16"
-    template: "qwen2"
-    notes: "Do not use this model unless you have 1 GB of RAM."
 
 llama-3.1-8b-instruct:
     # License: Llama3.1
@@ -344,8 +333,6 @@ llama-3.1-8b-instruct:
         f32: "Meta-Llama-3.1-8B-Instruct-f32.gguf"            # 32.1 GB
         default: "f32"
         recommended: "q8_0"
-    template: "llama-3"
-    notes: "Better than Qwen 7B but has a limit on how it can be commercialized."
 
 llama-3.2-3b-instruct:
     # License: Llama3.2
@@ -365,8 +352,6 @@ llama-3.2-3b-instruct:
         f16: "Llama-3.2-3B-Instruct-f16.gguf"            # 6.43 GB
         default: "f16"
         recommended: "q8_0"
-    template: "llama-3"
-    notes: "Better than Qwen 3B."
 
 llama-3.2-1b-instruct:
     # License: Llama3.2
@@ -386,8 +371,6 @@ llama-3.2-1b-instruct:
         f16: "Llama-3.2-1B-Instruct-f16.gguf"            # 2.48 GB
         default: "f16"
         recommended: "f16"
-    template: "llama-3"
-    notes: "Prefer using Qwen 1.5B; this one is slightly better but has a limit on how it can be commercialized."
 
 granite-3.0-2b-instruct:
     # License: Apache 2.0
@@ -410,8 +393,6 @@ granite-3.0-2b-instruct:
         f16: "granite-3.0-2b-instruct-f16.gguf"            # 5.27 GB
         default: "f16"
         recommended: "f16"
-    template: ""
-    notes: "Similar to Qwen 3B."
 
 granite-3.0-8b-instruct:
     # License: Apache 2.0
@@ -435,8 +416,6 @@ granite-3.0-8b-instruct:
         f16: "granite-3.0-8b-instruct-f16.gguf"            # 16.3 GB
         default: "f16"
         recommended: "q8_0"
-    template: ""
-    notes: "Similar to Qwen 7B."
 
 marco-o1:
     # License: Apache 2.0
@@ -461,8 +440,6 @@ marco-o1:
         f32: "Marco-o1-f32.gguf"            # 30.5 GB
         default: "f16"
         recommended: "q8_0"
-    template: "qwen2"
-    notes: "Fine-tune of Qwen 7B, uses reasoning."
 
 qwq-32b-preview:
     # License: Apache 2.0
@@ -484,8 +461,6 @@ qwq-32b-preview:
         q6_k_l: "QwQ-32B-Preview-Q6_K_L.gguf"      # 27.3 GB
         q8_0: "QwQ-32B-Preview-Q8_0.gguf"          # 34.8 GB
         # F16 not available right now
-    template: "qwen2"
-    notes: "Similar to Qwen 32B, uses reasoning."
 
 deepseek-r1-distill-qwen-1.5b:
     # License: MIT
@@ -508,8 +483,6 @@ deepseek-r1-distill-qwen-1.5b:
         q8_0: "DeepSeek-R1-Distill-Qwen-1.5B-Q8_0.gguf"         # 1.89 GB
         f16: "DeepSeek-R1-Distill-Qwen-1.5B-f16.gguf"           # 3.56 GB
         f32: "DeepSeek-R1-Distill-Qwen-1.5B-f32.gguf"           # 7.11 GB
-    template: "qwen2"
-    notes: "Distilled from Qwen 1.5B, uses reasoning."
 
 deepseek-r1-distill-qwen-7b:
     # License: MIT
@@ -532,8 +505,6 @@ deepseek-r1-distill-qwen-7b:
         q8_0: "DeepSeek-R1-Distill-Qwen-7B-Q8_0.gguf"           # 8.10 GB
         f16: "DeepSeek-R1-Distill-Qwen-7B-f16.gguf"             # 15.2 GB
         f32: "DeepSeek-R1-Distill-Qwen-7B-f32.gguf"             # 30.5 GB
-    template: "qwen2"
-    notes: "Distilled from Qwen 7B, uses reasoning."
 
 deepseek-r1-distill-qwen-14b:
     # License: MIT
@@ -556,8 +527,6 @@ deepseek-r1-distill-qwen-14b:
         q8_0: "DeepSeek-R1-Distill-Qwen-14B-Q8_0.gguf"          # 15.7 GB
         f16: "DeepSeek-R1-Distill-Qwen-14B-f16.gguf"            # 26.6 GB
         # F32 not available right now
-    template: "qwen2"
-    notes: "Distilled from Qwen 14B, uses reasoning."
 
 deepseek-r1-distill-qwen-32b:
     # License: MIT
@@ -579,8 +548,6 @@ deepseek-r1-distill-qwen-32b:
         q6_k_l: "DeepSeek-R1-Distill-Qwen-32B-Q6_K_L.gguf"      # 27.3 GB
         q8_0: "DeepSeek-R1-Distill-Qwen-32B-Q8_0.gguf"          # 34.8 GB
         # BF16 not available right now
-    template: "qwen2"
-    notes: "Distilled from Qwen 32B, uses reasoning."
 
 phi-4:
     # License: MIT
@@ -603,8 +570,6 @@ phi-4:
         q8_0: "phi-4-Q8_0.gguf"         # 15.6 GB
         f16: "phi-4-f16.gguf"           # 29.3 GB
         # F32 not available right now
-    template: "phi3"
-    notes: "A very good model, recommended if you have 32 GB of RAM."
 
 mistral-small-24b-instruct-2501:
     # License: Apache-2.0
@@ -627,8 +592,6 @@ mistral-small-24b-instruct-2501:
         q8_0: "Mistral-Small-24B-Instruct-2501-Q8_0.gguf"           # 25.0 GB
         f16: "Mistral-Small-24B-Instruct-2501-f16.gguf"             # 47.2 GB
         # F32 not available right now
-    template: ""
-    notes: ""
 
 deepscaler-1.5b-preview:
     # License: MIT
@@ -651,8 +614,6 @@ deepscaler-1.5b-preview:
         q8_0: "agentica-org_DeepScaleR-1.5B-Preview-Q8_0.gguf"           # 1.89 GB
         f16: "agentica-org_DeepScaleR-1.5B-Preview-f16.gguf"             # 3.56 GB
         f32: "agentica-org_DeepScaleR-1.5B-Preview-f32.gguf"             # 7.11 GB
-    template: "qwen2"
-    notes: "Very good and small reasoning model."
 
 virtuoso-small-v2:
     # License: Apache-2.0
@@ -675,5 +636,150 @@ virtuoso-small-v2:
         q8_0: "arcee-ai_Virtuoso-Small-v2-Q8_0.gguf"        # 15.7 GB
         f16: "arcee-ai_Virtuoso-Small-v2-f16.gguf"          # 29.5 GB
         # F32 not available right now
-    template: "qwen2"
-    notes: "Very good model!"
+
+qwen3-0.6b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-0.6B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-0.6B-Q2_K.gguf"        # 0.35 GB
+        q2_k_l: "Qwen_Qwen3-0.6B-Q2_K_L.gguf"    # 0.50 GB
+        q3_k_s: "Qwen_Qwen3-0.6B-Q3_K_S.gguf"    # 0.39 GB
+        q3_k_m: "Qwen_Qwen3-0.6B-Q3_K_M.gguf"    # 0.41 GB
+        q3_k_l: "Qwen_Qwen3-0.6B-Q3_K_L.gguf"    # 0.44 GB
+        q3_k_xl: "Qwen_Qwen3-0.6B-Q3_K_XL.gguf"  # 0.57 GB
+        q4_k_s: "Qwen_Qwen3-0.6B-Q4_K_S.gguf"    # 0.47 GB
+        q4_k_m: "Qwen_Qwen3-0.6B-Q4_K_M.gguf"    # 0.48 GB
+        q4_k_l: "Qwen_Qwen3-0.6B-Q4_K_L.gguf"    # 0.60 GB
+        q5_k_s: "Qwen_Qwen3-0.6B-Q5_K_S.gguf"    # 0.54 GB
+        q5_k_m: "Qwen_Qwen3-0.6B-Q5_K_M.gguf"    # 0.55 GB
+        q5_k_l: "Qwen_Qwen3-0.6B-Q5_K_L.gguf"    # 0.65 GB
+        q6_k: "Qwen_Qwen3-0.6B-Q6_K.gguf"        # 0.62 GB
+        q6_k_l: "Qwen_Qwen3-0.6B-Q6_K_L.gguf"    # 0.70 GB
+        q8_0: "Qwen_Qwen3-0.6B-Q8_0.gguf"        # 0.80 GB
+        bf16: "Qwen_Qwen3-0.6B-bf16.gguf"        # 1.51 GB
+
+qwen3-1.7b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-1.7B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-1.7B-Q2_K.gguf"        # 0.88 GB
+        q2_k_l: "Qwen_Qwen3-1.7B-Q2_K_L.gguf"    # 1.18 GB
+        q3_k_s: "Qwen_Qwen3-1.7B-Q3_K_S.gguf"    # 1.00 GB
+        q3_k_m: "Qwen_Qwen3-1.7B-Q3_K_M.gguf"    # 1.07 GB
+        q3_k_l: "Qwen_Qwen3-1.7B-Q3_K_L.gguf"    # 1.14 GB
+        q3_k_xl: "Qwen_Qwen3-1.7B-Q3_K_XL.gguf"  # 1.41 GB
+        q4_k_s: "Qwen_Qwen3-1.7B-Q4_K_S.gguf"    # 1.24 GB
+        q4_k_m: "Qwen_Qwen3-1.7B-Q4_K_M.gguf"    # 1.28 GB
+        q4_k_l: "Qwen_Qwen3-1.7B-Q4_K_L.gguf"    # 1.51 GB
+        q5_k_s: "Qwen_Qwen3-1.7B-Q5_K_S.gguf"    # 1.44 GB
+        q5_k_m: "Qwen_Qwen3-1.7B-Q5_K_M.gguf"    # 1.47 GB
+        q5_k_l: "Qwen_Qwen3-1.7B-Q5_K_L.gguf"    # 1.66 GB
+        q6_k: "Qwen_Qwen3-1.7B-Q6_K.gguf"        # 1.67 GB
+        q6_k_l: "Qwen_Qwen3-1.7B-Q6_K_L.gguf"    # 1.82 GB
+        q8_0: "Qwen_Qwen3-1.7B-Q8_0.gguf"        # 2.17 GB
+        bf16: "Qwen_Qwen3-1.7B-bf16.gguf"        # 4.07 GB
+
+qwen3-4b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-4B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-4B-Q2_K.gguf"        # 1.67 GB
+        q2_k_l: "Qwen_Qwen3-4B-Q2_K_L.gguf"    # 1.76 GB
+        q3_k_s: "Qwen_Qwen3-4B-Q3_K_S.gguf"    # 1.89 GB
+        q3_k_m: "Qwen_Qwen3-4B-Q3_K_M.gguf"    # 2.08 GB
+        q3_k_l: "Qwen_Qwen3-4B-Q3_K_L.gguf"    # 2.24 GB
+        q3_k_xl: "Qwen_Qwen3-4B-Q3_K_XL.gguf"  # 2.33 GB
+        q4_k_s: "Qwen_Qwen3-4B-Q4_K_S.gguf"    # 2.38 GB
+        q4_k_m: "Qwen_Qwen3-4B-Q4_K_M.gguf"    # 2.50 GB
+        q4_k_l: "Qwen_Qwen3-4B-Q4_K_L.gguf"    # 2.59 GB
+        q5_k_s: "Qwen_Qwen3-4B-Q5_K_S.gguf"    # 2.82 GB
+        q5_k_m: "Qwen_Qwen3-4B-Q5_K_M.gguf"    # 2.89 GB
+        q5_k_l: "Qwen_Qwen3-4B-Q5_K_L.gguf"    # 2.98 GB
+        q6_k: "Qwen_Qwen3-4B-Q6_K.gguf"        # 3.31 GB
+        q6_k_l: "Qwen_Qwen3-4B-Q6_K_L.gguf"    # 3.40 GB
+        q8_0: "Qwen_Qwen3-4B-Q8_0.gguf"        # 4.28 GB
+        bf16: "Qwen_Qwen3-4B-bf16.gguf"        # 8.05 GB
+
+qwen3-8b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-8B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-8B-Q2_K.gguf"        # 3.28 GB
+        q2_k_l: "Qwen_Qwen3-8B-Q2_K_L.gguf"    # 3.89 GB
+        q3_k_s: "Qwen_Qwen3-8B-Q3_K_S.gguf"    # 3.77 GB
+        q3_k_m: "Qwen_Qwen3-8B-Q3_K_M.gguf"    # 4.12 GB
+        q3_k_l: "Qwen_Qwen3-8B-Q3_K_L.gguf"    # 4.43 GB
+        q3_k_xl: "Qwen_Qwen3-8B-Q3_K_XL.gguf"  # 4.98 GB
+        q4_k_s: "Qwen_Qwen3-8B-Q4_K_S.gguf"    # 4.80 GB
+        q4_k_m: "Qwen_Qwen3-8B-Q4_K_M.gguf"    # 5.03 GB
+        q4_k_l: "Qwen_Qwen3-8B-Q4_K_L.gguf"    # 5.49 GB
+        q5_k_s: "Qwen_Qwen3-8B-Q5_K_S.gguf"    # 5.72 GB
+        q5_k_m: "Qwen_Qwen3-8B-Q5_K_M.gguf"    # 5.85 GB
+        q5_k_l: "Qwen_Qwen3-8B-Q5_K_L.gguf"    # 6.24 GB
+        q6_k: "Qwen_Qwen3-8B-Q6_K.gguf"        # 6.73 GB
+        q6_k_l: "Qwen_Qwen3-8B-Q6_K_L.gguf"    # 7.03 GB
+        q8_0: "Qwen_Qwen3-8B-Q8_0.gguf"        # 8.71 GB
+        bf16: "Qwen_Qwen3-8B-bf16.gguf"        # 16.4 GB
+
+qwen3-14b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-14B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-14B-Q2_K.gguf"        # 5.75 GB
+        q2_k_l: "Qwen_Qwen3-14B-Q2_K_L.gguf"    # 6.51 GB
+        q3_k_s: "Qwen_Qwen3-14B-Q3_K_S.gguf"    # 6.66 GB
+        q3_k_m: "Qwen_Qwen3-14B-Q3_K_M.gguf"    # 7.32 GB
+        q3_k_l: "Qwen_Qwen3-14B-Q3_K_L.gguf"    # 7.90 GB
+        q3_k_xl: "Qwen_Qwen3-14B-Q3_K_XL.gguf"  # 8.58 GB
+        q4_k_s: "Qwen_Qwen3-14B-Q4_K_S.gguf"    # 8.57 GB
+        q4_k_m: "Qwen_Qwen3-14B-Q4_K_M.gguf"    # 9.00 GB
+        q4_k_l: "Qwen_Qwen3-14B-Q4_K_L.gguf"    # 9.58 GB
+        q5_k_s: "Qwen_Qwen3-14B-Q5_K_S.gguf"    # 10.3 GB
+        q5_k_m: "Qwen_Qwen3-14B-Q5_K_M.gguf"    # 10.5 GB
+        q5_k_l: "Qwen_Qwen3-14B-Q5_K_L.gguf"    # 11.0 GB
+        q6_k: "Qwen_Qwen3-14B-Q6_K.gguf"        # 12.1 GB
+        q6_k_l: "Qwen_Qwen3-14B-Q6_K_L.gguf"    # 12.5 GB
+        q8_0: "Qwen_Qwen3-14B-Q8_0.gguf"        # 15.7 GB
+        bf16: "Qwen_Qwen3-14B-bf16.gguf"        # 29.5 GB
+
+qwen3-32b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-32B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-32B-Q2_K.gguf"        # 12.3 GB
+        q2_k_l: "Qwen_Qwen3-32B-Q2_K_L.gguf"    # 13.1 GB
+        q3_k_s: "Qwen_Qwen3-32B-Q3_K_S.gguf"    # 14.4 GB
+        q3_k_m: "Qwen_Qwen3-32B-Q3_K_M.gguf"    # 16.0 GB
+        q3_k_l: "Qwen_Qwen3-32B-Q3_K_L.gguf"    # 17.3 GB
+        q3_k_xl: "Qwen_Qwen3-32B-Q3_K_XL.gguf"  # 18.0 GB
+        q4_k_s: "Qwen_Qwen3-32B-Q4_K_S.gguf"    # 18.8 GB
+        q4_k_m: "Qwen_Qwen3-32B-Q4_K_M.gguf"    # 19.8 GB
+        q4_k_l: "Qwen_Qwen3-32B-Q4_K_L.gguf"    # 20.3 GB
+        q5_k_s: "Qwen_Qwen3-32B-Q5_K_S.gguf"    # 22.6 GB
+        q5_k_m: "Qwen_Qwen3-32B-Q5_K_M.gguf"    # 23.2 GB
+        q5_k_l: "Qwen_Qwen3-32B-Q5_K_L.gguf"    # 23.7 GB
+        q6_k: "Qwen_Qwen3-32B-Q6_K.gguf"        # 26.9 GB
+        q6_k_l: "Qwen_Qwen3-32B-Q6_K_L.gguf"    # 27.3 GB
+        q8_0: "Qwen_Qwen3-32B-Q8_0.gguf"        # 34.8 GB
+        # BF16 not available right now
+
+qwen3-30b-a3b:
+    # License: Apache-2.0
+    repo: "bartowski/Qwen_Qwen3-30B-A3B-GGUF"
+    model:
+        q2_k: "Qwen_Qwen3-30B-A3B-Q2_K.gguf"        # 10.9 GB
+        q2_k_l: "Qwen_Qwen3-30B-A3B-Q2_K_L.gguf"    # 11.2 GB
+        q3_k_s: "Qwen_Qwen3-30B-A3B-Q3_K_S.gguf"    # 13.4 GB
+        q3_k_m: "Qwen_Qwen3-30B-A3B-Q3_K_M.gguf"    # 14.1 GB
+        q3_k_l: "Qwen_Qwen3-30B-A3B-Q3_K_L.gguf"    # 14.6 GB
+        q3_k_xl: "Qwen_Qwen3-30B-A3B-Q3_K_XL.gguf"  # 14.9 GB
+        q4_k_s: "Qwen_Qwen3-30B-A3B-Q4_K_S.gguf"    # 18.0 GB
+        q4_k_m: "Qwen_Qwen3-30B-A3B-Q4_K_M.gguf"    # 18.6 GB
+        q4_k_l: "Qwen_Qwen3-30B-A3B-Q4_K_L.gguf"    # 18.9 GB
+        q5_k_s: "Qwen_Qwen3-30B-A3B-Q5_K_S.gguf"    # 21.1 GB
+        q5_k_m: "Qwen_Qwen3-30B-A3B-Q5_K_M.gguf"    # 21.7 GB
+        q5_k_l: "Qwen_Qwen3-30B-A3B-Q5_K_L.gguf"    # 21.9 GB
+        q6_k: "Qwen_Qwen3-30B-A3B-Q6_K.gguf"        # 25.1 GB
+        q6_k_l: "Qwen_Qwen3-30B-A3B-Q6_K_L.gguf"    # 25.3 GB
+        q8_0: "Qwen_Qwen3-30B-A3B-Q8_0.gguf"        # 32.5 GB
+        # BF16 not available right now

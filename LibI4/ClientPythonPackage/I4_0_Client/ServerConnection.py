@@ -1,11 +1,12 @@
 # Import libraries
 from collections.abc import AsyncIterator
+from websockets.asyncio.client import connect, ClientConnection
+from websockets.protocol import State
 import asyncio
 import json
-import websockets
 
 # Import I4.0 utilities
-from .Config import Conf
+from .Config import Conf as Config
 from .Service import Service as Service
 from .Service import ServiceManager as ServiceManager
 from . import Encryption
@@ -13,9 +14,10 @@ from . import Encryption
 # Servers variables
 ServersTasks: dict[int, list[Service]] = {}
 Connected: str = ""
+Conf: Config = Config()
 
 # WebSocket variables
-ClientSocket: websockets.WebSocketClientProtocol | None = None
+ClientSocket: ClientConnection | None = None
 
 # Keys
 PublicKey: bytes | None = None
@@ -37,12 +39,22 @@ async def __connect_str__(Server: str, Port: int = 8060) -> None:
     # Disconnect from any other server
     await Disconnect()
 
+    # Get the extension
+    if (Server.startswith("ws://")):
+        ext = "ws://"
+        Server = Server[5:]
+    elif (Server.startswith("wss://")):
+        ext = "wss://"
+        Server = Server[6:]
+    else:
+        ext = "ws://"
+
     # Create socket and connect
-    ClientSocket = await websockets.connect(f"ws://{Server}:{Port}", max_size = None)
+    ClientSocket = await connect(f"{ext}{Server}:{Port}", max_size = None)
 
     # Wait until it's connected
     for _ in range(50):
-        if (ClientSocket.open):
+        if (ClientSocket.state == State.OPEN):
             break
 
         await asyncio.sleep(0.1)
@@ -135,7 +147,6 @@ async def SendAndReceive(Data: bytes | str, Encrypt: bool = True) -> bytes:
 
     # Encrypt the data
     if (Encrypt):
-        OriginalData = Data
         Data = Encryption.EncryptMessage(Data, ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
         Data = json.dumps({"Hash": Conf.HashAlgorithm, "Message": Data.decode("utf-8")}).encode("utf-8")
 
@@ -242,9 +253,9 @@ async def FindFirstServer(ServiceToExecute: Service, DeleteData: bool = False) -
 
 def IsConnected() -> bool:
     # Check if the user is connected to a server
-    return len(Connected.strip()) > 0 and ClientSocket != None and ClientSocket.open
+    return len(Connected.strip()) > 0 and ClientSocket != None and ClientSocket.state == State.OPEN
 
-async def SendAndWaitForStreaming(Data: str) -> AsyncIterator[dict[str, any]]:
+async def SendAndWaitForStreaming(Data: str | bytes) -> AsyncIterator[dict[str, any]]:
     """
     This will send a prompt to the connected server and will wait for the full response.
     Also, this will yield the response of the server when received even if they're not complete.

@@ -1,6 +1,9 @@
 # Import libraries
+from io import BytesIO
 import torch
 import whisper
+import numpy as np
+import soundfile as sf
 
 def LoadModel(ModelName: str, Dtype: torch.dtype, Device: str) -> whisper.Whisper:
     # Load the model
@@ -38,7 +41,15 @@ def LoadModel(ModelName: str, Dtype: torch.dtype, Device: str) -> whisper.Whispe
     # Return the model
     return model
 
-def Inference(Model: whisper.Whisper, AudioPath: str, Temperature: float) -> dict[str, str]:
+def Inference(Model: whisper.Whisper, AudioPath: str | BytesIO | bytes, Temperature: float) -> dict[str, str]:
+    # Convert the audio
+    if (isinstance(AudioPath, bytes)):
+        AudioPath = BytesIO(AudioPath)
+    
+    if (isinstance(AudioPath, BytesIO)):
+        AudioPath.seek(0)
+        AudioPath, _ = sf.read(AudioPath)
+
     # Inference the model
     result = Model.transcribe(AudioPath, temperature = Temperature, verbose = True)
 

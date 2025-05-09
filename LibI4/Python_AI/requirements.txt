@@ -1,4 +1,4 @@
-# Please use the `install_requirements_auto.sh` file!!!!
+# Please use the `install_requirements_auto.sh` script!!!!
 
 # General requirements
 numpy==1.26
@@ -6,12 +6,12 @@ torch>=2.0.0
 torchtext
 torchvision
 torchaudio
-transformers>=4.46.3
-diffusers>=0.31.0
+transformers<=4.46.3
+diffusers<=0.31.0
 
 # Server requirements
 asyncio
-websockets==13.1
+websockets>=15.0.0,<16.0.0
 pymysql==1.1.1
 cryptography>=44.0.0,<45.0.0
 
@@ -34,8 +34,10 @@ psutil
 pyyaml
 omegaconf>=2.2,<2.4
 Cython
-antlr4-python3-runtime==4.9.*
+antlr4-python3-runtime==4.9
 I4_0-Client-PY
+bitsandbytes
+accelerate>=0.26.0
 
 # Requirements for inference
 gpt4all==2.8.2

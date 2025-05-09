@@ -1,10 +1,13 @@
+# Import I4.0 utilities
+import ai_config as cfg
+
+# Import other libraries
 from transformers import AutoImageProcessor, AutoModelForDepthEstimation
+from io import BytesIO
 import PIL.Image
 import torch
 import torch.nn as nn
 import numpy as np
-import os
-import ai_config as cfg
 
 __models__: dict[int, tuple[AutoModelForDepthEstimation, AutoImageProcessor, str, str]] = {}
 
@@ -73,25 +76,13 @@ def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
     output = PIL.Image.fromarray(output)
 
     # Save a temporal image
-    img_name = "tdi.png"
-    img_n = 0
+    buffer = BytesIO()
+    output.save(buffer, format = "PNG")
 
-    while (os.path.exists(img_name)):
-        img_n += 1
-        img_name = "tdi_" + str(img_n) + ".png"
+    buffer.seek(0)
+    data = buffer.getvalue()
 
-    with open(img_name, "w+") as f:
-        f.close()
-    
-    output.save(img_name)
-
-    # Read the bytes of the saved image
-    with open(img_name, "rb") as f:
-        output = f.read()
-        f.close()
-
-    # Delete the temporal image
-    os.remove(img_name)
+    buffer.close()
 
     # Return the bytes of the output image
-    return output
+    return data

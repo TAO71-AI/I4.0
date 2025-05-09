@@ -1,5 +1,5 @@
 # Import HuggingFace Transformers
-from transformers import AutoModelForVision2Seq, AutoProcessor, TextIteratorStreamer
+from transformers import AutoModelForImageTextToText, AutoProcessor, TextIteratorStreamer
 from qwen_omni_utils import process_mm_info
 
 # Import some other libraries
@@ -9,7 +9,7 @@ import threading
 # Import I4.0's utilities
 import ai_config as cfg
 
-def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVision2Seq, AutoProcessor, str, str]:
+def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForImageTextToText, AutoProcessor, str, str]:
     modelExtraKWargs = {}
     processorExtraKWargs = {
         "min_pixels": 256 * 28 * 28,
@@ -33,9 +33,20 @@ def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForVisi
         # They're, delete
         processorExtraKWargs = None
 
-    return cfg.LoadModel("chatbot", Index, AutoModelForVision2Seq, AutoProcessor, modelExtraKWargs, processorExtraKWargs)
+    return cfg.LoadModel("chatbot", Index, AutoModelForImageTextToText, AutoProcessor, modelExtraKWargs, processorExtraKWargs)
 
-def __inference__(Model: AutoModelForVision2Seq, Processor: AutoProcessor, Device: str, Dtype: str, Config: dict[str, any], ContentForModel: list[dict[str, list[dict[str, str]]]], MaxLength: int, Temperature: float) -> Iterator[tuple[str, list[dict[str, any]]]]:
+def __inference__(
+        Model: AutoModelForImageTextToText,
+        Processor: AutoProcessor,
+        Device: str,
+        Dtype: str,
+        Config: dict[str, any],
+        ContentForModel: list[dict[str, list[dict[str, str]]]],
+        MaxLength: int,
+        Temperature: float,
+        TopP: float,
+        TopK: int
+    ) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Apply the chat template using the processor
     text = Processor.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
 
@@ -45,13 +56,15 @@ def __inference__(Model: AutoModelForVision2Seq, Processor: AutoProcessor, Devic
     inputs = inputs.to(Device).to(Dtype)
 
     # Set streamer
-    streamer = TextIteratorStreamer(Processor)
+    streamer = TextIteratorStreamer(Processor, skip_prompt = True, skip_special_tokens = True)
 
     # Set inference args
     generationKwargs = dict(
         **inputs,
         temperature = Temperature,
         max_new_tokens = MaxLength,
+        top_p = TopP,
+        top_k = TopK,
         streamer = streamer,
         do_sample = True
     )

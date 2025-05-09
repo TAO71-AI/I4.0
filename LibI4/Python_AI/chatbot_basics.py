@@ -66,7 +66,7 @@ def IsToolValid(Tool: dict[str, str | dict[str, any]]) -> bool:
         if (not isinstance(toolType, str)):
             raise Exception("Tool type is not a string.")
         elif (toolType != "function"):
-            raise Exception("Tool is not function.")
+            raise Exception("Tool type is not 'function'.")
         elif (not isinstance(toolFunc, dict)):
             raise Exception("Tool function is not a dict.")
         elif (not isinstance(toolName, str)):
@@ -74,15 +74,15 @@ def IsToolValid(Tool: dict[str, str | dict[str, any]]) -> bool:
         elif (not isinstance(toolDescription, str)):
             raise Exception("Tool description is not a string.")
         elif (not isinstance(toolParameters, dict)):
-            raise Exception("Tool parameters are not a dict.")
+            raise Exception("Tool parameter are not a dict.")
         elif (not isinstance(toolParametersType, str)):
-            raise Exception("Tool parameters type is not a string.")
+            raise Exception("Tool parameter type is not a string.")
         elif (toolParametersType != "object"):
-            raise Exception("Tool parameters type is not object.")
+            raise Exception("Tool parameter type is not 'object'.")
         elif (not isinstance(toolParametersProperties, dict)):
-            raise Exception("Tool parameters properties is not dict.")
+            raise Exception("Tool parameter properties is not dict.")
         elif (not isinstance(toolParametersReq, list)):
-            raise Exception("Tool parameters required is not a list.")
+            raise Exception("Tool parameter required is not a list.")
         
         return True
     except Exception as e:
@@ -141,20 +141,58 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                             "type": "string",
                             "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
                         },
-                        "question": {
+                        "prompt": {
                             "type": "string",
-                            "description": "Question or prompt to answer."
-                        },
-                        "type": {
-                            "type": "string",
-                            "description": "Type of search. Can be `websites`, `news` or `maps`."
+                            "description": "Prompt or question to answer using the internet. Give as many details as possible."
                         },
                         "count": {
                             "type": "integer",
                             "description": "Max number of results to search."
                         }
                     },
-                    "required": ["keywords", "question", "type"]
+                    "required": ["keywords", "prompt"]
+                }
+            }
+        },
+        "internet-url": {
+            "type": "function",
+            "function": {
+                "name": "internet_url",
+                "description": "Read the content of a website from internet.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "URL of the website."
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "Prompt or question to answer using the internet. Give as many details as possible."
+                        }
+                    },
+                    "required": ["url", "prompt"]
+                }
+            }
+        },
+        "internet-research": {
+            "type": "function",
+            "function": {
+                "name": "internet_research",
+                "description": "Research information across the whole internet. WARNING: THIS TOOL MAY TAKE UP A LOT OF TIME AND RESOURCES, CHOOSE WISELY WHEN TO USE IT.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "keywords": {
+                            "type": "string",
+                            "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "Prompt or question to answer using the internet. Give as many details as possible."
+                        }
+                    },
+                    "required": ["keywords", "prompt"]
                 }
             }
         },

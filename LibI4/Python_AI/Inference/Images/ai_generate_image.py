@@ -1,14 +1,12 @@
-# Import the text to image systems
+# Import I4.0 utilities
 import Inference.Images.TextToImage.hf as hf
 import Inference.Images.TextToImage.sdcpp as sdcpp
-
-# Import I4.0's utilities
-from diffusers import AutoPipelineForText2Image
-from stable_diffusion_cpp import StableDiffusion
 import ai_config as cfg
 
-# Import some libraries
-import os
+# Import other libraries
+from io import BytesIO
+from diffusers import AutoPipelineForText2Image
+from stable_diffusion_cpp import StableDiffusion
 import psutil
 
 __models__: dict[int, tuple[AutoPipelineForText2Image | StableDiffusion, dict[str, any]]] = {}
@@ -143,26 +141,13 @@ def __generate_images__(Index: int, Prompt: str, NegativePrompt: str, Width: int
 
     # For each image
     for image in images_generated:
-        # Create a temporal file with the image
-        img_name = "ti.png"
-        img_n = 0
+        buffer = BytesIO()
+        image.save(buffer, format = "PNG")
 
-        while (os.path.exists(img_name)):
-            img_n += 1
-            img_name = "ti_" + str(img_n) + ".png"
+        buffer.seek(0)
+        images.append(buffer.getvalue())
 
-        with open(img_name, "w+") as f:
-            f.close()
-        
-        image.save(img_name)
-
-        # Read the bytes of the saved image and add it to the images list
-        with open(img_name, "rb") as f:
-            images.append(f.read())
-            f.close()
-
-        # Delete the temporal file
-        os.remove(img_name)
+        buffer.close()
 
     # Return all the generated images
     return images

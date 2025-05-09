@@ -1,5 +1,8 @@
 from collections.abc import Iterator
-import websockets.server
+from websockets.asyncio.server import serve
+from websockets.asyncio.client import ClientConnection
+from websockets.exceptions import ConnectionClosed, ConnectionClosedError, ConnectionClosedOK
+from websockets.protocol import State
 import asyncio
 import threading
 import os
@@ -17,6 +20,9 @@ try:
     import ai_config as cfg
     import conversation_multimodal as conv
     import ai_memory as memories
+    import queue_system as qs
+    import temporal_files as temp
+    import data_save as ds
 except ImportError:
     # Error importing utilities
     traceback.print_exc()
@@ -25,8 +31,6 @@ except ImportError:
     os._exit(1)
 
 # Variables
-queue: dict[str, list[int]] = {}
-times: dict[str, list[list[int]]] = {}
 banned: dict[str, list[str]] = {
     "ip": [],
     "key": []
@@ -50,7 +54,7 @@ def __clear_cache_loop__() -> None:
         time.sleep(cfg.current_data["clear_cache_time"])
 
         # Clear the cache
-        cb.EmptyCache()
+        temp.DeleteAllFiles()
 
         # Save old data
         SaveOldData()
@@ -67,8 +71,7 @@ def __clear_queue_loop__() -> None:
         time.sleep(cfg.current_data["clear_queue_time"])
 
         # Clear the queue
-        queue.clear()
-        times.clear()
+        qs.Clear()
 
 def __offload_loop__() -> None:
     # Check if the offload time is less or equal to 0
@@ -223,33 +226,32 @@ def CheckFiles() -> None:
 
 def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     # Get the users for the queue
-    try:
-        if (queue[Service][Index] < 0):
-            queue[Service][Index] = 0
-
-        users = queue[Service][Index]
-    except:
-        users = 0
+    users = qs.GetUsersFromQueue(Service, Index)
     
     # Calculate the predicted time
-    try:
-        t = 0
-
-        for ti in times[Service][Index]:
-            t += ti
-        
-        t = int(t / len(times[Service][Index]))
-    except:
-        t = -1
+    t = qs.GetAllTimes(Service, Index, True)
     
     return (users, t)
 
-def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]], AIArgs: str | None, SystemPrompts: str | list[str], Key: dict[str, any], Conversation: str, UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None, AllowedTools: str | list[str] | None, ExtraTools: list[dict[str, str | dict[str, any]]], MaxLength: int | None, Temperature: float | None) -> Iterator[dict[str, any]]:
-    # Make sure the key of the service exists
-    if (Service not in list(queue.keys())):
-        queue[Service] = []
-        times[Service] = []
-    
+def __infer__(
+        Service: str,
+        Index: int,
+        Prompt: str,
+        Files: list[dict[str, str]],
+        AIArgs: str | None,
+        SystemPrompts: str | list[str],
+        Key: dict[str, any],
+        Conversation: str,
+        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+        AllowedTools: str | list[str] | None,
+        ExtraTools: list[dict[str, str | dict[str, any]]],
+        MaxLength: int | None,
+        Temperature: float | None,
+        TopP: float | None,
+        TopK: int | None,
+        SeeTools: bool,
+        DataSave: bool
+    ) -> Iterator[dict[str, any]]:
     # Copy the key
     Key = Key.copy()
 
@@ -263,19 +265,8 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         # Sleep 1s
         time.sleep(1)
 
-    try:
-        # Try to add to the queue
-        queue[Service][Index] += 1
-    except IndexError:
-        # The queue doesn't exists for this index
-        # While the length of the list of the queue is less than the index
-        while (len(queue[Service]) < Index + 1):
-            # Add 0s to the queue and empty list to the times
-            queue[Service].append(0)
-            times[Service].append([])
-                
-        # Now, add 1 to the index
-        queue[Service][Index] += 1
+    # Add to the queue
+    qs.AddUserToQueue(Service, Index)
 
     # Create copy of the files
     fs = []
@@ -297,7 +288,22 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         modelsUsed[Service] = [Index]
 
     # Process the prompt and get a response
-    response = cb.MakePrompt(Index, Prompt, fs, Service, AIArgs, SystemPrompts, [Key["key"], Conversation], UseDefaultSystemPrompts, AllowedTools, ExtraTools, MaxLength, Temperature)
+    response = cb.MakePrompt(
+        Index,
+        Prompt,
+        fs,
+        Service,
+        AIArgs,
+        SystemPrompts,
+        [Key["key"], Conversation],
+        UseDefaultSystemPrompts,
+        AllowedTools,
+        ExtraTools,
+        MaxLength,
+        Temperature,
+        TopP,
+        TopK
+    )
     fullResponse = ""
     responseFiles = []
     tools = []
@@ -323,21 +329,24 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         fullResponse += token["response"]
         responseFiles += token["files"]
         token["ended"] = False
+        token["errors"] = []
 
         # Set the timer and transform to milliseconds
         timer = int((time.time() - timer) * 1000)
 
         # Add the timer to the service
-        try:
-            times[Service][Index].append(timer)
-        except:
-            times[Service][Index] = [timer]
+        qs.AddNewTime(Service, Index, timer)
         
         # Restart the timer
         timer = time.time()
 
         # Check if the chatbot is using a tool
-        if (((firstToken and token["response"].startswith("{")) or (token["response"] == "<tool_call>")) or len(tempTool) > 0):
+        if (
+            ((
+                (firstToken and token["response"].startswith("{")) or
+                (token["response"] == "<tool_call>")
+            ) or len(tempTool) > 0)
+        ):
             tempTool += token["response"]
 
             if (token["response"].endswith("}") and not tempTool.startswith("<tool_call>")):
@@ -347,17 +356,17 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 tools.append(tempTool[11:-12])
                 tempTool = ""
             
+            if (SeeTools):
+                yield token
+            
             continue
 
         # Yield the token
         firstToken = False
         yield token
-
-    # Remove the user from the queue
-    queue[Service][Index] -= 1
-
-    if (queue[Service][Index] < 0):
-        queue[Service][Index] = 0
+    
+    # Delete the timer
+    timer = None
 
     # Strip the full response
     fullResponse = fullResponse.strip()
@@ -376,47 +385,125 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         try:
             tool = cfg.JSONDeserializer(toolStr)
         except Exception as ex:
-            print(str(ex))
             continue
 
         if (tool["name"] == "image_generation"):
             # Generate image tool
+            # Get the index
+            index = GetAutoIndex("text2img")
+
+            # Check if the user has enough tokens
+            enoughTokens = CheckIfHasEnoughTokens("text2img", index, Key["tokens"])
+
+            if (not enoughTokens):
+                yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask('text2img', Index)['price']} tokens, you have {Key['tokens']}. This tool will not be executed."]}
+                continue
+
+            # Remove the tokens from the key
+            Key["tokens"] -= cfg.GetInfoOfTask("text2img", index)["price"]
+
             # Get the prompt
             pr = tool["arguments"]["prompt"]
             npr = tool["arguments"]["negative_prompt"]
 
             # Generate the image and append it to the files
-            toolResponse = __infer__("text2img", GetAutoIndex("text2img"), json.dumps({
-                "prompt": pr,
-                "negative_prompt": npr
-            }), [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools, ExtraTools, MaxLength, Temperature)
+            toolResponse = __infer__(
+                "text2img",
+                index,
+                json.dumps({
+                    "prompt": pr,
+                    "negative_prompt": npr
+                }),
+                [],
+                AIArgs,
+                SystemPrompts,
+                Key,
+                Conversation,
+                UseDefaultSystemPrompts,
+                AllowedTools,
+                ExtraTools,
+                MaxLength,
+                Temperature,
+                TopP,
+                TopK,
+                SeeTools,
+                DataSave
+            )
 
             # Append all the files
             for token in toolResponse:
                 # Append the image to the convAssistantFiles
                 convAssistantFiles += token["files"]
                 
-                yield {"response": "", "files": token["files"], "ended": False}
+                yield {"response": "", "files": token["files"], "ended": False, "errors": []}
         elif (tool["name"] == "audio_generation"):
             # Generate audio tool
+            # Get the index
+            index = GetAutoIndex("text2audio")
+
+            # Check if the user has enough tokens
+            enoughTokens = CheckIfHasEnoughTokens("text2audio", index, Key["tokens"])
+
+            if (not enoughTokens):
+                yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask('text2audio', Index)['price']} tokens, you have {Key['tokens']}. This tool will not be executed."]}
+                continue
+
+            # Remove the tokens from the key
+            Key["tokens"] -= cfg.GetInfoOfTask("text2audio", index)["price"]
+
+            # Save the key if the key is not None
+            if (len(Key["key"]) > 0):
+                sb.SaveKey(Key)
+
             # Get the prompt
             pr = tool["arguments"]["prompt"]
 
             # Generate the audio and append it to the files
-            toolResponse = __infer__("text2audio", GetAutoIndex("text2audio"), pr, [], AIArgs, SystemPrompts, Key, Conversation, UseDefaultSystemPrompts, AllowedTools, ExtraTools, MaxLength, Temperature)
+            toolResponse = __infer__(
+                "text2audio",
+                index,
+                pr,
+                [],
+                AIArgs,
+                SystemPrompts,
+                Key,
+                Conversation,
+                UseDefaultSystemPrompts,
+                AllowedTools,
+                ExtraTools,
+                MaxLength,
+                Temperature,
+                TopP,
+                TopK,
+                SeeTools,
+                DataSave
+            )
 
             # Append all the files
             for token in toolResponse:
                 # Append the audio to the convAssistantFiles
                 convAssistantFiles += token["files"]
 
-                yield {"response": "", "files": token["files"], "ended": False}
+                yield {"response": "", "files": token["files"], "ended": False, "errors": []}
         elif (tool["name"] == "internet_search"):
-            # Internet (websites, answers, news, chat and maps) search tool
+            # Internet search tool
+            # Check if the user has enough tokens
+            enoughTokens = CheckIfHasEnoughTokens("chatbot", Index, Key["tokens"])
+
+            if (not enoughTokens):
+                yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask('chatbot', Index)['price']} tokens, you have {Key['tokens']}. This tool will not be executed."]}
+                continue
+
+            # Remove the tokens from the key
+            Key["tokens"] -= cfg.GetInfoOfTask("chatbot", Index)["price"]
+
+            # Save the key if the key is not None
+            if (len(Key["key"]) > 0):
+                sb.SaveKey(Key)
+
             # Get the variables
             keywords = tool["arguments"]["keywords"]
-            question = tool["arguments"]["question"]
-            searchType = tool["arguments"]["type"]
+            i_prompt = tool["arguments"]["prompt"]
 
             try:
                 searchCount = int(tool["arguments"]["count"])
@@ -430,19 +517,128 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
                 searchCount = cfg.current_data["internet"]["min_results"]
 
             # Get the response from internet
-            toolResponse = cb.GetResponseFromInternet(Index, keywords, question, searchType, searchCount, AIArgs, SystemPrompts, UseDefaultSystemPrompts)
+            toolResponse = cb.GetResponseFromInternet(
+                Index,
+                keywords,
+                i_prompt,
+                searchCount,
+                AIArgs,
+                SystemPrompts,
+                UseDefaultSystemPrompts,
+                [Key["key"], Conversation],
+                MaxLength,
+                Temperature,
+                TopP,
+                TopK
+            )
             text = ""
 
             # Yield another line
-            yield {"response": "\n", "files": [], "ended": False}
+            yield {"response": "\n", "files": [], "ended": False, "errors": []}
 
             # Save and yield the tokens
             for token in toolResponse:
                 text += token["response"]
-                yield {"response": token["response"], "files": token["files"], "ended": False}
+                yield {"response": token["response"], "files": token["files"], "ended": False, "errors": []}
+            
+            # Save the response from the internet in the memory
+            memories.SaveMemory(Key["key"], f"```plaintext\n{text}\n```")
+        elif (tool["name"] == "internet_url"):
+            # Internet search tool (using a URL)
+            # Check if the user has enough tokens
+            enoughTokens = CheckIfHasEnoughTokens("chatbot", Index, Key["tokens"])
 
-            # Add to the memories
-            memories.SaveMemory(Key["key"], f"Internet response for prompt '{keywords}': '{text}'.")
+            if (not enoughTokens):
+                yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask('chatbot', Index)['price']} tokens, you have {Key['tokens']}. This tool will not be executed."]}
+                continue
+
+            # Remove the tokens from the key
+            Key["tokens"] -= cfg.GetInfoOfTask("chatbot", Index)["price"]
+
+            # Save the key if the key is not None
+            if (len(Key["key"]) > 0):
+                sb.SaveKey(Key)
+
+            # Get the variables
+            url = tool["arguments"]["url"]
+            i_prompt = tool["arguments"]["prompt"]
+
+            # Get the response from internet
+            toolResponse = cb.GetResponseFromInternet_URL(
+                Index,
+                url,
+                i_prompt,
+                AIArgs,
+                SystemPrompts,
+                UseDefaultSystemPrompts,
+                [Key["key"], Conversation],
+                MaxLength,
+                Temperature,
+                TopP,
+                TopK
+            )
+            text = ""
+
+            # Yield another line
+            yield {"response": "\n", "files": [], "ended": False, "errors": []}
+
+            # Save and yield the tokens
+            for token in toolResponse:
+                text += token["response"]
+                yield {"response": token["response"], "files": token["files"], "ended": False, "errors": []}
+            
+            # Save the response from the internet in the memory
+            memories.SaveMemory(Key["key"], f"```plaintext\n{text}\n```")
+        elif (tool["name"] == "internet_research"):
+            # Internet research tool
+            # Check if the user has enough tokens
+            price = cfg.GetInfoOfTask("chatbot", Index)["price"] * (cfg.current_data["internet"]["max_results"] + 1) + cfg.current_data["internet"]["research"]["price"]
+            enoughTokens = Key["tokens"] >= price
+
+            if (not enoughTokens):
+                yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {price} tokens, you have {Key['tokens']}. This tool will not be executed."]}
+                continue
+
+            # Remove the tokens from the key
+            Key["tokens"] -= price
+
+            # Save the key if the key is not None
+            if (len(Key["key"]) > 0):
+                sb.SaveKey(Key)
+
+            # Get the variables
+            keywords = tool["arguments"]["keywords"]
+            i_prompt = tool["arguments"]["prompt"]
+
+            # Yield another line
+            yield {"response": "\n", "files": [], "ended": False, "errors": []}
+
+            # Get the response from internet
+            toolResponse = cb.InternetResearch(
+                Index,
+                keywords,
+                i_prompt,
+                AIArgs,
+                SystemPrompts,
+                UseDefaultSystemPrompts,
+                [Key["key"], Conversation],
+                MaxLength,
+                Temperature,
+                TopP,
+                TopK
+            )
+            text = ""
+
+            # Yield another line
+            yield {"response": "\n", "files": [], "ended": False, "errors": []}
+
+            # Save and yield the tokens
+            for token in toolResponse:
+                text += token["response"]
+                yield {"response": token["response"], "files": token["files"], "ended": False, "errors": []}
+            
+            # Save the response from the internet in the memory
+            memories.SaveMemory(Key["key"], f"```plaintext\n{text}\n```")
         elif (tool["name"] == "save_memory"):
             # Save memory tool
             # Get the prompt
@@ -468,9 +664,9 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
 
             # Delete the memory
             memories.DeleteMemory(Key["key"], memories.GetMemory(Key["key"], memID))
-        else:
+        elif (not SeeTools):
             # Unknown tool. Send to the client
-            yield {"response": f"Unknown tool: {json.dumps(tool)}", "files": [], "ended": False}
+            yield {"response": json.dumps(tool), "files": [], "ended": False, "errors": ["unknown tool"]}
     
     # Save messages in the conversation if the service is a chatbot
     if (Service == "chatbot"):
@@ -499,6 +695,22 @@ def __infer__(Service: str, Index: int, Prompt: str, Files: list[dict[str, str]]
         })
 
         conv.SaveConversation(Key["key"], (Conversation, conversation), Key["temporal_conversations"])
+    
+    # Save the data into the DB if allowed by the user
+    if (DataSave and cfg.current_data["allow_data_save"]):
+        uFiles = []
+        aFiles = []
+
+        for f in Files:
+            uFiles.append({"type": f["type"], f["type"]: f["data"]})
+            
+        for f in convAssistantFiles:
+            aFiles.append({"type": f["type"], f["type"]: f["data"]})
+
+        ds.SaveData(
+            uFiles + [{"type": "text", "text": Prompt}],
+            aFiles + [{"type": "text", "text": fullResponse}]
+        )
 
 def CheckIfHasEnoughTokens(Service: str, Index: int, KeyTokens: float) -> bool:
     # Get price
@@ -537,15 +749,15 @@ def GetAutoIndex(Service: str) -> int:
         if (length == 0):
             raise Exception("Length of the services is 0.")
         
-        # Check if the service exists in the queue
-        if (Service not in list(queue.keys())):
-            # It isn't, return 0 (the first index)
-            return 0
-        
-        # It is, return the index with the smallest queue
-        return min(queue[Service])
-    except:
+        # Add all the indexes
+        for idx in range(length):
+            qs.__add_to_queue__(Service, idx)
+
+        # Return the index with the smallest queue
+        return qs.GetIndexFromQueue_Filter(Service, 1)
+    except Exception as ex:
         # Return an error saying the service is not available
+        traceback.print_exception(ex)
         raise Exception("Service not available.")
 
 def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str, any]]:
@@ -584,7 +796,14 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         print(f"Could not get client key. Reason: {ex}")
         key = {"tokens": 0, "key": None, "admin": False, "temporal_conversations": cfg.current_data["nokey_temporal_conversations"]}
     
-    # Get some "optional" variables
+    # Get other variables
+    try:
+        # Try to get the client's public key
+        clientPublicKey = str(Prompt["PublicKey"])
+    except:
+        # If an error occurs, set to default
+        clientPublicKey = None
+
     try:
         # Try to get conversation
         conversation = str(Prompt["Conversation"])
@@ -596,24 +815,23 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Try to get the prompt and files
         prompt = str(Prompt["Prompt"])
         files = list(Prompt["Files"])
-    except:
+    except Exception as ex:
         # If any of this variables is missing, return an error
-        yield {"response": "ERROR: Missing variables.", "files": [], "ended": True}
+        yield {"response": f"", "files": [], "ended": True, "errors": [f"missing variables. Details: {ex}"], "pubKey": clientPublicKey}
         
     try:
         # Try to get AI args
-        aiArgs = str(Prompt["AIArgs"])
+        aiArgs = Prompt["AIArgs"]
     except:
         # If an error occurs, set to default
         aiArgs = None
         
     try:
         # Try to get extra system prompts
-        systemPrompts = Prompt["SystemPrompts"]
-
-        # Check the type
-        if (type(systemPrompts) != list[str] and type(systemPrompts) != list):
-            systemPrompts = [str(systemPrompts)]
+        if (isinstance(Prompt["SystemPrompts"], list)):
+            systemPrompts = Prompt["SystemPrompts"]
+        else:
+            systemPrompts = [str(Prompt["SystemPrompts"])]
     except:
         # If an error occurs, set to default
         systemPrompts = []
@@ -633,13 +851,6 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         index = -1
     
     try:
-        # Try to get the client's public key
-        clientPublicKey = str(Prompt["PublicKey"])
-    except:
-        # If an error occurs, set to default
-        clientPublicKey = None
-    
-    try:
         # Try to get the allowed tools
         aTools = Prompt["AllowedTools"]
     except:
@@ -648,7 +859,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     
     try:
         # Try to get the extra tools
-        eTools = list(Prompt["ExtraTools"])
+        eTools = Prompt["ExtraTools"]
     except:
         # If an error occurs, set to default
         eTools = []
@@ -667,9 +878,37 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # If an error occurs, set to default
         temperature = None
     
+    try:
+        # Try to get the see tools
+        seeTools = Prompt["SeeTools"]
+    except:
+        # If an error occurs, set to default
+        seeTools = False
+    
+    try:
+        # Try to get the data save
+        dataSave = Prompt["AllowDataSave"]
+    except:
+        # If an error occurs, set to default
+        dataSave = True
+    
+    try:
+        # Try to get top_p
+        top_p = float(Prompt["TopP"])
+    except:
+        # If an error occurs, set to default
+        top_p = None
+    
+    try:
+        # Try to get top_k
+        top_k = int(Prompt["TopK"])
+    except:
+        # If an error occurs, set to default
+        top_k = None
+    
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
-        yield {"response": "ERROR: Your API key is banned.", "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": "", "files": [], "ended": True, "errors": ["API key banned"], "pubKey": clientPublicKey}
         return
     
     # Check if the user wants to execute a service
@@ -682,32 +921,33 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
 
         # Check index
         if (index < 0):
             # Get index
             index = GetAutoIndex(service)
+            Prompt["Index"] = index
 
         # Check the if the index is valid
         try:
             enoughTokens = CheckIfHasEnoughTokens(service, index, key["tokens"])
         except ValueError:
             print(f"Invalid index for service, returning exception. From 0 to {len(cfg.GetAllInfosOfATask(service)) - 1} expected; got {index}.")
-            yield {"response": f"ERROR: Invalid index. Expected index to be from 0 to {len(cfg.GetAllInfosOfATask(service)) - 1}; got {index}.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [f"Invalid index. Expected index to be from 0 to {len(cfg.GetAllInfosOfATask(service)) - 1}; got {index}."], "pubKey": clientPublicKey}
             return
         except Exception as ex:
-            print(f"[Check enouth tokens: ai_server.py] Unknown error: {ex}")
-            yield {"response": f"ERROR: Unknown error checking if you have enouth tokens.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            print(f"[Check enough tokens: ai_server.py] Unknown error: {ex}")
+            yield {"response": "", "files": [], "ended": True, "errors": [f"Unknown error while checking if you had enough tokens."], "pubKey": clientPublicKey}
 
         # Check the price and it's a valid key
         if (not enoughTokens and key["key"] != None and cfg.current_data["force_api_key"]):
             # Doesn't have enough tokens or the API key is invalid, return an error
-            yield {"response": f"ERROR: Not enough tokens. You need {cfg.GetInfoOfTask(service, index)['price']} tokens, you have {key['tokens']}.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask(service, index)['price']} tokens, you have {key['tokens']}."], "pubKey": clientPublicKey}
             return
         elif (not enoughTokens and key["key"] == None):
             # Invalid API key
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": ["Invalid API key."], "pubKey": clientPublicKey}
             return
         
         # Check if the key is an admin
@@ -722,7 +962,25 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Check files length and service
             if (len(files) == 0 or service == "chatbot"):
                 # Execute the service with all the files
-                inf = __infer__(service, index, prompt, files, aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools, eTools, maxLength, temperature)
+                inf = __infer__(
+                    service,
+                    index,
+                    prompt,
+                    files,
+                    aiArgs,
+                    systemPrompts,
+                    key,
+                    conversation,
+                    useDefSystemPrompts,
+                    aTools,
+                    eTools,
+                    maxLength,
+                    temperature,
+                    top_p,
+                    top_k,
+                    seeTools,
+                    dataSave
+                )
 
                 # For each token
                 for inf_t in inf:
@@ -732,15 +990,39 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # For each file
                 for file in files:
                     # Execute the service with the current file
-                    inf = __infer__(service, index, prompt, [file], aiArgs, systemPrompts, key, conversation, useDefSystemPrompts, aTools, eTools, maxLength, temperature)
+                    inf = __infer__(
+                        service,
+                        index,
+                        prompt,
+                        [file],
+                        aiArgs,
+                        systemPrompts,
+                        key,
+                        conversation,
+                        useDefSystemPrompts,
+                        aTools,
+                        eTools,
+                        maxLength,
+                        temperature,
+                        top_p,
+                        top_k,
+                        seeTools,
+                        dataSave
+                    )
 
                     # For each token
                     for inf_t in inf:
                         inf_t["pubKey"] = clientPublicKey
                         yield inf_t
             
+            # Clear
+            inf = None
+
+            # Remove the user from the queue
+            qs.RemoveUserFromQueue(service, index)
+
             # Return empty response
-            yield {"response": "", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
         except Exception as ex:
             if (str(ex).lower() == "nsfw detected!"):
                 # NSFW detected, check if the server should ban the API key
@@ -763,18 +1045,13 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 sb.SaveKey(key)
             
             # Remove the user from the queue
-            queue[service][index] -= 1
-
-            # Check the list is not < 0
-            if (queue[service][index] < 0):
-                # It is, set to 0
-                queue[service][index] = 0
+            qs.RemoveUserFromQueue(service, index)
             
             # Return the exception
             print("Unknown exception found in a service.")
             traceback.print_exc()
 
-            yield {"response": f"ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [f"Unknown error: {ex}"], "pubKey": clientPublicKey}
     elif (service == "clear_my_history" or service == "clear_conversation"):
         # Clear the conversation
         # Check the key
@@ -784,7 +1061,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
 
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -795,14 +1072,14 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             conv.DeleteConversation("", conversation)
         else:
             # The key is invalid and it's required by the server, return an error
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": ["Invalid API key."], "pubKey": clientPublicKey}
         
         # Return a message
-        yield {"response": "Conversation deleted.", "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": "Conversation deleted.", "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_all_services"):
         # Get all the available services
         # Return all the services
-        yield {"response": json.dumps(cb.GetServicesAndIndexes()), "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": json.dumps(cb.GetServicesAndIndexes()), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_conversation"):
         # Get the conversation of the user
         # Check the key
@@ -812,7 +1089,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
         
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -823,7 +1100,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             cnv = conv.GetConversation("", conversation)
 
         # Return the conversation
-        yield {"response": json.dumps(cnv), "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": json.dumps(cnv), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_conversations"):
         # Get all the conversations of the user
         # Check the key
@@ -833,7 +1110,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
         
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -844,7 +1121,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             cnv = list(conv.GetConversations("").keys())
 
         # Return all the conversations
-        yield {"response": json.dumps([cn for cn in cnv]), "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": json.dumps([cn for cn in cnv]), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "clear_memories"):
         # Delete all the memories of the user
         # Check the key
@@ -854,7 +1131,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
         
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -865,10 +1142,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             memories.DeleteMemories("")
         else:
             # The key is invalid and it's required by the server, return an error
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": ["Invalid API key."], "pubKey": clientPublicKey}
         
         # Return a message
-        yield {"response": "Memories deleted.", "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": "Memories deleted.", "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "clear_memory"):
         # Delete a memory of the user
         # Check the key
@@ -878,7 +1155,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
             
         # Check if the API key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -889,10 +1166,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             memories.DeleteMemory("", int(prompt))
         else:
             # The key is invalid and it's required by the server, return an error
-            yield {"response": "ERROR: Invalid API key.", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": ["Invalid API key."], "pubKey": clientPublicKey}
         
         # Return a message
-        yield {"response": "Memory deleted.", "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": "Memory deleted.", "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_memories"):
         # Get all the memories of the user
         # Check the key
@@ -902,7 +1179,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             time.sleep(2)
 
             # Return a warning
-            yield {"response": "WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty.\n", "files": [], "ended": False, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": False, "errors": ["WARNING! Processing delayed 2s for security reasons. To avoid this warning, please use a valid API key or set it to empty."], "pubKey": clientPublicKey}
         
         # Check if the key is valid
         if (key["key"] != None and len(key["key"].strip()) > 0):
@@ -913,7 +1190,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             mms = memories.GetMemories("")
 
         # Return all the memories
-        yield {"response": json.dumps(mms), "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": json.dumps(mms), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_queue"):
         # Check index
         if (index < 0):
@@ -925,25 +1202,25 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             queueUsers, queueTime = GetQueueForService(prompt, index)
 
             print(f"Queue for service '{prompt}:{index}' ==> {queueUsers} users, ~{queueTime}ms/token.")
-            yield {"response": json.dumps({"users": queueUsers, "time": queueTime}), "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": json.dumps({"users": queueUsers, "time": queueTime}), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_tos"):
         # Get the Terms of Service of the server
         with open("TOS.txt", "r") as f:
             tos = f.read()
         
-        yield {"response": tos, "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": tos, "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "create_key" and key["admin"]):
         # Create a new API key
         keyData = cfg.JSONDeserializer(prompt)
         keyData = sb.CreateKey(keyData["tokens"], keyData["daily"])
 
-        yield {"response": keyData["key"], "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": keyData["key"], "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_key"):
         # Get information about the key
-        keyData = key
+        keyData = key.copy()
         keyData["key"] = "[PRIVATE]"
 
-        yield {"response": json.dumps(keyData), "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": json.dumps(keyData), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "get_service_description"):
         # Get the description of a specific service
         # Get the info from the service
@@ -952,10 +1229,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check if contains a description
         if ("description" in list(info.keys())):
             # Contains a description, send it
-            yield {"response": info["description"], "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": info["description"], "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
         else:
             # Does not contain a description, send an empty message
-            yield {"response": "", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
     elif (service == "is_chatbot_multimodal"):
         # Check if the chatbot is multimodal
         try:
@@ -964,9 +1241,9 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 # Set index
                 index = GetAutoIndex("chatbot")
 
-            yield {"response": str(cfg.GetInfoOfTask("chatbot", index)["allows_files"]), "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": cfg.GetInfoOfTask("chatbot", index)["multimodal"], "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
         except Exception as ex:
-            yield {"response": f"ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [str(ex)], "pubKey": clientPublicKey}
     elif (service == "get_price"):
         # Get the price of a service and index
         try:
@@ -977,15 +1254,15 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             
             if (index >= len(cfg.GetAllInfosOfATask(prompt))):
                 # Index is out of range, return error
-                yield {"response": "ERROR: Invalid index.", "files": [], "ended": True, "pubKey": clientPublicKey}
+                yield {"response": "", "files": [], "ended": True, "errors": ["Invalid index."], "pubKey": clientPublicKey}
             else:
-                yield {"response": str(cfg.GetInfoOfTask(prompt, index)["price"]), "files": [], "ended": True, "pubKey": clientPublicKey}
+                yield {"response": str(cfg.GetInfoOfTask(prompt, index)["price"]), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
         except Exception as ex:
-            yield {"response": f"COULD NOT GET THE PRICE DUE TO THIS ERROR: {ex}", "files": [], "ended": True, "pubKey": clientPublicKey}
+            yield {"response": "", "files": [], "ended": True, "errors": [f"COULD NOT GET THE PRICE DUE TO THIS ERROR: {ex}"], "pubKey": clientPublicKey}
     else:
-        yield {"response": "ERROR: Invalid command.", "files": [], "ended": True, "pubKey": clientPublicKey}
+        yield {"response": "", "files": [], "ended": True, "errors": ["Invalid command."], "pubKey": clientPublicKey}
 
-async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtocol, Prompt: dict[str, any], HashAlgorithm: enc.hashes.HashAlgorithm) -> None:
+async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[str, any], HashAlgorithm: enc.hashes.HashAlgorithm) -> None:
     clPubKey = None
     
     try:
@@ -997,7 +1274,7 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
 
             # Send the response
             await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey, HashAlgorithm)
-    except websockets.ConnectionClosedError:
+    except (ConnectionClosed, ConnectionClosedError, ConnectionClosedOK):
         # Print error
         print("Connection closed while processing!")
 
@@ -1008,16 +1285,17 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
 
         try:
             # Try to get the index of the model to use
-            index = Prompt["Index"]
+            index = int(Prompt["Index"])
+
+            # Throw an error if the index is invalid
+            if (index < 0 or index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
+                raise Exception()
         except:
             # If an error occurs, auto get index
             index = GetAutoIndex(Prompt["Service"])
-            
-        # Substract 1 to the queue
-        try:
-            queue[Prompt["Service"]][index] -= 1
-        except:
-            pass
+
+        # Remove from the queue
+        qs.RemoveUserFromQueue(Prompt["Service"], index)
     except:
         # Print error
         print("Error processing! Could not send data to client.")
@@ -1032,29 +1310,31 @@ async def ExecuteServiceAndSendToClient(Client: websockets.WebSocketClientProtoc
 
         try:
             # Try to get the index of the model to use
-            index = Prompt["Index"]
+            index = int(Prompt["Index"])
+
+            # Throw an error if the index is invalid
+            if (index < 0 or index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
+                raise Exception()
         except:
             # If an error occurs, auto get index
             index = GetAutoIndex(Prompt["Service"])
             
-        # Substract 1 to the queue
-        try:
-            queue[Prompt["Service"]][index] -= 1
-        except:
-            pass
+        # Remove from the queue
+        qs.RemoveUserFromQueue(Prompt["Service"], index)
 
         try:
             # Try to send the closed message
             await __send_to_client__(Client, json.dumps({
                 "response": "",
                 "files": [],
-                "ended": True
+                "ended": True,
+                "errors": []
             }).encode("utf-8"), clPubKey, HashAlgorithm)
         except:
             # Error, ignore
             pass
 
-async def WaitForReceive(Client: websockets.WebSocketClientProtocol, Message: bytes | str) -> None:
+async def WaitForReceive(Client: ClientConnection, Message: bytes | str) -> None:
     # Wait for receive
     clientHashType = None
 
@@ -1062,7 +1342,7 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol, Message: by
     if (len(Message) == 0):
         # Received nothing, close the connection
         Client.close()
-        raise websockets.ConnectionClosed(None, None)
+        raise ConnectionClosed(None, None)
 
     # Print received length
     print(f"Received {len(Message)} bytes from '{Client.remote_address[0]}'")
@@ -1105,14 +1385,15 @@ async def WaitForReceive(Client: websockets.WebSocketClientProtocol, Message: by
         # If there's an error, send the response
         try:
             await __send_to_client__(Client, json.dumps({
-                "response": "Error. Details: " + str(ex),
+                "response": "",
                 "files": [],
-                "ended": True
+                "ended": True,
+                "errors": [f"Error. Details: {ex}"]
             }).encode("utf-8"), None, None)
         except:
             pass
 
-async def __send_to_client__(Client: websockets.WebSocketClientProtocol, Message: str | bytes, EncryptKey: bytes | None, HashAlgorithm: enc.hashes.HashAlgorithm | None) -> None:
+async def __send_to_client__(Client: ClientConnection, Message: str | bytes, EncryptKey: bytes | None, HashAlgorithm: enc.hashes.HashAlgorithm | None) -> None:
     # Encrypt the message
     if (EncryptKey is None or HashAlgorithm is None):
         msg = Message
@@ -1122,7 +1403,7 @@ async def __send_to_client__(Client: websockets.WebSocketClientProtocol, Message
     # Send the message
     await Client.send(msg)
 
-def __receive_thread__(Client: websockets.WebSocketClientProtocol, Message: str | bytes) -> None:
+def __receive_thread__(Client: ClientConnection, Message: str | bytes) -> None:
     # Create new event loop
     clientLoop = asyncio.new_event_loop()
 
@@ -1132,10 +1413,10 @@ def __receive_thread__(Client: websockets.WebSocketClientProtocol, Message: str 
     # Close the event loop
     clientLoop.close()
 
-async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
+async def __receive_loop__(Client: ClientConnection) -> None:
     async for message in Client:
         # Check if the connection ended or if the server is closed
-        if (Client.closed or not started):
+        if (Client.state == State.CLOSED or not started):
             # Break the loop
             break
 
@@ -1143,7 +1424,7 @@ async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
             # Create and start a new thread
             clientThread = threading.Thread(target = __receive_thread__, args = (Client, message), daemon = True)
             clientThread.start()
-        except websockets.ConnectionClosed:
+        except (ConnectionClosed, ConnectionClosedError, ConnectionClosedOK):
             # Connection closed
             break
         except Exception as ex:
@@ -1153,9 +1434,10 @@ async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
             try:
                 # Try to send to the client
                 await __send_to_client__(Client, json.dumps({
-                    "response": "Error executing service. Details: " + str(ex),
+                    "response": "",
                     "files": [],
-                    "ended": True
+                    "ended": True,
+                    "errors": [f"Error executing service. Details: {ex}"]
                 }), None, None)
 
                 # Print the error
@@ -1169,7 +1451,7 @@ async def __receive_loop__(Client: websockets.WebSocketClientProtocol) -> None:
         with open("BannedIPs.json", "w+") as f:
             f.write(json.dumps(banned))
 
-async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
+async def OnConnect(Client: ClientConnection) -> None:
     print(f"'{Client.remote_address[0]}' has connected.")
 
     if (Client.remote_address[0] in banned["ip"]):
@@ -1179,9 +1461,10 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
 
             # Send banned message
             await __send_to_client__(Client, json.dumps({
-                "response": "Your IP address has been banned. Please contact support if this was a mistake.",
+                "response": "",
                 "files": [],
-                "ended": True
+                "ended": True,
+                "errors": ["Your IP address has been banned. Please contact support if this was a mistake."]
             }), None, None)
 
             # Close the connection
@@ -1224,7 +1507,7 @@ async def StartServer() -> None:
         print(f"Error parsing the server port, make sure it's an integer. Using default ({port}).")
 
     # Start the server
-    serverWS = await websockets.serve(OnConnect, ip, port, max_size = None, ping_interval = 60, ping_timeout = 30)
+    serverWS = await serve(OnConnect, ip, port, max_size = None, ping_interval = 60, ping_timeout = 30)
     await serverWS.wait_closed()
 
 # Save old data
@@ -1258,7 +1541,7 @@ except KeyboardInterrupt:
     cfg.SaveConfig(cfg.current_data)
 
     # Delete the cache
-    cb.EmptyCache()
+    temp.DeleteAllFiles()
 
     # Close
     started = False

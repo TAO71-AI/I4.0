@@ -1,3 +1,7 @@
+# Import I4.0 utilities
+import ai_config as cfg
+import conversation_multimodal as conv
+
 # Import LLaMA-CPP-Python chatbot
 from llama_cpp import Llama
 import Inference.Text.Chatbot.lcpp as lcpp
@@ -10,13 +14,9 @@ import Inference.Text.Chatbot.g4a as g4a
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import Inference.Text.Chatbot.hf as hf
 
-# Import some other libraries
+# Import other libraries
 from collections.abc import Iterator
 import psutil
-
-# Import I4.0's utilities
-import ai_config as cfg
-import conversation_multimodal as conv
 
 __models__: dict[int, tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str, str], dict[str, any]]] = {}
 
@@ -123,13 +123,23 @@ def LoadModels() -> None:
         # Load the model and add it to the list of models
         __load_model__(i)
 
-def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Tools: list[dict[str, str | dict[str, any]]], Conversation: list[str] = ["", ""], MaxLength: int | None = None, Temperature: float | None = None) -> Iterator[str]:
+def Inference(
+        Index: int,
+        Prompt: str,
+        SystemPrompts: list[str],
+        Tools: list[dict[str, str | dict[str, any]]],
+        Conversation: list[str] = ["", ""],
+        MaxLength: int | None = None,
+        Temperature: float | None = None,
+        TopP: float | None = None,
+        TopK: int | None = None
+    ) -> Iterator[str]:
     # Load the model
     __load_model__(Index)
 
     # Strip the prompt and set the system prompts
     Prompt = Prompt.strip()
-    SystemPrompts = "".join(sp + "\n" for sp in SystemPrompts).strip()
+    SystemPrompts = "".join(f"{sp}\n" for sp in SystemPrompts).strip()
 
     # Create the content for the model with the system prompts
     contentForModel = [{"role": "system", "content": SystemPrompts}]
@@ -200,7 +210,24 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Tools: list[dic
             # Error; probably `max_length` is not configured. Set to the server's default
             maxLength = cfg.current_data["max_length"]
     else:
+        # Set max length to the user's config
         maxLength = MaxLength
+
+        try:
+            # Check if max length is greater than the model's max length
+            if (maxLength > __models__[Index][1]["max_length"]):
+                # Set max length to the model's max length
+                maxLength = __models__[Index][1]["max_length"]
+
+                # Check the max length
+                if (maxLength is None or maxLength <= 0):
+                    # Invalid max length, set to the server's default
+                    maxLength = cfg.current_data["max_length"]
+        except:
+            # Error; probably `max_length` is not configured. Check if max length is greater than the servers's max length
+            if (maxLength > cfg.current_data["max_length"]):
+                # Set max length to the server's max length
+                maxLength = cfg.current_data["max_length"]
     
     # Set the temperature
     if (Temperature is None):
@@ -208,19 +235,55 @@ def Inference(Index: int, Prompt: str, SystemPrompts: list[str], Tools: list[dic
     else:
         temp = Temperature
 
+    # Set top_p
+    if (TopP is None):
+        TopP = 0.95
+    
+    # Set top_k
+    if (TopK is None):
+        TopK = 40
+
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
     
     # Get the model type to use
     if (type(__models__[Index][0]) == GPT4All):
         # Use GPT4All
-        return g4a.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, contentToShow, maxLength, temp)
+        return g4a.__inference__(
+            __models__[Index][0],
+            __models__[Index][1],
+            contentForModel,
+            contentToShow,
+            maxLength,
+            temp
+        )
     elif (type(__models__[Index][0]) == Llama):
         # Use Llama-CPP-Python
-        return lcpp.__inference__(__models__[Index][0], __models__[Index][1], contentForModel, seed, Tools, maxLength, temp)
+        return lcpp.__inference__(
+            __models__[Index][0],
+            __models__[Index][1],
+            contentForModel,
+            seed,
+            Tools,
+            maxLength,
+            temp,
+            TopP,
+            TopK
+        )
     elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str, str]):
         # Use HF
-        return hf.__inference__(__models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][0][3], __models__[Index][1], contentForModel, maxLength, temp)
+        return hf.__inference__(
+            __models__[Index][0][0],
+            __models__[Index][0][1],
+            __models__[Index][0][2],
+            __models__[Index][0][3],
+            __models__[Index][1],
+            contentForModel,
+            maxLength,
+            temp,
+            TopP,
+            TopK
+        )
     else:
         # It's an invalid model type
         raise Exception("Invalid model.")
