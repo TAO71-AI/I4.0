@@ -2,6 +2,8 @@
 from stable_diffusion_cpp import StableDiffusion, GGMLType
 from huggingface_hub import hf_hub_download
 from PIL.Image import Image
+import random
+import sys
 
 # Import I4.0's utilities
 import ai_config as cfg
@@ -141,5 +143,6 @@ def __inference__(Model: StableDiffusion, Prompt: str, NegativePrompt: str, Widt
         width = Width,
         height = Height,
         guidance = Guidance,
-        sample_method = "euler"
+        sample_method = "euler",
+        seed = random.randint(0, sys.maxsize)
     )

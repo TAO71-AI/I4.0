@@ -43,7 +43,7 @@ Should work with about 384 MB, but 512 MB or 1 GB is recommended.
 > We are not including the RAM required for the OS here.
 
 ### OS
-Any OS that supports Python 3.8 or higher.
+Any OS that supports Python 3.11 or higher.
 
 > [!NOTE]
 > Only tested in **Windows 10**, **Windows 11** and **Arch Linux**.

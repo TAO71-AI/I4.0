@@ -201,11 +201,17 @@ def Inference(
     
     # Set top_p
     if (TopP is None):
-        TopP = 0.95
+        try:
+            TopP = __models__[Index][1]["top_p"]
+        except:
+            TopP = 0.95
     
     # Set top_k
     if (TopK is None):
-        TopK = 40
+        try:
+            TopK = __models__[Index][1]["top_k"]
+        except:
+            TopK = 40
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")

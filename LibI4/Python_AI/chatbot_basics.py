@@ -95,7 +95,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "image_generation",
-                "description": "Generates an image.",
+                "description": "This function generates an image.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -116,7 +116,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "audio_generation",
-                "description": "Generates an audio.",
+                "description": "This function generates an audio.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -133,7 +133,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "internet_search",
-                "description": "Search over the internet.",
+                "description": "This function searches over the internet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -158,7 +158,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "internet_url",
-                "description": "Read the content of a website from internet.",
+                "description": "This function reads the content of a website from internet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -179,7 +179,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "internet_research",
-                "description": "Research information across the whole internet. WARNING: THIS TOOL MAY TAKE UP A LOT OF TIME AND RESOURCES, CHOOSE WISELY WHEN TO USE IT.",
+                "description": "This function researches information across the whole internet. WARNING: THIS TOOL MAY TAKE UP A LOT OF TIME AND RESOURCES, CHOOSE WISELY WHEN TO USE IT.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -200,7 +200,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "save_memory",
-                "description": "Saves a memory for the long-term.",
+                "description": "This function saves a memory for the long-term.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -217,7 +217,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "edit_memory",
-                "description": "Edits a previously created memory.",
+                "description": "This function edits a previously created memory.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -238,7 +238,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "delete_memory",
-                "description": "Deletes a previously created memory.",
+                "description": "This function deletes a previously created memory.",
                 "parameters": {
                     "type": "object",
                     "properties": {
@@ -248,6 +248,27 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                         }
                     },
                     "required": ["memory_id"]
+                }
+            }
+        },
+        "document-creator": {
+            "type": "function",
+            "function": {
+                "name": "document_creator",
+                "description": "This function creates a PDF document.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "html": {
+                            "type": "string",
+                            "description": "Content of the document, in HTML format. Example: `<html><head><style>...</style>...</head><body>...</body></html>`."
+                        },
+                        "document_type": {
+                            "type": "string",
+                            "description": "Type of document to create. This parameter can be `pdf` or `docx`."
+                        }
+                    },
+                    "required": ["html", "document_type"]
                 }
             }
         }

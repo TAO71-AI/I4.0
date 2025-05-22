@@ -13,8 +13,9 @@ from . import Encryption
 
 # Servers variables
 ServersTasks: dict[int, list[Service]] = {}
-Connected: str = ""
+Connected: tuple[str, str, int] | None = None
 Conf: Config = Config()
+ClientVersion: int = 140100
 
 # WebSocket variables
 ClientSocket: ClientConnection | None = None
@@ -48,25 +49,41 @@ async def __connect_str__(Server: str, Port: int = 8060) -> None:
         Server = Server[6:]
     else:
         ext = "ws://"
+    
+    # Get port
+    if (Server.count(":") > 0):
+        Server = Server.split(":")
+        Port = int(Server[1])
+        Server = Server[0]
 
     # Create socket and connect
-    ClientSocket = await connect(f"{ext}{Server}:{Port}", max_size = None)
+    ClientSocket = await connect(f"{ext}{Server}:{Port}", max_size = None, ping_interval = None, ping_timeout = None, close_timeout = None)
 
     # Wait until it's connected
-    for _ in range(50):
-        if (ClientSocket.state == State.OPEN):
-            break
+    waited = 0
+
+    while (ClientSocket.state == State.CONNECTING):
+        if (waited > 50):
+            raise TimeoutError("Server not responding.")
 
         await asyncio.sleep(0.1)
-    else:
-        raise Exception("Server not responding.")
+        waited += 1
 
     # Set connected server
-    Connected = Server
+    Connected = (Server, f"{ext}{Server}:{Port}", -1)
 
     # Get the public key from the server
     if (ServerPublicKey is None):
         ServerPublicKey = await SendAndReceive("get_public_key".encode("utf-8"), False)
+    
+    # Get the server version from the server
+    serverVersion = await SendAndReceive("get_server_version".encode("utf-8"), False)
+    serverVersion = serverVersion.decode("utf-8")
+
+    try:
+        Connected = (Connected[0], Connected[1], int(serverVersion))
+    except:
+        pass
 
 async def __connect_int__(Server: int, Port: int = 8060) -> None:
     if (Server < 0 or Server >= len(Conf.Servers)):
@@ -111,7 +128,7 @@ async def Disconnect() -> None:
         ClientSocket = None
 
     # Delete the connected server
-    Connected = ""
+    Connected = None
 
     # Delete the server public key
     ServerPublicKey = None
@@ -147,8 +164,8 @@ async def SendAndReceive(Data: bytes | str, Encrypt: bool = True) -> bytes:
 
     # Encrypt the data
     if (Encrypt):
-        Data = Encryption.EncryptMessage(Data, ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm)).encode("utf-8")
-        Data = json.dumps({"Hash": Conf.HashAlgorithm, "Message": Data.decode("utf-8")}).encode("utf-8")
+        Data = Encryption.EncryptMessage(Data, ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm), Connected[2] >= 140100).encode("utf-8")
+        Data = json.dumps({"Hash": Conf.HashAlgorithm, "Message": Data.decode("utf-8"), "Version": str(ClientVersion)}).encode("utf-8")
 
     # Send the data
     await ClientSocket.send(Data)
@@ -253,7 +270,7 @@ async def FindFirstServer(ServiceToExecute: Service, DeleteData: bool = False) -
 
 def IsConnected() -> bool:
     # Check if the user is connected to a server
-    return len(Connected.strip()) > 0 and ClientSocket != None and ClientSocket.state == State.OPEN
+    return Connected is not None and ClientSocket != None and ClientSocket.state == State.OPEN
 
 async def SendAndWaitForStreaming(Data: str | bytes) -> AsyncIterator[dict[str, any]]:
     """

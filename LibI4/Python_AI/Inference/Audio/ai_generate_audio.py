@@ -1,21 +1,31 @@
 # Import I4.0 utilities
 import ai_config as cfg
 
-# Import other libraries
-from io import BytesIO
-from transformers import AutoModelForTextToWaveform, AutoProcessor
-import soundfile as sf
+# Import `hf` text2audio library
+import Inference.Audio.Text2Audio.hf as t2a_hf
 
-__models__: dict[int, tuple[AutoModelForTextToWaveform, AutoProcessor, str, str]] = {}
+# Import other libraries
+from transformers import AutoModelForTextToWaveform, AutoProcessor
+
+__models__: dict[int, tuple[tuple[AutoModelForTextToWaveform, AutoProcessor, str, str], dict[str, any]] | None] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is already loaded
     if (Index in list(__models__.keys()) and __models__[Index] is not None):
         return
+    
+    # Get configuration
+    config = cfg.GetInfoOfTask("text2audio", Index)
+    
+    # Check and load the model type
+    if (config["type"] == "hf"):
+        model, processor, device, dtype = t2a_hf.LoadModel(Index)
+        model = (model, processor, device, dtype)
+    else:
+        raise RuntimeError("Unknown text2audio type.")
         
-    # Load the model and add it to the list of models
-    model, processor, device, dtype = cfg.LoadModel("text2audio", Index, AutoModelForTextToWaveform, AutoProcessor)
-    __models__[Index] = (model, processor, device, dtype)
+    # Append the model to the list of models
+    __models__[Index] = (model, config)
 
 def LoadModels() -> None:
     # For each model
@@ -38,27 +48,11 @@ def GenerateAudio(Index: int, Prompt: str) -> bytes:
     # Load the model
     __load_model__(Index)
 
-    # Cut the prompt
-    if (Prompt.startswith("\"") or Prompt.startswith("'")):
-        Prompt = Prompt[1:]
-    
-    if (Prompt.endswith("\"") or Prompt.endswith("'")):
-        Prompt = Prompt[:-1]
-
-    # Tokenize the prompt
-    inputs = __models__[Index][1](text = [Prompt], return_tensors = "pt").to(__models__[Index][2]).to(__models__[Index][3])
-
     # Inference the model
-    result = __models__[Index][0].generate(**inputs, do_sample = True)
-    
-    # Save the audio into a buffer
-    buffer = BytesIO()
-    sf.write(buffer, result.cpu().numpy().squeeze(), __models__[Index][0].generation_config.sample_rate, format = "WAV")
-
-    buffer.seek(0)
-    data = buffer.getvalue()
-    
-    buffer.close()
+    if (__models__[Index][1]["type"] == "hf"):
+        data = t2a_hf.InferenceModel(Prompt, __models__[Index][0][0], __models__[Index][0][1], __models__[Index][0][2], __models__[Index][0][3])
+    else:
+        raise RuntimeError("Unknown text2audio type.")
 
     # Return the bytes of the generated audio file
     return data

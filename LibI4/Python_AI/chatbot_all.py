@@ -169,7 +169,7 @@ def GetResponseFromInternet(
         TopK: int | None
     ) -> Iterator[dict[str, any]]:
     # Search for websites
-    internetResults = internet.Search__Websites(Keywords, Count)
+    internetResults = internet.Search__Websites(Keywords, Count, None)
     return GetResponseFromInternet_URL(
         Index,
         internetResults,
@@ -262,7 +262,7 @@ def InternetResearch(
         TopK: int | None
     ) -> Iterator[dict[str, any]]:
     # Get the internet results
-    internetResults = internet.Search__Websites(Keywords, cfg.current_data["internet"]["max_results"])
+    internetResults = internet.Search__Websites(Keywords, cfg.current_data["internet"]["max_results"], None)
     internetResponses = []
 
     # Yield a token
@@ -281,7 +281,7 @@ def InternetResearch(
             "",
             "",
             False,
-            ["", ""],
+            Conversation,
             None,
             Temperature,
             TopP,
@@ -401,8 +401,8 @@ def MakePrompt(
     
     # Add system prompt if tools > 0
     if (len(tools) > 0):
-        sp.append("To use a tool, you must write something like this:\n\"\"\"\n<tool_call>\n{function parameters}\n</tool_call>\n\"\"\"")
-
+        sp.append("To use a tool, you must write something like this:\n```plaintext\n<tool_call>\n{function parameters}\n</tool_call>\n[RESPONSE TO USER'S PROMPT]\n```")
+    
     # Get the personality
     sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
 

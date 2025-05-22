@@ -11,6 +11,7 @@ import datetime
 import time
 import traceback
 import gc
+import base64
 
 try:
     # Try to import I4.0 utilities
@@ -23,6 +24,7 @@ try:
     import queue_system as qs
     import temporal_files as temp
     import data_save as ds
+    import documents as docs
 except ImportError:
     # Error importing utilities
     traceback.print_exc()
@@ -37,6 +39,7 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 modelsUsed: dict[str, list[int]] = {}
+ServerVersion: int = 140100
 
 # Keys
 ServerPublicKey: bytes | None = None
@@ -399,9 +402,6 @@ def __infer__(
                 yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask('text2img', Index)['price']} tokens, you have {Key['tokens']}. This tool will not be executed."]}
                 continue
 
-            # Remove the tokens from the key
-            Key["tokens"] -= cfg.GetInfoOfTask("text2img", index)["price"]
-
             # Get the prompt
             pr = tool["arguments"]["prompt"]
             npr = tool["arguments"]["negative_prompt"]
@@ -447,13 +447,6 @@ def __infer__(
             if (not enoughTokens):
                 yield {"response": "", "files": [], "ended": False, "errors": [f"Not enough tokens. You need {cfg.GetInfoOfTask('text2audio', Index)['price']} tokens, you have {Key['tokens']}. This tool will not be executed."]}
                 continue
-
-            # Remove the tokens from the key
-            Key["tokens"] -= cfg.GetInfoOfTask("text2audio", index)["price"]
-
-            # Save the key if the key is not None
-            if (len(Key["key"]) > 0):
-                sb.SaveKey(Key)
 
             # Get the prompt
             pr = tool["arguments"]["prompt"]
@@ -664,7 +657,26 @@ def __infer__(
 
             # Delete the memory
             memories.DeleteMemory(Key["key"], memories.GetMemory(Key["key"], memID))
-        elif (not SeeTools):
+        elif (tool["name"] == "document_creator"):
+            # Create a document tool
+            # Get the code and document type
+            htmlCode = tool["arguments"]["html"]
+            documentType = tool["arguments"]["document_type"].lower().strip()
+
+            # Check the document type and create the document
+            if (documentType == "pdf"):
+                document = docs.HTML2PDF(htmlCode)
+            elif (documentType == "docx"):
+                document = docs.HTML2DOCX(htmlCode)
+            else:
+                raise RuntimeError("Invalid document type.")
+            
+            # Convert to base64
+            document = base64.b64encode(document).decode("utf-8")
+
+            # Send message
+            yield {"response": "", "files": [{"type": documentType, "data": document}], "ended": False, "errors": []}
+        else:
             # Unknown tool. Send to the client
             yield {"response": json.dumps(tool), "files": [], "ended": False, "errors": ["unknown tool"]}
     
@@ -701,11 +713,12 @@ def __infer__(
         uFiles = []
         aFiles = []
 
-        for f in Files:
-            uFiles.append({"type": f["type"], f["type"]: f["data"]})
-            
-        for f in convAssistantFiles:
-            aFiles.append({"type": f["type"], f["type"]: f["data"]})
+        if (len("".join(f["data"] for f in Files)) + len("".join(f["data"] for f in convAssistantFiles)) <= cfg.current_data["data_save_max_fs"] * 1024 * 1024):
+            for f in Files:
+                uFiles.append({"type": f["type"], f["type"]: f["data"]})
+                
+            for f in convAssistantFiles:
+                aFiles.append({"type": f["type"], f["type"]: f["data"]})
 
         ds.SaveData(
             uFiles + [{"type": "text", "text": Prompt}],
@@ -1039,10 +1052,6 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 if (cfg.current_data["ban_if_nsfw_ip"] and IPAddress != "127.0.0.1"):
                     # Ban the IP address
                     banned["ip"].append(IPAddress)
-            else:
-                # Return half of the tokens spent
-                key["tokens"] += cfg.GetInfoOfTask(service, index)["price"] / 2
-                sb.SaveKey(key)
             
             # Remove the user from the queue
             qs.RemoveUserFromQueue(service, index)
@@ -1262,7 +1271,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     else:
         yield {"response": "", "files": [], "ended": True, "errors": ["Invalid command."], "pubKey": clientPublicKey}
 
-async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[str, any], HashAlgorithm: enc.hashes.HashAlgorithm) -> None:
+async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[str, any], HashAlgorithm: enc.hashes.HashAlgorithm, ClientVersion: int) -> None:
     clPubKey = None
     
     try:
@@ -1273,8 +1282,12 @@ async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[s
             response.pop("pubKey")
 
             # Send the response
-            await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey, HashAlgorithm)
-    except (ConnectionClosed, ConnectionClosedError, ConnectionClosedOK):
+            await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey, HashAlgorithm, ClientVersion)
+    except (
+        ConnectionError, ConnectionClosed, ConnectionClosedError,
+        ConnectionClosedOK, ConnectionAbortedError, ConnectionRefusedError,
+        ConnectionResetError
+    ):
         # Print error
         print("Connection closed while processing!")
 
@@ -1296,9 +1309,9 @@ async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[s
 
         # Remove from the queue
         qs.RemoveUserFromQueue(Prompt["Service"], index)
-    except:
+    except Exception as ex:
         # Print error
-        print("Error processing! Could not send data to client.")
+        print(f"Error processing! Could not send data to client. Error: {ex}")
 
         # Print error info
         traceback.print_exc()
@@ -1329,7 +1342,7 @@ async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[s
                 "files": [],
                 "ended": True,
                 "errors": []
-            }).encode("utf-8"), clPubKey, HashAlgorithm)
+            }).encode("utf-8"), clPubKey, HashAlgorithm, ClientVersion)
         except:
             # Error, ignore
             pass
@@ -1347,23 +1360,34 @@ async def WaitForReceive(Client: ClientConnection, Message: bytes | str) -> None
     # Print received length
     print(f"Received {len(Message)} bytes from '{Client.remote_address[0]}'")
 
+    # Convert message to string
+    if (isinstance(Message, bytes)):
+        Message = Message.decode("utf-8")
+
     # Check for some services
-    if ((Message == "get_public_key" and type(Message) is str) or (Message.decode("utf-8") == "get_public_key" and type(Message) is bytes)):
+    if (Message == "get_public_key"):
         # Send the public key to the client
-        await __send_to_client__(Client, ServerPublicKey.decode("utf-8"), None, None)
+        await __send_to_client__(Client, ServerPublicKey.decode("utf-8"), None, None, -1)
+        return
+    elif (Message == "get_server_version"):
+        # Send the server version to the client
+        await __send_to_client__(Client, str(ServerVersion), None, None, -1)
         return
 
     try:
+        clientVersion = -1
+
         # Get the message and hash algorithm of the client
         try:
             Message = cfg.JSONDeserializer(Message)
             clientHashType = Message["Hash"]
+            clientVersion = int(Message["Version"]) if ("Version" in list(Message.keys())) else -1
             Message = enc.DecryptMessage(Message["Message"], ServerPrivateKey, enc.__parse_hash__(clientHashType))
 
             print(f"Client is using the hash '{clientHashType}' (specified by client).")
             clientHashType = enc.__parse_hash__(clientHashType)
         except json.JSONDecodeError:
-            # Decrypt the message
+            # Oldest decryption, VERY slow, deprecated
             for encType in cfg.current_data["allowed_hashes"]:
                 try:
                     Message = enc.DecryptMessage(Message, ServerPrivateKey, enc.__parse_hash__(encType))
@@ -1380,28 +1404,33 @@ async def WaitForReceive(Client: ClientConnection, Message: bytes | str) -> None
         prompt = cfg.JSONDeserializer(Message)
         
         # Execute service and send data
-        await ExecuteServiceAndSendToClient(Client, prompt, clientHashType)
+        await ExecuteServiceAndSendToClient(Client, prompt, clientHashType, clientVersion)
     except Exception as ex:
         # If there's an error, send the response
-        try:
-            await __send_to_client__(Client, json.dumps({
-                "response": "",
-                "files": [],
-                "ended": True,
-                "errors": [f"Error. Details: {ex}"]
-            }).encode("utf-8"), None, None)
-        except:
-            pass
+        await __send_to_client__(Client, json.dumps({
+            "response": "",
+            "files": [],
+            "ended": True,
+            "errors": [f"Error. Details: {ex}"]
+        }).encode("utf-8"), None, None, -1)
 
-async def __send_to_client__(Client: ClientConnection, Message: str | bytes, EncryptKey: bytes | None, HashAlgorithm: enc.hashes.HashAlgorithm | None) -> None:
+async def __send_to_client__(Client: ClientConnection, Message: str | bytes, EncryptKey: bytes | None, HashAlgorithm: enc.hashes.HashAlgorithm | None, ClientVersion: int) -> None:
     # Encrypt the message
     if (EncryptKey is None or HashAlgorithm is None):
         msg = Message
     else:
-        msg = enc.EncryptMessage(Message, EncryptKey, HashAlgorithm)
+        msg = enc.EncryptMessage(Message, EncryptKey, HashAlgorithm, ClientVersion >= 140100)
 
     # Send the message
-    await Client.send(msg)
+    try:
+        await Client.send(msg)
+    except Exception as ex:
+        print(f"Error sending message. Details: {ex}")
+        
+        try:
+            await Client.send(msg)
+        except:
+            pass
 
 def __receive_thread__(Client: ClientConnection, Message: str | bytes) -> None:
     # Create new event loop
@@ -1424,7 +1453,11 @@ async def __receive_loop__(Client: ClientConnection) -> None:
             # Create and start a new thread
             clientThread = threading.Thread(target = __receive_thread__, args = (Client, message), daemon = True)
             clientThread.start()
-        except (ConnectionClosed, ConnectionClosedError, ConnectionClosedOK):
+        except (
+            ConnectionError, ConnectionClosed, ConnectionClosedError,
+            ConnectionClosedOK, ConnectionAbortedError, ConnectionRefusedError,
+            ConnectionResetError
+        ):
             # Connection closed
             break
         except Exception as ex:
@@ -1438,7 +1471,7 @@ async def __receive_loop__(Client: ClientConnection) -> None:
                     "files": [],
                     "ended": True,
                     "errors": [f"Error executing service. Details: {ex}"]
-                }), None, None)
+                }), None, None, -1)
 
                 # Print the error
                 print("Error executing service. Traceback:")
@@ -1452,31 +1485,35 @@ async def __receive_loop__(Client: ClientConnection) -> None:
             f.write(json.dumps(banned))
 
 async def OnConnect(Client: ClientConnection) -> None:
-    print(f"'{Client.remote_address[0]}' has connected.")
+    try:
+        print(f"'{Client.remote_address[0]}' has connected.")
 
-    if (Client.remote_address[0] in banned["ip"]):
-        try:
-            # Print
-            print("Banned user. Closing connection.")
+        if (Client.remote_address[0] in banned["ip"]):
+            try:
+                # Print
+                print("Banned user. Closing connection.")
 
-            # Send banned message
-            await __send_to_client__(Client, json.dumps({
-                "response": "",
-                "files": [],
-                "ended": True,
-                "errors": ["Your IP address has been banned. Please contact support if this was a mistake."]
-            }), None, None)
+                # Send banned message
+                await __send_to_client__(Client, json.dumps({
+                    "response": "",
+                    "files": [],
+                    "ended": True,
+                    "errors": ["Your IP address has been banned. Please contact support if this was a mistake."]
+                }), None, None, -1)
 
-            # Close the connection
-            await Client.close()
-            return
-        except:
-            # Error closing the connection, print
-            print("Error closing the connection. Ignoring...")
-            return
+                # Close the connection
+                await Client.close()
+                return
+            except:
+                # Error closing the connection, print
+                print("Error closing the connection. Ignoring...")
+                return
 
-    # Receive
-    await __receive_loop__(Client)
+        # Receive
+        await __receive_loop__(Client)
+    except Exception as ex:
+        print(f"Error while the client was connecting.")
+        traceback.print_exception(ex)
 
 async def StartServer() -> None:
     # Create thread for the cache cleanup
@@ -1507,7 +1544,7 @@ async def StartServer() -> None:
         print(f"Error parsing the server port, make sure it's an integer. Using default ({port}).")
 
     # Start the server
-    serverWS = await serve(OnConnect, ip, port, max_size = None, ping_interval = 60, ping_timeout = 30)
+    serverWS = await serve(OnConnect, ip, port, max_size = None, ping_interval = None, ping_timeout = None, close_timeout = None)
     await serverWS.wait_closed()
 
 # Save old data

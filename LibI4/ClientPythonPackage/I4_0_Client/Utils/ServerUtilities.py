@@ -41,6 +41,10 @@ class SimulatedVisionV1():
         # Get only the images files
         files = SimulatedVisionV1.SeparateFiles(Files)
 
+        # Check files
+        if (len(files) == 0):
+            return ""
+
         # Try to send the message
         res = ExecuteService("", files, VisionService, Index, ForceNoConnect, False)
         img = 0
@@ -211,6 +215,10 @@ class SimulatedVisionV2():
         # Get only the video files
         files = SimulatedVisionV2.SeparateFiles(Files)
 
+        # Check files
+        if (len(files) == 0):
+            return ""
+
         # For each video
         for video in files:
             # Get the video bytes
@@ -270,6 +278,10 @@ class SimulatedAuditionV1():
         # Get only the audio files
         files = SimulatedAuditionV1.SeparateFiles(Files)
 
+        # Check files
+        if (len(files) == 0):
+            return ""
+
         # Try to send the message
         res = ExecuteService("", files, AuditionService, Index, ForceNoConnect, False)
         aud = 0
@@ -307,7 +319,7 @@ def __update_config__() -> None:
     """
     Updates the configuration in the server connection.
     """
-    ServerCon.Conf = Conf
+    ServerCon.Conf = ServerCon.Conf.__from_dict__(Conf.__to_dict__())
 
 async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> AsyncIterator[dict[str, any]]:
     """
@@ -348,15 +360,25 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
     If FilesPath is false, the Files list MUST have the bytes of the files, in base64.
     If ForceNoConnect is true, this will not connect to any server, so you must be connected to one first.
     """
-
     # Update config
     __update_config__()
 
     # Connect to a server
+    currentServer = ServerCon.Connected[1] if (ServerCon.Connected is not None) else None
+
     if (not ForceNoConnect):
-        # Connect to the first server to the service
-        server = await ServerCon.FindFirstServer(ServerService)
-        await ServerCon.Connect(server)
+        if (ServerCon.IsConnected()):
+            # Get the services from the server
+            serverTasks = await ServerCon.GetServicesFromServer()
+
+            if (ServerService not in serverTasks):
+                # Connect to the first server to the service
+                server = await ServerCon.FindFirstServer(ServerService)
+                await ServerCon.Connect(server)
+        else:
+            # Connect to the first server to the service
+            server = await ServerCon.FindFirstServer(ServerService)
+            await ServerCon.Connect(server)
     elif (not ServerCon.IsConnected()):
         raise Exception("Please connect to a server first or set `ForceNoConnect` to false.")
 
@@ -439,14 +461,20 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
             # Use the `img2text` service if allowed in the configuration
             if (Conf.SimulatedVision_v1_Image2Text_Allow):
                 try:
-                    simulatedPrompt += await SimulatedVisionV1.ExecuteImageToText(files, ForceNoConnect)
+                    res = await SimulatedVisionV1.ExecuteImageToText(files, ForceNoConnect)
+                    
+                    if (len(res) > 0):
+                        simulatedPrompt += res
                 except:
                     pass  # Error. Ignore
             
             # Use the `od` service if allowed in the configuration
             if (Conf.SimulatedVision_v1_ObjectDetection_Allow):
                 try:
-                    simulatedPrompt += await SimulatedVisionV1.ExecuteObjectDetection(files, ForceNoConnect)
+                    res = await SimulatedVisionV1.ExecuteObjectDetection(files, ForceNoConnect)
+                    
+                    if (len(res) > 0):
+                        simulatedPrompt += res
                 except:
                     pass  # Error. Ignore
         
@@ -455,7 +483,10 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
 
             if (Conf.SimulatedVision_v2_Video_Allow):
                 try:
-                    simulatedPrompt += await SimulatedVisionV2.ExecuteSimulatedVision(files, ForceNoConnect)
+                    res = await SimulatedVisionV2.ExecuteSimulatedVision(files, ForceNoConnect)
+                    
+                    if (len(res) > 0):
+                        simulatedPrompt += res
                 except:
                     pass  # Error. Ignore
         
@@ -465,13 +496,20 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
             # Use the `speech2text` service if allowed in the configuration
             if (Conf.SimulatedAudition_v1_SpeechToText_Allow):
                 try:
-                    simulatedPrompt += await SimulatedAuditionV1.ExecuteSpeechToText(files, ForceNoConnect)
+                    res = await SimulatedAuditionV1.ExecuteSpeechToText(files, ForceNoConnect)
+                    
+                    if (len(res) > 0):
+                        simulatedPrompt += res
                 except:
                     pass  # Error. Ignore
 
         # Add into the system prompts
         if (len(simulatedPrompt.strip()) > 0):
             systemPrompt += f"\n{simulatedPrompt}"
+        
+        # Reconnect to the server if disconnected
+        if (ServerCon.Connected is not None and currentServer is not None and ServerCon.Connected[1] != currentServer and not ForceNoConnect):
+            await ServerCon.Connect(currentServer)
 
     # Set prompt
     Prompt = json.dumps({

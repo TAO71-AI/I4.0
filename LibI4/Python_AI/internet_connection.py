@@ -1,7 +1,15 @@
-# Import libraries
-from bs4 import BeautifulSoup
+# Import I4.0 utilities
+import ai_config as cfg
+
+# Import DuckDuckGo
 from duckduckgo_search import DDGS
 from duckduckgo_search.exceptions import RatelimitException, DuckDuckGoSearchException
+
+# Import Google
+from googlesearch import search as google_search
+
+# Import other libraries
+from bs4 import BeautifulSoup
 import requests
 import json
 
@@ -76,25 +84,45 @@ def ReadTextFromWebsite(URL: str, Limit: int = 0, RemoveUnderLength: int = 0) ->
     # Return the text
     return text.strip()
 
-def Search__Websites(Prompt: str, MaxResults: int) -> list[str]:
+def Search__Websites(Prompt: str, MaxResults: int, InternetSystem: str | None = None) -> list[str]:
     # Create results list
     results = []
+    
+    # Set the internet system
+    if (InternetSystem is None):
+        InternetSystem = cfg.current_data["internet"]["system"].lower().strip()
 
-    try:
-        # Try to search the prompt using the API
-        searchResults = DDGS().text(Prompt, max_results = MaxResults)
-    except (RatelimitException, DuckDuckGoSearchException):
+    if (InternetSystem == "duckduckgo" or InternetSystem == "ddg"):
         try:
-            # Rate limit error, try again using DuckDuckGo Lite
-            searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
+            # Try to search the prompt using the API
+            searchResults = DDGS().text(Prompt, max_results = MaxResults)
         except (RatelimitException, DuckDuckGoSearchException):
-            # Rate limit error, try again using DuckDuckGo HTML
-            searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "html")
+            try:
+                # Rate limit error, try again using DuckDuckGo Lite
+                searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
+            except (RatelimitException, DuckDuckGoSearchException):
+                # Rate limit error, try again using DuckDuckGo HTML
+                searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "html")
 
-    # For each result
-    for result in searchResults:
-        # Append the result URL to the results list
-        results.append(result["href"])
+        # For each result
+        for result in searchResults:
+            # Append the result URL to the results list
+            results.append(result["href"])
+    elif (InternetSystem == "google"):
+        # Search the prompt using the API
+        searchResults = google_search(Prompt, num_results = MaxResults)
+
+        # Set the results
+        results = searchResults
+    elif (InternetSystem == "auto" or InternetSystem == "automatic" or InternetSystem == "hybrid"):
+        try:
+            # Try to search using DuckDuckGo
+            return Search__Websites(Prompt, MaxResults, "ddg")
+        except:
+            # Search using Google
+            return Search__Websites(Prompt, MaxResults, "google")
+    else:
+        raise ValueError("Invalid internet search system.")
     
     # Return the results list
     return results
@@ -111,26 +139,6 @@ def Search__News(Prompt: str, MaxResults: int) -> list[str]:
     
     # Return the results list
     return results
-
-def Search__Chat(Prompt: str, Model: str) -> str:
-    # Check the model
-    availableModels = [
-        "gpt-4o-mini",      # Not Open-Source
-        "claude-3-haiku",   # Not Open-Source
-        "llama-3.1-70b",    # Open-Source
-        "mixtral-8x7b"      # Open-Source
-    ]
-
-    if (Model not in availableModels):
-        # Invalid model, print and use mixtral-8x7b
-        print(f"Invalid model. Available models are: {', '.join(availableModels)[2:-2]}.\nUsing Mixtral-8x7B.")
-        Model = "mixtral-8x7b"
-
-    # Use a chatbot from DuckDuckGo
-    response = DDGS().chat(Prompt, Model)
-
-    # Return the chatbot response
-    return response
 
 def Search__Maps(Prompt: str, Radius: int, MaxResults: int) -> list[str]:
     # Search the prompt in DuckDuckGo (maps) and create the results list

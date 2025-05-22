@@ -5,11 +5,11 @@
 # Q3_K_M    - Low quality.
 # Q3_K_L    - Can be usable.
 # Q3_K_XL   - Almost the same as Q3_K_L. The embedding and output weights are in Q8_0.
-# Q4_K_S    - Decent quality.
+# Q4_K_S    - Decent quality.                                                               <--- RECOMMENDED
 # Q4_K_M    - Good quality.                                                                 <--- RECOMMENDED
 # Q4_K_L    - Almost the same as Q4_K_M. The embedding and output weights are in Q8_0.
 # Q5_K_S    - High quality.                                                                 <--- RECOMMENDED
-# Q5_K_M    - High quality. A bit more than Q5_K_S.                                         <--- RECOMMENDED
+# Q5_K_M    - High quality. A bit better than Q5_K_S.                                       <--- RECOMMENDED
 # Q5_K_L    - Almost the same as Q5_K_M. The embedding and output weights are in Q8_0.
 # Q6_K      - Very high quality, almost like F16 or BF16.                                   <--- RECOMMENDED
 # Q6_K_L    - Almost the same as Q6_K. The embedding and output weights are in Q8_0.

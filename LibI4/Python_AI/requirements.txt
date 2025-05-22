@@ -1,12 +1,12 @@
 # Please use the `install_requirements_auto.sh` script!!!!
 
 # General requirements
-numpy==1.26
+numpy<1.27,>=1.22
 torch>=2.0.0
 torchtext
 torchvision
 torchaudio
-transformers<=4.46.3
+transformers<4.51.0,>=4.50.0
 diffusers<=0.31.0
 
 # Server requirements
@@ -28,7 +28,6 @@ safetensors
 sentencepiece
 emoji
 pydub
-#google-tts
 #git+https://github.com/Tps-F/fairseq.git@main
 psutil
 pyyaml
@@ -38,14 +37,17 @@ antlr4-python3-runtime==4.9
 I4_0-Client-PY
 bitsandbytes
 accelerate>=0.26.0
+click<9.0.0,>=8.1.7
+weasyprint>=65.1,<66
+html2docx
+googlesearch-python
 
 # Requirements for inference
 gpt4all==2.8.2
-llama-cpp-python
-stable-diffusion-cpp-python
+#llama-cpp-python
+#stable-diffusion-cpp-python
 SpeechRecognition==3.10.4
 openai-whisper>=20240930
 qwen-omni-utils[decord]
 #git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
 #git+https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git@intel_support  # For Intel GPUs
-#styletts2~=0.1.6

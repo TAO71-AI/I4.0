@@ -61,6 +61,10 @@ def Inference(Index: int, Data: bytes | sr.AudioData) -> dict[str, str]:
     # Load the model
     __load_model__(Index)
 
+    # Convert audio data into bytes
+    if (isinstance(Data, sr.AudioData)):
+        Data = Data.get_wav_data()
+
     # Save data into a buffer
     data = BytesIO(Data)
     data.seek(0)

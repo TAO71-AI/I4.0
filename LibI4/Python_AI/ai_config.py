@@ -62,9 +62,10 @@ __config_data__: dict[str] = {
         "research": {                                                                               # Internet research configuration.
             "price": 40,                                                                                # Extra price of the internet research (WARNING: The tokens that this will take will be `[chatbot price] * ([internet max websites] + 1) + [this price]`).
             "reasoning_mode": -1                                                                        # -1 = Switch automatically between using reasoning or not. 0 = ALWAYS use reasoning. 1 = NEVER use reasoning.
-        }
+        },
+        "system": "auto"                                                                            # Library to use when searching from internet.
     },
-    "enabled_tools": "image_generation audio_generation internet internet-url internet-research memory memory-edit memory-delete",
+    "enabled_tools": "image_generation audio_generation internet internet-url internet-research memory memory-edit memory-delete document-creator",
     # ^-- I4.0 tools.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
@@ -91,6 +92,7 @@ __config_data__: dict[str] = {
         "minute": 0                                                                                 # How many minutes the conversation will be saved?
     },
     "allow_data_save": True,                                                                    # Allow the usage of data save.
+    "data_save_max_fs": 0,                                                                      # Max file size allowed (in MB) to use the data save. Set to 0 to don't save any files.
     "allow_response_cache": True,                                                               # Allow response cache.             WORKING ON THIS.
     "models": [                                                                                 # Models to be used.
         # Examples:
@@ -208,6 +210,7 @@ __config_data__: dict[str] = {
         #},
         #{
         #    "service": "text2audio",
+        #    "type": "hf",
         #    "model": "MODEL REPOSITORY",
         #    "device": "cpu",
         #    "price": 20

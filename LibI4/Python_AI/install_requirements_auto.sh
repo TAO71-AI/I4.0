@@ -59,29 +59,38 @@ else
 fi
 
 # Set variables
-PIP_CMD="pip"
+if [ -z "$PIP_CMD" ]; then
+    PIP_CMD="pip"
+fi
+
+if [ -z "$PIP_EXTRA_ARGS" ]; then
+    PIP_EXTRA_ARGS=""
+else
+    echo "Running with extra pip args: '$PIP_EXTRA_ARGS'."
+fi
+
 LATEST_LCPP=0
 
 for arg in "$@"; do
     if [ "$arg" = "--lcpp-latest" ]; then
         echo "Building with latest llama.cpp."
         LATEST_LCPP=1
-    else if [ "$arg" = "--force-lcpp-cpu" ]; then
+    elif [ "$arg" = "--force-lcpp-cpu" ]; then
         LCPP_CMK_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
-    else if [ "$arg" = "--lcpp-sycl-no-fp16" ] && [ "$GPU_VENDOR" = "intel" ]; then
+    elif [ "$arg" = "--lcpp-sycl-no-fp16" ] && [ "$GPU_VENDOR" = "intel" ]; then
         LCPP_CMK_ARGS="-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=off"
-    else if [ "$arg" = "--force-sdcpp-cpu" ]; then
+    elif [ "$arg" = "--force-sdcpp-cpu" ]; then
         SDCPP_CMK_ARGS="-DGGML_OPENBLAS=ON"
-    else if [ "$arg" = "--sdcpp-sycl-no-fp16" ] && [ "$GPU_VENDOR" = "intel" ]; then
+    elif [ "$arg" = "--sdcpp-sycl-no-fp16" ] && [ "$GPU_VENDOR" = "intel" ]; then
         SDCPP_CMK_ARGS="-DSD_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx -DGGML_SYCL_F16=OFF"
     fi
 done
 
 # Update some requirements
-"$PIP_CMD" install --upgrade "pip<24.0" setuptools
+"$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade "pip<24.0" setuptools
 
 # Install requirements
-"$PIP_CMD" install --upgrade -r requirements.txt
+"$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade -r requirements.txt
 
 if [ $? -ne 0 ]; then
     echo "Error installing requirements. Closing program."
@@ -93,7 +102,7 @@ fi
 git clone $RVC_URL ./RVC
 cd ./RVC/
 git checkout "$RVC_BRANCH"
-"$PIP_CMD" install --upgrade --verbose .
+"$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade --verbose .
 
 if [ $? -ne 0 ]; then
     echo "Error installing RVC. Closing program."
@@ -107,7 +116,7 @@ rm -rf ./RVC/
 "$PIP_CMD" uninstall -y fairseq
 git clone "https://github.com/Tps-F/fairseq.git" ./fairseq
 cd ./fairseq/
-"$PIP_CMD" install --upgrade --verbose .
+"$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade --verbose .
 
 if [ $? -ne 0 ]; then
     echo "Error installing fairseq. Closing program."
@@ -121,9 +130,9 @@ rm -rf ./fairseq/
 "$PIP_CMD" uninstall -y torch torchvision torchaudio
 
 if [ -z "$TORCH_E_IDX" ]; then
-    "$PIP_CMD" install --upgrade $TORCH_PKG --index-url "$TORCH_IDX"
+    "$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade $TORCH_PKG --index-url "$TORCH_IDX"
 else
-    "$PIP_CMD" install --upgrade $TORCH_PKG --index-url "$TORCH_IDX" --extra-index-url "$TORCH_E_IDX"
+    "$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade $TORCH_PKG --index-url "$TORCH_IDX" --extra-index-url "$TORCH_E_IDX"
 fi
 
 if [ $? -ne 0 ]; then
@@ -148,7 +157,7 @@ if [ $LATEST_LCPP = 1 ]; then
         exit 1
     fi
 
-    FORCE_CMAKE=1 CMAKE_ARGS="$LCPP_CMK_ARGS -DLLAMA_CURL=OFF" "$PIP_CMD" install --upgrade --force-reinstall --no-cache-dir --verbose .
+    FORCE_CMAKE=1 CMAKE_ARGS="$LCPP_CMK_ARGS -DLLAMA_CURL=OFF" "$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade --force-reinstall --no-cache-dir --verbose .
     
     if [ $? -ne 0 ]; then
         echo "Error installing LlamaCPP-Python. Closing program."
@@ -158,7 +167,7 @@ if [ $LATEST_LCPP = 1 ]; then
     cd ..
     rm -rf llama-cpp-python
 else
-    FORCE_CMAKE=1 CMAKE_ARGS="$LCPP_CMK_ARGS" "$PIP_CMD" install --upgrade --force-reinstall --no-cache-dir --verbose git+https://github.com/abetlen/llama-cpp-python.git@main
+    FORCE_CMAKE=1 CMAKE_ARGS="$LCPP_CMK_ARGS" "$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade --force-reinstall --no-cache-dir --verbose git+https://github.com/abetlen/llama-cpp-python.git@main
 
     if [ $? -ne 0 ]; then
         echo "Error installing LlamaCPP-Python. Closing program."
@@ -167,7 +176,7 @@ else
 fi
 
 # Install StableDiffusionCPP-Python
-FORCE_CMAKE=1 CMAKE_ARGS="$SDCPP_CMK_ARGS" "$PIP_CMD" install --upgrade --force-reinstall --no-cache-dir --verbose stable-diffusion-cpp-python
+FORCE_CMAKE=1 CMAKE_ARGS="$SDCPP_CMK_ARGS" "$PIP_CMD" install $PIP_EXTRA_ARGS --upgrade --force-reinstall --no-cache-dir --verbose stable-diffusion-cpp-python
 
 if [ $? -ne 0 ]; then
     echo "Error installing StableDiffusionCPP-Python. Closing program."
