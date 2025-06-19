@@ -1,13 +1,11 @@
-# Import the libraries
-from stable_diffusion_cpp import StableDiffusion, GGMLType
-from huggingface_hub import hf_hub_download
-from PIL.Image import Image
-import random
-import sys
-
 # Import I4.0's utilities
 import ai_config as cfg
 import Inference.PredefinedModels.models as models
+
+# Import the libraries
+from stable_diffusion_cpp import StableDiffusion
+from huggingface_hub import hf_hub_download
+from PIL.Image import Image
 
 def __load_model__(Type: str, DiffusionModel: str, VAE: str, ClipL: str, T5XXL: str, Threads: int) -> StableDiffusion:
     # Print loading message
@@ -18,7 +16,7 @@ def __load_model__(Type: str, DiffusionModel: str, VAE: str, ClipL: str, T5XXL: 
         diffusion_model_path = DiffusionModel,
         vae_path = VAE if (Type == "sdcpp-flux") else "",
         clip_l_path = ClipL,
-        #clip_g_path = VAE if (Type == "sdcpp-sd") else "",
+        clip_g_path = VAE if (Type == "sdcpp-sd") else "",
         t5xxl_path = T5XXL,
         n_threads = Threads,
         wtype = "default",
@@ -134,7 +132,16 @@ def LoadModel(Index: int, Threads: int) -> StableDiffusion:
         # Load as a custom one
         return __load_custom_model__(Index, Threads)
 
-def __inference__(Model: StableDiffusion, Prompt: str, NegativePrompt: str, Width: int, Height: int, Guidance: float, Steps: int) -> list[Image]:
+def __inference__(
+        Model: StableDiffusion,
+        Prompt: str,
+        NegativePrompt: str,
+        Width: int,
+        Height: int,
+        Guidance: float,
+        Steps: int,
+        CFGScale: float
+    ) -> list[Image]:
     # Inference
     return Model.txt_to_img(
         prompt = Prompt,
@@ -143,6 +150,8 @@ def __inference__(Model: StableDiffusion, Prompt: str, NegativePrompt: str, Widt
         width = Width,
         height = Height,
         guidance = Guidance,
+        cfg_scale = CFGScale,
         sample_method = "euler",
-        seed = random.randint(0, sys.maxsize)
+        batch_count = 1,
+        seed = -1
     )

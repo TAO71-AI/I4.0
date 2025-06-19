@@ -1,4 +1,5 @@
 from transformers import Pipeline
+from io import BytesIO
 import PIL.Image
 import ai_config as cfg
 
@@ -30,14 +31,21 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Img: str | PIL.Image.Image) -> str:
+def Inference(Index: int, Img: str | bytes | PIL.Image.Image) -> str:
     # Load the model
     __load_model__(Index)
+
+    # Create empty buffer
+    imgBuffer = None
 
     # Check the image type
     if (type(Img) == str):
         # The image is a string, open the file
         image = PIL.Image.open(Img)
+    elif (type(Img) == bytes):
+        # It's an image from bytes
+        imgBuffer = BytesIO(Img)
+        image = PIL.Image.open(imgBuffer)
     elif (type(Img) == PIL.Image.Image):
         # The image is already an image, set the variable
         image = Img
@@ -47,6 +55,12 @@ def Inference(Index: int, Img: str | PIL.Image.Image) -> str:
 
     # Get the response from the model
     response = __models__[Index](image)[0]["generated_text"]
+
+    # Close the image buffer if needed
+    image.close()
+    
+    if (imgBuffer is not None):
+        imgBuffer.close()
 
     # Return the response as a string
     return str(response)

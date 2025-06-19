@@ -132,7 +132,9 @@ def Inference(
         MaxLength: int | None = None,
         Temperature: float | None = None,
         TopP: float | None = None,
-        TopK: int | None = None
+        TopK: int | None = None,
+        MinP: float | None = None,
+        TypicalP: float | None = None,
     ) -> Iterator[str]:
     # Load the model
     __load_model__(Index)
@@ -254,12 +256,32 @@ def Inference(
                 raise Exception()
         except:
             TopK = 40
+    
+    # Set min_p
+    if (MinP is None):
+        try:
+            MinP = __models__[Index][1]["min_p"]
+
+            if (MinP == None):
+                raise Exception()
+        except:
+            MinP = 0.05
+    
+    # Set typical_p
+    if (TypicalP is None):
+        try:
+            TypicalP = __models__[Index][1]["typical_p"]
+
+            if (TypicalP == None):
+                raise Exception()
+        except:
+            TypicalP = 1
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
     
     # Get the model type to use
-    if (type(__models__[Index][0]) == GPT4All):
+    if (isinstance(__models__[Index][0], GPT4All)):
         # Use GPT4All
         return g4a.__inference__(
             __models__[Index][0],
@@ -269,7 +291,7 @@ def Inference(
             maxLength,
             temp
         )
-    elif (type(__models__[Index][0]) == Llama):
+    elif (isinstance(__models__[Index][0], Llama)):
         # Use Llama-CPP-Python
         return lcpp.__inference__(
             __models__[Index][0],
@@ -280,9 +302,11 @@ def Inference(
             maxLength,
             temp,
             TopP,
-            TopK
+            TopK,
+            MinP,
+            TypicalP
         )
-    elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str, str]):
+    elif (isinstance(__models__[Index][0], tuple) or isinstance(__models__[Index][0], list)):
         # Use HF
         return hf.__inference__(
             __models__[Index][0][0],
@@ -291,10 +315,14 @@ def Inference(
             __models__[Index][0][3],
             __models__[Index][1],
             contentForModel,
+            seed,
+            Tools,
             maxLength,
             temp,
             TopP,
-            TopK
+            TopK,
+            MinP,
+            TypicalP
         )
     else:
         # It's an invalid model type

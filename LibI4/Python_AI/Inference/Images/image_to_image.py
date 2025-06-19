@@ -59,7 +59,7 @@ def Inference(Index: int, Prompt: str | dict[str, str]) -> list[bytes]:
     # Process the image
     return __process__(Index, p["prompt"], steps, p["image"])
 
-def __process__(Index: int, Prompt: str, Steps: int, Image: str | Image.Image) -> list[bytes]:
+def __process__(Index: int, Prompt: str, Steps: int, Img: str | bytes | Image.Image) -> list[bytes]:
     # Load the model
     __load_model__(Index)
 
@@ -70,9 +70,23 @@ def __process__(Index: int, Prompt: str, Steps: int, Image: str | Image.Image) -
     if (Prompt.endswith("\"") or Prompt.endswith("\'")):
         Prompt = Prompt[:-1]
     
+    # Create empty buffer
+    imgBuffer = None
+    
     # Convert into an image if it's a string
-    if (type(image) == str):
+    if (type(Img) == str):
+        # The image is a string, open the file
         image = Image.open(image)
+    elif (type(Img) == bytes):
+        # It's an image from bytes
+        imgBuffer = BytesIO(Img)
+        image = Image.open(imgBuffer)
+    elif (type(Img) == Image.Image):
+        # The image is already an image, set the variable
+        image = Img
+    else:
+        # Invalid image type
+        raise Exception("Invalid image type.")
     
     # Convert the image to RGB
     image = ImageOps.exif_transpose(image)
@@ -91,6 +105,12 @@ def __process__(Index: int, Prompt: str, Steps: int, Image: str | Image.Image) -
         images.append(buffer.getvalue())
 
         buffer.close()
+    
+    # Close the image buffer if needed
+    image.close()
+    
+    if (imgBuffer is not None):
+        imgBuffer.close()
 
     # Return all the generated images
     return images

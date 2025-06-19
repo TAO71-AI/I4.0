@@ -1,4 +1,4 @@
-[![Thumbnail](https://github.com/TAO71-AI/I4.0/blob/main/Assets/Thumbnails/v14.0.0.png?raw=true)](https://github.com/TAO71-AI/I4.0/releases/tag/v14.0.0)
+[![Thumbnail](https://github.com/TAO71-AI/I4.0/blob/main/Assets/Thumbnails/v15.0.0.png?raw=true)](https://github.com/TAO71-AI/I4.0/releases/tag/v15.0.0)
 
 # What is this?
 TAO71 I4.0 is an AI created by TAO71 in Python. It uses LLaMA-CPP-Python, Hugging Face Transformers, Hugging Face Diffusers, etc.

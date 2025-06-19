@@ -14,6 +14,7 @@ class Conf():
         self.Temperature: float | None = None
         self.SeeTools: bool = False
         self.AllowDataSave: bool = True
+        self.DefaultIndex: int = -2
 
         # Chatbot
         self.Chatbot_ExtraSystemPrompts: str = ""
@@ -21,13 +22,15 @@ class Conf():
         self.Chatbot_Conversation: str = "Client"
         self.Chatbot_AIArgs: str | None = None
         self.Chatbot_TopP: float | None = None
-        self.Chatbot_TopK: float | None = None
+        self.Chatbot_TopK: int | None = None
+        self.Chatbot_MinP: float | None = None
+        self.Chatbot_TypicalP: float | None = None
 
         # Simulated vision v1
         self.SimulatedVision_v1_Image2Text_Allow: bool = True
-        self.SimulatedVision_v1_Image2Text_Index: int = -1
+        self.SimulatedVision_v1_Image2Text_Index: int | None = None
         self.SimulatedVision_v1_ObjectDetection_Allow: bool = True
-        self.SimulatedVision_v1_ObjectDetection_Index: int = -1
+        self.SimulatedVision_v1_ObjectDetection_Index: int | None = None
 
         # Simulated vision v2
         self.SimulatedVision_v2_Video_Allow: bool = True
@@ -36,7 +39,7 @@ class Conf():
 
         # Simulated audition v1
         self.SimulatedAudition_v1_SpeechToText_Allow: bool = True
-        self.SimulatedAudition_v1_SpeechToText_Index: int = -1
+        self.SimulatedAudition_v1_SpeechToText_Index: int | None = None
 
         # Text2Image
         self.Text2Image_Width: int = -1

@@ -1,10 +1,11 @@
-# Import some dependencies
+# Import I4.0's utilities
+import ai_config as cfg
+
+# Import other libraries
+from io import BytesIO
 from transformers import AutoTokenizer, AutoModelForSequenceClassification, Pipeline
 from PIL import Image
 import torch
-
-# Import I4.0's utilities
-import ai_config as cfg
 
 __models_text__: dict[int, tuple[AutoModelForSequenceClassification, AutoTokenizer, str, str, dict[str, any]]] = {}
 __models_image__: dict[int, tuple[Pipeline, str, dict[str, any]]] = {}
@@ -90,14 +91,21 @@ def InferenceText(Prompt: str, Index: int) -> bool:
     # Return the response
     return predicted_class == info["nsfw_label"].lower()
 
-def InferenceImage(Prompt: str | Image.Image, Index: int) -> bool:
+def InferenceImage(Prompt: str | bytes | Image.Image, Index: int) -> bool:
     # Load the model
     __load_image_model__(Index)
+
+    # Create empty buffer
+    imgBuffer = None
 
     # Check the image variable type
     if (type(Prompt) == str):
         # It's a string, open the image
         Prompt = Image.open(Prompt)
+    elif (type(Prompt) == bytes):
+        # It's an image from bytes
+        imgBuffer = BytesIO(Prompt)
+        image = Image.open(imgBuffer)
     elif (type(Prompt) != Image.Image):
         # Invalid type
         raise Exception("The image in the NSFW filter must be 'str' or 'PIL.Image.Image'.")
@@ -113,6 +121,12 @@ def InferenceImage(Prompt: str | Image.Image, Index: int) -> bool:
     # Get the predicted class
     predicted_class = result.argmax().item()
     predicted_class = pipe.model.config.id2label[predicted_class].lower()
+
+    # Close the image buffer if needed
+    image.close()
+    
+    if (imgBuffer is not None):
+        imgBuffer.close()
 
     # Return the response
     return predicted_class == info["nsfw_label"].lower()

@@ -17,6 +17,8 @@ def __parse_hash__(HashName: str) -> hashes.HashAlgorithm | None:
         return hashes.SHA384()
     elif (HashName == "sha512"):
         return hashes.SHA512()
+    elif (HashName == "none"):
+        return None
     
     raise ValueError("Unsupported hash algorithm.")
 
@@ -125,7 +127,7 @@ def __encrypt_hybrid__(Message: str | bytes, Key: str | bytes, HashAlgorithm: ha
         "iv": base64.b64encode(iv).decode("utf-8")
     })
 
-def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes.HashAlgorithm) -> str:
+def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes.HashAlgorithm | None) -> str:
     if (isinstance(Message, bytes)):
         Message = Message.decode("utf-8")
     elif (not isinstance(Message, str)):
@@ -135,6 +137,9 @@ def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes
         Key = Key.encode("utf-8")
     elif (not isinstance(Key, bytes)):
         raise Exception("Invalid key.")
+
+    if (HashAlgorithm is None):
+        return Message
 
     if (__is_hybrid_message__(Message)):
         return __decrypt_hybrid__(Message, Key, HashAlgorithm)

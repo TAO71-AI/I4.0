@@ -7,7 +7,6 @@ from io import BytesIO
 from pydub import AudioSegment
 from transformers import Pipeline
 import whisper
-import speech_recognition as sr
 
 __models__: dict[int, tuple[whisper.Whisper | Pipeline, dict[str, any]]] = {}
 
@@ -57,13 +56,12 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Data: bytes | sr.AudioData) -> dict[str, str]:
+def Inference(Index: int, Data: bytes) -> dict[str, str]:
     # Load the model
     __load_model__(Index)
 
-    # Convert audio data into bytes
-    if (isinstance(Data, sr.AudioData)):
-        Data = Data.get_wav_data()
+    # Convert to WAV
+    ConvertToWAV(Data)
 
     # Save data into a buffer
     data = BytesIO(Data)
@@ -92,12 +90,23 @@ def Inference(Index: int, Data: bytes | sr.AudioData) -> dict[str, str]:
     data.close()
     return result
 
-def GetAudioDataFromFile(FilePath: str) -> sr.AudioData:
-    # Convert to wav
-    audio: AudioSegment = AudioSegment.from_file(FilePath)
-    audio.export(FilePath, format = "wav")
+def ConvertToWAV(Data: bytes) -> bytes:
+    # Create a buffer from the data
+    inputBuffer = BytesIO(Data)
 
-    # Open the file
-    with sr.AudioFile(FilePath) as source:
-        # Return the audio data
-        return sr.Recognizer().record(source)
+    # Convert the data to WAV format
+    audio = AudioSegment.from_file(inputBuffer)
+    
+    # Export the audio to WAV format
+    outputBuffer = BytesIO()
+    audio.export(outputBuffer, format = "wav")
+    
+    # Get the bytes from the output buffer
+    output = outputBuffer.getvalue()
+
+    # Close the buffers
+    inputBuffer.close()
+    outputBuffer.close()
+
+    # Return the output
+    return output

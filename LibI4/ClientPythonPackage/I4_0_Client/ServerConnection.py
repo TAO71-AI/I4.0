@@ -15,7 +15,7 @@ from . import Encryption
 ServersTasks: dict[int, list[Service]] = {}
 Connected: tuple[str, str, int] | None = None
 Conf: Config = Config()
-ClientVersion: int = 140100
+ClientVersion: int = 150000
 
 # WebSocket variables
 ClientSocket: ClientConnection | None = None

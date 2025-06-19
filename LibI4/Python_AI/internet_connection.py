@@ -113,7 +113,8 @@ def Search__Websites(Prompt: str, MaxResults: int, InternetSystem: str | None = 
         searchResults = google_search(Prompt, num_results = MaxResults)
 
         # Set the results
-        results = searchResults
+        for result in searchResults:
+            results.append(result)
     elif (InternetSystem == "auto" or InternetSystem == "automatic" or InternetSystem == "hybrid"):
         try:
             # Try to search using DuckDuckGo

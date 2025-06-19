@@ -1,8 +1,6 @@
 from collections.abc import Iterator
-from websockets.asyncio.server import serve
-from websockets.asyncio.client import ClientConnection
+from websockets.asyncio.server import serve, ServerConnection
 from websockets.exceptions import ConnectionClosed, ConnectionClosedError, ConnectionClosedOK
-from websockets.protocol import State
 import asyncio
 import threading
 import os
@@ -12,6 +10,78 @@ import time
 import traceback
 import gc
 import base64
+import ssl
+
+class GlobalConnection:
+    def __init__(self, BaseConnection: ServerConnection) -> None:
+        # Set class variables
+        self.__base_conn__ = BaseConnection
+        self.Closed = False
+        
+        # Set remote address
+        if (isinstance(BaseConnection, ServerConnection)):
+            self.RemoteAddress = BaseConnection.remote_address
+        else:
+            raise RuntimeError("Invalid connection type.")
+    
+    async def Receive(self, ReturnAsBytes: bool = False) -> str | bytes | None:
+        # Try to receive
+        if (isinstance(self.__base_conn__, ServerConnection)):
+            # Receive as websockets
+            try:
+                msg = await self.__base_conn__.recv(not ReturnAsBytes)
+            except ConnectionClosedOK:
+                try:
+                    await self.Close()
+                except:
+                    self.Closed = True
+                
+                return None
+        else:
+            raise RuntimeError("Invalid connection type.")
+
+        # Return message
+        return msg
+    
+    async def Send(self, Data: str | bytes) -> None:
+        # Check Data length
+        if (len(Data) == 0):
+            return
+
+        # Encode the message if needed
+        if (isinstance(Data, str)):
+            Data = Data.encode("utf-8")
+
+        # Send the message
+        if (isinstance(self.__base_conn__, ServerConnection)):
+            # Send as websockets
+            try:
+                await self.__base_conn__.send(Data)
+            except ConnectionClosedOK:
+                try:
+                    await self.Close()
+                except:
+                    self.Closed = True
+                
+                return
+        else:
+            raise RuntimeError("Invalid connection type.")
+    
+    async def Close(self) -> None:
+        # Check if the connection is closed
+        if (self.Closed):
+            return
+
+        # Close the connection
+        if (isinstance(self.__base_conn__, ServerConnection)):
+            # Close as websockets
+            await self.__base_conn__.close()
+        
+        # Set closed
+        self.Closed = True
+
+        # Delete variables
+        self.__base_conn__ = None
 
 try:
     # Try to import I4.0 utilities
@@ -39,7 +109,10 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 modelsUsed: dict[str, list[int]] = {}
-ServerVersion: int = 140100
+ServerVersion: int = 150000
+
+# Server sockets
+serverWS: serve | None = None
 
 # Keys
 ServerPublicKey: bytes | None = None
@@ -88,7 +161,7 @@ def __offload_loop__() -> None:
         time.sleep(cfg.current_data["offload_time"])
 
         # Offload the models
-        cb.OffloadAll(modelsUsed)
+        cb.OffloadAll(modelsUsed, False)
         modelsUsed.clear()
 
         # IMPORTANT!!! Make sure that the offload_time is greater than the time that takes the model to generate a token.
@@ -252,6 +325,8 @@ def __infer__(
         Temperature: float | None,
         TopP: float | None,
         TopK: int | None,
+        MinP: float | None,
+        TypicalP: float | None,
         SeeTools: bool,
         DataSave: bool
     ) -> Iterator[dict[str, any]]:
@@ -305,7 +380,9 @@ def __infer__(
         MaxLength,
         Temperature,
         TopP,
-        TopK
+        TopK,
+        MinP,
+        TypicalP
     )
     fullResponse = ""
     responseFiles = []
@@ -387,13 +464,13 @@ def __infer__(
         # Parse the JSON
         try:
             tool = cfg.JSONDeserializer(toolStr)
-        except Exception as ex:
+        except:
             continue
 
         if (tool["name"] == "image_generation"):
             # Generate image tool
             # Get the index
-            index = GetAutoIndex("text2img")
+            index = GetAutoIndex("text2img", -2)
 
             # Check if the user has enough tokens
             enoughTokens = CheckIfHasEnoughTokens("text2img", index, Key["tokens"])
@@ -426,6 +503,8 @@ def __infer__(
                 Temperature,
                 TopP,
                 TopK,
+                MinP,
+                TypicalP,
                 SeeTools,
                 DataSave
             )
@@ -439,7 +518,7 @@ def __infer__(
         elif (tool["name"] == "audio_generation"):
             # Generate audio tool
             # Get the index
-            index = GetAutoIndex("text2audio")
+            index = GetAutoIndex("text2audio", -2)
 
             # Check if the user has enough tokens
             enoughTokens = CheckIfHasEnoughTokens("text2audio", index, Key["tokens"])
@@ -468,6 +547,8 @@ def __infer__(
                 Temperature,
                 TopP,
                 TopK,
+                MinP,
+                TypicalP,
                 SeeTools,
                 DataSave
             )
@@ -496,7 +577,6 @@ def __infer__(
 
             # Get the variables
             keywords = tool["arguments"]["keywords"]
-            i_prompt = tool["arguments"]["prompt"]
 
             try:
                 searchCount = int(tool["arguments"]["count"])
@@ -513,7 +593,7 @@ def __infer__(
             toolResponse = cb.GetResponseFromInternet(
                 Index,
                 keywords,
-                i_prompt,
+                Prompt,
                 searchCount,
                 AIArgs,
                 SystemPrompts,
@@ -522,7 +602,9 @@ def __infer__(
                 MaxLength,
                 Temperature,
                 TopP,
-                TopK
+                TopK,
+                MinP,
+                TypicalP
             )
             text = ""
 
@@ -554,13 +636,12 @@ def __infer__(
 
             # Get the variables
             url = tool["arguments"]["url"]
-            i_prompt = tool["arguments"]["prompt"]
 
             # Get the response from internet
             toolResponse = cb.GetResponseFromInternet_URL(
                 Index,
                 url,
-                i_prompt,
+                Prompt,
                 AIArgs,
                 SystemPrompts,
                 UseDefaultSystemPrompts,
@@ -568,7 +649,9 @@ def __infer__(
                 MaxLength,
                 Temperature,
                 TopP,
-                TopK
+                TopK,
+                MinP,
+                TypicalP
             )
             text = ""
 
@@ -601,7 +684,6 @@ def __infer__(
 
             # Get the variables
             keywords = tool["arguments"]["keywords"]
-            i_prompt = tool["arguments"]["prompt"]
 
             # Yield another line
             yield {"response": "\n", "files": [], "ended": False, "errors": []}
@@ -610,7 +692,7 @@ def __infer__(
             toolResponse = cb.InternetResearch(
                 Index,
                 keywords,
-                i_prompt,
+                Prompt,
                 AIArgs,
                 SystemPrompts,
                 UseDefaultSystemPrompts,
@@ -618,7 +700,9 @@ def __infer__(
                 MaxLength,
                 Temperature,
                 TopP,
-                TopK
+                TopK,
+                MinP,
+                TypicalP
             )
             text = ""
 
@@ -635,7 +719,7 @@ def __infer__(
         elif (tool["name"] == "save_memory"):
             # Save memory tool
             # Get the prompt
-            mem = tool["arguments"]["memory"]
+            mem = tool["arguments"]["content"]
 
             # Save the memory
             memories.SaveMemory(Key["key"], mem)
@@ -643,7 +727,7 @@ def __infer__(
             # Edit memory tool
             # Get the ID and new memory
             memID = tool["arguments"]["memory_id"]
-            newMem = tool["arguments"]["new_memory"]
+            newMem = tool["arguments"]["new_content"]
 
             # Delete the previous memory
             memories.DeleteMemory(Key["key"], memories.GetMemory(Key["key"], memID))
@@ -660,16 +744,24 @@ def __infer__(
         elif (tool["name"] == "document_creator"):
             # Create a document tool
             # Get the code and document type
-            htmlCode = tool["arguments"]["html"]
+            fileCode = tool["arguments"]["code"]
             documentType = tool["arguments"]["document_type"].lower().strip()
 
             # Check the document type and create the document
-            if (documentType == "pdf"):
-                document = docs.HTML2PDF(htmlCode)
-            elif (documentType == "docx"):
-                document = docs.HTML2DOCX(htmlCode)
-            else:
-                raise RuntimeError("Invalid document type.")
+            try:
+                if (documentType == "html2pdf"):
+                    document = docs.HTML2PDF(fileCode)
+                    documentType = "pdf"
+                elif (documentType == "html2docx"):
+                    document = docs.HTML2DOCX(fileCode)
+                    documentType = "docx"
+                elif (documentType == "csv2xlsx"):
+                    document = docs.CSV2XLSX(fileCode)
+                    documentType = "xlsx"
+                else:
+                    raise ValueError("Invalid document type.")
+            except Exception as ex:
+                yield {"response": "", "files": [], "ended": False, "errors": [f"Error using tool. Details: {ex}"]}
             
             # Convert to base64
             document = base64.b64encode(document).decode("utf-8")
@@ -753,7 +845,7 @@ def MinPriceForService(Service: str) -> float:
     # If no prices are found, return -1
     return -1
 
-def GetAutoIndex(Service: str) -> int:
+def GetAutoIndex(Service: str, IndexMode: int) -> int:
     try:
         # Get the length of the service
         length = cb.GetServicesAndIndexes()[Service]
@@ -766,8 +858,27 @@ def GetAutoIndex(Service: str) -> int:
         for idx in range(length):
             qs.__add_to_queue__(Service, idx)
 
-        # Return the index with the smallest queue
-        return qs.GetIndexFromQueue_Filter(Service, 1)
+        # Check index mode
+        if (IndexMode == -1):
+            # Return the index with the smallest queue
+            return qs.GetIndexFromQueue_Filter(Service, 1)
+        elif (IndexMode == -2):
+            # Create the prices list
+            prices = []
+
+            # For each index
+            for idx in range(length):
+                # Get the price of that idx
+                idxPrice = cfg.GetInfoOfTask(Service, idx)["price"]
+
+                # Append the price into the list
+                prices.append(idxPrice)
+
+            # Return the cheapest index
+            return prices.index(min(prices))
+        
+        # Return the cheapest model by default
+        return GetAutoIndex(Service, -2)
     except Exception as ex:
         # Return an error saying the service is not available
         traceback.print_exception(ex)
@@ -838,7 +949,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     except:
         # If an error occurs, set to default
         aiArgs = None
-        
+    
     try:
         # Try to get extra system prompts
         if (isinstance(Prompt["SystemPrompts"], list)):
@@ -861,7 +972,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         index = int(Prompt["Index"])
     except:
         # If an error occurs, set to default
-        index = -1
+        index = -2
     
     try:
         # Try to get the allowed tools
@@ -919,6 +1030,20 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # If an error occurs, set to default
         top_k = None
     
+    try:
+        # Try to get min_p
+        min_p = float(Prompt["MinP"])
+    except:
+        # If an error occurs, set to default
+        min_p = None
+    
+    try:
+        # Try to get typical_p
+        typical_p = float(Prompt["TypicalP"])
+    except:
+        # If an error occurs, set to default
+        typical_p = None
+    
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
         yield {"response": "", "files": [], "ended": True, "errors": ["API key banned"], "pubKey": clientPublicKey}
@@ -939,7 +1064,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check index
         if (index < 0):
             # Get index
-            index = GetAutoIndex(service)
+            index = GetAutoIndex(service, index)
             Prompt["Index"] = index
 
         # Check the if the index is valid
@@ -991,6 +1116,8 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                     temperature,
                     top_p,
                     top_k,
+                    min_p,
+                    typical_p,
                     seeTools,
                     dataSave
                 )
@@ -1019,6 +1146,8 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                         temperature,
                         top_p,
                         top_k,
+                        min_p,
+                        typical_p,
                         seeTools,
                         dataSave
                     )
@@ -1204,7 +1333,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # Check index
         if (index < 0):
             # Set index
-            index = GetAutoIndex(prompt)
+            index = GetAutoIndex(prompt, index)
 
         # Get a queue for a service
         if (len(prompt) > 0):
@@ -1259,7 +1388,7 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # Check if the index is valid
             if (index < 0):
                 # Set index by default
-                index = GetAutoIndex(prompt)
+                index = GetAutoIndex(prompt, index)
             
             if (index >= len(cfg.GetAllInfosOfATask(prompt))):
                 # Index is out of range, return error
@@ -1271,12 +1400,17 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
     else:
         yield {"response": "", "files": [], "ended": True, "errors": ["Invalid command."], "pubKey": clientPublicKey}
 
-async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[str, any], HashAlgorithm: enc.hashes.HashAlgorithm, ClientVersion: int) -> None:
+async def ExecuteServiceAndSendToClient(
+        Client: GlobalConnection,
+        Prompt: dict[str, any],
+        HashAlgorithm: enc.hashes.HashAlgorithm | None,
+        ClientVersion: int
+    ) -> None:
     clPubKey = None
     
     try:
         # Try to execute the service
-        for response in ExecuteService(Prompt, Client.remote_address[0]):
+        for response in ExecuteService(Prompt, Client.RemoteAddress[0]):
             # Get the public key from the response
             clPubKey = response["pubKey"]
             response.pop("pubKey")
@@ -1300,12 +1434,16 @@ async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[s
             # Try to get the index of the model to use
             index = int(Prompt["Index"])
 
+            # Check if the index is less than 0
+            if (index < 0):
+                index = GetAutoIndex(Prompt["Service"], index)
+
             # Throw an error if the index is invalid
-            if (index < 0 or index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
+            if (index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
                 raise Exception()
         except:
             # If an error occurs, auto get index
-            index = GetAutoIndex(Prompt["Service"])
+            index = GetAutoIndex(Prompt["Service"], -2)
 
         # Remove from the queue
         qs.RemoveUserFromQueue(Prompt["Service"], index)
@@ -1325,13 +1463,17 @@ async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[s
             # Try to get the index of the model to use
             index = int(Prompt["Index"])
 
+            # Check if the index is less than 0
+            if (index < 0):
+                index = GetAutoIndex(Prompt["Service"], index)
+
             # Throw an error if the index is invalid
-            if (index < 0 or index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
+            if (index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
                 raise Exception()
         except:
             # If an error occurs, auto get index
-            index = GetAutoIndex(Prompt["Service"])
-            
+            index = GetAutoIndex(Prompt["Service"], -2)
+        
         # Remove from the queue
         qs.RemoveUserFromQueue(Prompt["Service"], index)
 
@@ -1347,18 +1489,18 @@ async def ExecuteServiceAndSendToClient(Client: ClientConnection, Prompt: dict[s
             # Error, ignore
             pass
 
-async def WaitForReceive(Client: ClientConnection, Message: bytes | str) -> None:
+async def WaitForReceive(Client: GlobalConnection, Message: bytes | str | None) -> None:
     # Wait for receive
     clientHashType = None
 
     # Check the length of the received data
-    if (len(Message) == 0):
+    if (len(Message) == 0 or Message is None):
         # Received nothing, close the connection
-        Client.close()
+        await Client.Close()
         raise ConnectionClosed(None, None)
 
     # Print received length
-    print(f"Received {len(Message)} bytes from '{Client.remote_address[0]}'")
+    print(f"Received {len(Message)} bytes from '{Client.RemoteAddress[0]}'")
 
     # Convert message to string
     if (isinstance(Message, bytes)):
@@ -1414,7 +1556,13 @@ async def WaitForReceive(Client: ClientConnection, Message: bytes | str) -> None
             "errors": [f"Error. Details: {ex}"]
         }).encode("utf-8"), None, None, -1)
 
-async def __send_to_client__(Client: ClientConnection, Message: str | bytes, EncryptKey: bytes | None, HashAlgorithm: enc.hashes.HashAlgorithm | None, ClientVersion: int) -> None:
+async def __send_to_client__(
+        Client: GlobalConnection,
+        Message: str | bytes,
+        EncryptKey: bytes | None,
+        HashAlgorithm: enc.hashes.HashAlgorithm | None,
+        ClientVersion: int
+    ) -> None:
     # Encrypt the message
     if (EncryptKey is None or HashAlgorithm is None):
         msg = Message
@@ -1423,16 +1571,24 @@ async def __send_to_client__(Client: ClientConnection, Message: str | bytes, Enc
 
     # Send the message
     try:
-        await Client.send(msg)
+        await Client.Send(msg)
+    except (
+        ConnectionError, ConnectionClosed, ConnectionClosedError,
+        ConnectionClosedOK, ConnectionAbortedError, ConnectionRefusedError,
+        ConnectionResetError
+    ) as ex:
+        raise ex
     except Exception as ex:
-        print(f"Error sending message. Details: {ex}")
+        print(f"Error sending message. Details: ({type(ex)}) {ex}")
         
         try:
-            await Client.send(msg)
-        except:
-            pass
+            await Client.Send(msg)
+            print("Message sent at 2nd attempt!")
+        except Exception as ex2:
+            print(f"Error sending message (2nd attempt). Details: ({type(ex2)}) {ex2}")
+            raise ConnectionClosedError(None, None)
 
-def __receive_thread__(Client: ClientConnection, Message: str | bytes) -> None:
+def __receive_thread__(Client: GlobalConnection, Message: str | bytes) -> None:
     # Create new event loop
     clientLoop = asyncio.new_event_loop()
 
@@ -1442,11 +1598,13 @@ def __receive_thread__(Client: ClientConnection, Message: str | bytes) -> None:
     # Close the event loop
     clientLoop.close()
 
-async def __receive_loop__(Client: ClientConnection) -> None:
-    async for message in Client:
-        # Check if the connection ended or if the server is closed
-        if (Client.state == State.CLOSED or not started):
-            # Break the loop
+async def __receive_loop__(Client: GlobalConnection) -> None:
+    while (not Client.Closed and started):
+        # Receive the message
+        message = await Client.Receive(False)
+
+        # Break if the received data is None
+        if (message is None or len(message) == 0):
             break
 
         try:
@@ -1484,11 +1642,11 @@ async def __receive_loop__(Client: ClientConnection) -> None:
         with open("BannedIPs.json", "w+") as f:
             f.write(json.dumps(banned))
 
-async def OnConnect(Client: ClientConnection) -> None:
+async def OnConnect(Client: GlobalConnection) -> None:
     try:
-        print(f"'{Client.remote_address[0]}' has connected.")
+        print(f"'{Client.RemoteAddress[0]}' has connected.")
 
-        if (Client.remote_address[0] in banned["ip"]):
+        if (Client.RemoteAddress[0] in banned["ip"]):
             try:
                 # Print
                 print("Banned user. Closing connection.")
@@ -1502,7 +1660,7 @@ async def OnConnect(Client: ClientConnection) -> None:
                 }), None, None, -1)
 
                 # Close the connection
-                await Client.close()
+                await Client.Close()
                 return
             except:
                 # Error closing the connection, print
@@ -1515,7 +1673,19 @@ async def OnConnect(Client: ClientConnection) -> None:
         print(f"Error while the client was connecting.")
         traceback.print_exception(ex)
 
-async def StartServer() -> None:
+async def __connect__(Client: ServerConnection) -> None:
+    try:
+        # Create global client
+        globalClient = GlobalConnection(Client)
+
+        # Execute OnConnect function
+        await OnConnect(globalClient)
+    except Exception as ex:
+        # Print exception
+        print("Error during client connection.")
+        traceback.print_exception(ex)
+
+async def __start_server__() -> tuple[str, int]:
     # Create thread for the cache cleanup
     cacheThread = threading.Thread(target = __clear_cache_loop__)
     cacheThread.start()
@@ -1542,47 +1712,94 @@ async def StartServer() -> None:
         # Error parsing the port, print and use default
         port = 8060
         print(f"Error parsing the server port, make sure it's an integer. Using default ({port}).")
+    
+    # Return variables
+    return (ip, port)
 
-    # Start the server
-    serverWS = await serve(OnConnect, ip, port, max_size = None, ping_interval = None, ping_timeout = None, close_timeout = None)
+async def StartWebSocketsServer(IP: str, Port: int) -> None:
+    # Define global variables
+    global serverWS
+
+    # Set SSL variables
+    sslContext = None
+
+    if (
+        "ssl" in cfg.current_data and
+        len(cfg.current_data["ssl"]["cert"]) > 0 and
+        len(cfg.current_data["ssl"]["key"]) > 0
+    ):
+        # Create SSL context
+        sslContext = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+        sslContext.load_cert_chain(
+            certfile = cfg.current_data["ssl"]["cert"],
+            keyfile = cfg.current_data["ssl"]["key"]
+        )
+
+        print("SSL enabled for WebSockets server.")
+
+    # Start WebSockets server
+    serverWS = await serve(
+        __connect__,
+        IP,
+        Port,
+        max_size = None,
+        ping_interval = None,
+        ping_timeout = None,
+        close_timeout = None,
+        ssl = sslContext
+    )
+    print(f"Started WebSockets at {IP}:{Port}")
+
     await serverWS.wait_closed()
 
-# Save old data
-SaveOldData()
+async def StartServer() -> None:
+    # Get IP and port
+    serverIP, serverPort = await __start_server__()
 
-# Start the server
-serverLoop = asyncio.new_event_loop()
+    # Start servers
+    await asyncio.gather(
+        StartWebSocketsServer(serverIP, serverPort),
+        return_exceptions = True
+    )
 
-try:
-    # Generate public and private keys
-    ServerPrivateKey, ServerPublicKey = enc.CreateKeys()
+if (__name__ == "__main__"):
+    # Save old data
+    SaveOldData()
 
-    # Try to set the banned IPs
-    if (os.path.exists("BannedIPs.json")):
-        with open("BannedIPs.json", "r") as f:
-            banned = cfg.JSONDeserializer(f.read())
+    # Start the server
+    serverLoop = asyncio.new_event_loop()
 
-    # Load all the models
-    cb.LoadAllModels()
+    try:
+        # Generate public and private keys
+        ServerPrivateKey, ServerPublicKey = enc.CreateKeys()
 
-    # Try to start the server
-    print("Server started!")
-    started = True
+        # Try to set the banned IPs
+        if (os.path.exists("BannedIPs.json")):
+            with open("BannedIPs.json", "r") as f:
+                banned = cfg.JSONDeserializer(f.read())
 
-    serverLoop.run_until_complete(StartServer())
-    serverLoop.close()
-except KeyboardInterrupt:
-    print("\nClosing server...")
+        # Load all the models
+        cb.LoadAllModels()
 
-    # Save the configuration
-    cfg.SaveConfig(cfg.current_data)
+        # Try to start the server
+        print("Server started!")
+        started = True
 
-    # Delete the cache
-    temp.DeleteAllFiles()
+        serverLoop.run_until_complete(StartServer())
+        serverLoop.close()
+    except KeyboardInterrupt:
+        # Print
+        print("\nClosing server...")
+        
+        # Close loop
+        serverLoop.close()
 
-    # Close
-    started = False
-    os._exit(0)
-except Exception as ex:
-    print("ERROR! Running traceback.\n\n")
-    traceback.print_exc()
+        # Delete the cache
+        temp.DeleteAllFiles()
+
+        # Close
+        started = False
+        os._exit(0)
+    except Exception as ex:
+        print("ERROR! Running traceback.\n\n")
+        traceback.print_exc()

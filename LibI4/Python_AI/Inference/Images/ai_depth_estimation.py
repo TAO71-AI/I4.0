@@ -40,18 +40,26 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
+def Inference(Index: int, Image: str | bytes | PIL.Image.Image) -> bytes:
     # Load the model
     __load_model__(Index)
+
+    # Create empty buffer
+    imgBuffer = None
 
     # Check the type of the image
     if (type(Image) == str):
         # It's an image from a path
         # Open it
         Image = PIL.Image.open(Image)
+    elif (type(Image) == bytes):
+        # It's an image from bytes
+        # Open it
+        imgBuffer = BytesIO(Image)
+        Image = PIL.Image.open(imgBuffer)
     elif (type(Image) != PIL.Image.Image):
         # It's not a valid image
-        raise Exception("Image is not 'str' or 'PIL.Image.Image'.")
+        raise Exception("Image is not 'str', 'bytes' or 'PIL.Image.Image'.")
     
     # Tokenize the image and move to the device
     inputs = __models__[Index][1](images = [Image], return_tensors = "pt")
@@ -83,6 +91,12 @@ def Inference(Index: int, Image: str | PIL.Image.Image) -> bytes:
     data = buffer.getvalue()
 
     buffer.close()
+
+    # Close the image buffer if needed
+    Image.close()
+    
+    if (imgBuffer is not None):
+        imgBuffer.close()
 
     # Return the bytes of the output image
     return data

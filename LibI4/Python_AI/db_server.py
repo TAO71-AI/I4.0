@@ -8,6 +8,9 @@ import websockets
 import json
 import traceback
 
+import websockets.asyncio
+import websockets.asyncio.server
+
 # Import I4.0 utilities
 import encryption as enc
 import ai_config as cfg
@@ -103,7 +106,7 @@ def ExecuteCommand(Command: str, Objects: tuple | None) -> str:
     # Return the response
     return results
 
-async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
+async def OnConnect(Client: websockets.asyncio.server.ServerConnection) -> None:
     # Define globals
     global State
 
@@ -165,7 +168,7 @@ async def OnConnect(Client: websockets.WebSocketClientProtocol) -> None:
             response = ExecuteCommand(command, objects)
         
         # Encrypt the results
-        response = enc.EncryptMessage(response, ServerPublicKey, hash)
+        response = enc.EncryptMessage(response, ServerPublicKey, hash, True)
 
         # Send the response
         await Client.send(response)

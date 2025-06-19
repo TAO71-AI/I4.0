@@ -7,6 +7,7 @@ from transformers import AutoImageProcessor, AutoModelForObjectDetection
 import PIL.Image
 import torch
 import cv2
+import numpy as np
 import random
 
 __models__: dict[int, tuple[AutoModelForObjectDetection, AutoImageProcessor, str, str]] = {}
@@ -43,30 +44,30 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str, str | bytes]:
+def Inference(Index: int, Img: str | bytes | PIL.Image.Image) -> dict[str, str | bytes]:
     # Load the model
     __load_model__(Index)
+
+    # Create empty buffer
+    imgBuffer = None
 
     # Check the image type
     if (type(Img) == str):
         # It's a string, open the file
         image = PIL.Image.open(Img)
-    elif (type(Img) == PIL.Image.Image):
-        # The image is already an image, set the variable
-        image = Img
-
-        # Save the image as a temporal image
-        img_name = f"tmp_od_input_{random.randint(-9999, 9999)}.png"
-        image.save(img_name)
-
-        # Set the image name
-        image = img_name
-    else:
+    elif (type(Img) == bytes):
+        # It's an image from bytes
+        imgBuffer = BytesIO(Img)
+        image = PIL.Image.open(imgBuffer)
+    elif (type(Img) != PIL.Image.Image):
         # Invalid image type
         raise Exception("Invalid image type.")
+    
+    # Convert image to array
+    cv_image = np.array(image)
 
-    # Open the image with OpenCV
-    cv_image = cv2.imread(Img, cv2.IMREAD_COLOR)
+    # Convert image to BGR
+    cv_image = cv2.cvtColor(cv_image, cv2.COLOR_RGB2BGR)
 
     # Tokenize the image
     inputs = __models__[Index][1](images = [image], return_tensors = "pt")
@@ -98,6 +99,12 @@ def Inference(Index: int, Img: str | PIL.Image.Image) -> dict[str, str | bytes]:
     
     # Save the result image in a buffer
     success, encodedImg = cv2.imencode(".png", cv_image, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+
+    # Close the image buffer if needed
+    image.close()
+    
+    if (imgBuffer is not None):
+        imgBuffer.close()
 
     if (not success):
         raise RuntimeError("Could not encode image.")

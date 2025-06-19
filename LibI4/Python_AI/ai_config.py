@@ -21,7 +21,7 @@ __config_data__: dict[str] = {
         "password": "",                                                                             # Database password.
         "db": "",                                                                                   # Database name.
         "hash": "sha512",                                                                           # Hash algorithm to use, `sha512` is recommended.
-        "keys": {                                                                                   # Database: Keys.
+        "keys": {                                                                                   # Table: Keys.
             "table": "",                                                                                # Name of the table.
             "key": "key",                                                                               # Name of the parameter "key".
             "tokens": "tokens",                                                                         # Name of the parameter "tokens".
@@ -31,28 +31,33 @@ __config_data__: dict[str] = {
             "admin": "admin",                                                                           # Name of the parameter "admin".
             "temporal_conversations": "temp_conversations"                                              # Name of the parameter "temporal_conversations".
         },
-        "conversations": {                                                                          # Database: Conversations.
+        "conversations": {                                                                          # Table: Conversations.
             "table": "",                                                                                # Name of the table.
             "user": "key",                                                                              # Name of the parameter "user".
             "conversation_name": "conv_name",                                                           # Name of the parameter "conversation_name".
             "conversation_data": "conv_data",                                                           # Name of the parameter "conversation_data".
             "temporal": "temp"                                                                          # Name of the parameter "temporal".
         },
-        "memories": {                                                                               # Database: Memories.
+        "memories": {                                                                               # Table: Memories.
             "table": "",                                                                                # Name of the table.
             "user": "key",                                                                              # Name of the parameter "user".
             "memory": "memory"                                                                          # Name of the parameter "memory".
         },
-        "data_save": {                                                                              # Database: Data save.
+        "data_save": {                                                                              # Table: Data save.
             "table": "",                                                                                # Name of the table.
             "message_user": "message_user",                                                             # Name of the parameter "message_user".
             "message_response": "message_response"                                                      # Name of the parameter "message_response".
         },
-        "cache": {                                                                                  # Database: Cache.
+        "cache": {                                                                                  # Table: Cache.
             "table": "",                                                                                # Name of the table.
             "system_prompt": "system_prompt",                                                           # Name of the parameter "system_prompt".
             "user_prompt": "user_prompt",                                                               # Name of the parameter "user_prompt".
             "ai_response": "ai_response"                                                                # Name of the parameter "ai_response".
+        },
+        "dataset": {                                                                                # Table: Dataset.
+            "table": "",                                                                                # Name of the table.
+            "keywords": "keywords",                                                                     # Name of the parameter "keywords".
+            "response": "response"                                                                      # Name of the parameter "response".
         }
     },
     "internet": {                                                                               # Internet configuration.
@@ -65,7 +70,7 @@ __config_data__: dict[str] = {
         },
         "system": "auto"                                                                            # Library to use when searching from internet.
     },
-    "enabled_tools": "image_generation audio_generation internet internet-url internet-research memory memory-edit memory-delete document-creator",
+    "enabled_tools": "image-generation audio-generation internet internet-url internet-research memory memory-edit memory-delete document-creator",
     # ^-- I4.0 tools.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
@@ -76,7 +81,6 @@ __config_data__: dict[str] = {
     "force_device_check": True,                                                                 # Will check if the device is compatible.
     "max_files_size": 250,                                                                      # Maximum size allowed for files in MB.
     "save_conversation_files": True,                                                            # Will save the files of the conversation, may require a lot of disk space and compute power.
-    "internet_chat": "llama-3.3-70b",                                                           # Chatbot model to use (NOT LOCALLY) if I4.0 uses the internet chatbot command.
     "offload_time": 3600,                                                                       # Time (in seconds) to wait before offloading a model that has not been used. Set to 0 to disable.
     "clear_cache_time": 300,                                                                    # Time (in seconds) to wait before clearing the cache. Set to 0 to disable.
     "clear_queue_time": 600,                                                                    # Time (in seconds) to wait before clearing the queue. Set to 0 to disable.
@@ -94,6 +98,10 @@ __config_data__: dict[str] = {
     "allow_data_save": True,                                                                    # Allow the usage of data save.
     "data_save_max_fs": 0,                                                                      # Max file size allowed (in MB) to use the data save. Set to 0 to don't save any files.
     "allow_response_cache": True,                                                               # Allow response cache.             WORKING ON THIS.
+    "ssl": {                                                                                    # SSL configuration.
+        "cert": "",                                                                                 # Path to the SSL certificate.
+        "key": ""                                                                                   # Path to the SSL key.
+    },
     "models": [                                                                                 # Models to be used.
         # Examples:
         #{
@@ -318,16 +326,14 @@ def Init() -> None:
     if (not os.path.exists("config.json")):
         # It doesn't exist, create it
         with open("config.json", "w+") as f:
-            f.close()
-        
-        # Save the config
-        SaveConfig(__config_data__)
+            f.write(json.dumps(current_data, indent = 4))
+
         print("Configuration created at 'config.json'! To start the server, please run this script again.")
 
         # Close the program
         os._exit(0)
 
-def ReadConfig() -> dict[str]:
+def ReadConfig() -> dict[str, any]:
     # Initialize
     Init()
     
@@ -349,33 +355,25 @@ def ReadConfig() -> dict[str]:
         if (dkey not in list(data.keys())):
             # It doesn't exist, add it with the default value from the config template
             data[dkey] = __config_data__[dkey]
-    
-    # Save the config
-    SaveConfig(data)
+
+            # Save the configuration
+            SaveConfig(data)
 
     # Return the config
     return data
 
-def SaveConfig(Config: dict[str] = {}) -> None:
+def SaveConfig(Config: dict[str, any] | None = None) -> None:
     # Initialize
     Init()
 
-    # Check if the length of the config is 0
-    if (len(list(Config.keys())) == 0):
-        # It is, set the config to the current config
-        Config = current_data.copy()
-
-        # Check if the current config exists
-        if (current_data == None):
-            # If it doesn't, return
-            return
+    # Check if the configuration is null
+    if (Config is None):
+        # Set the current configuration
+        Config = current_data
     
-    # Convert the config dict to a JSON text with indent
-    text = json.dumps(Config, indent = 4)
-
-    # Save the config into the config file
+    # Save into the file
     with open("config.json", "w") as f:
-        f.write(text)
+        f.write(json.dumps(Config, indent = 4))
 
 def GetAvailableGPUDeviceForTask(Task: str, Index: int) -> str:
     # Get the device set for the task
@@ -640,5 +638,11 @@ current_data = ReadConfig()
 # Check if the database is invalid
 if (len(current_data["db"]["host"].strip()) == 0 or len(current_data["db"]["user"].strip()) == 0 or len(current_data["db"]["db"].strip()) == 0):
     # Invalid DB
-    SaveConfig(current_data)
+    # Check if the config file exists
+    if (not os.path.exists("config.json")):
+        # It doesn't exist, create it
+        with open("config.json", "w+") as f:
+            f.write(json.dumps(current_data, indent = 4))
+    
+    # Return exception
     raise Exception("Invalid database configuration. Since v13.0.0 a MySQL database is required.")

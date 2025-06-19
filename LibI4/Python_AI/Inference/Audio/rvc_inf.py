@@ -1,5 +1,6 @@
 # Import I4.0 utilities
 import ai_config as cfg
+import temporal_files as tempFiles
 
 # Import other libraries
 from io import BytesIO
@@ -101,18 +102,28 @@ def __load_model__(ModelPath: str, ModelIndex: str, ModelType: str, Index: int) 
     # Print loading message
     print("   Done!")
 
-def __make_rvc__(Index: int, AudioPath: str, Protect: float, FilterRadius: int, F0UpKey: int, IndexRate: float, MixRate: float) -> bytes:
+def __make_rvc__(Index: int, AudioData: bytes | str, Protect: float, FilterRadius: int, F0UpKey: int, IndexRate: float, MixRate: float) -> bytes:
     # Load the model
     __prepare_model__(Index)
 
-    # Check if the audio file exists
-    if (not os.path.exists(AudioPath)):
-        raise Exception("Audio file doesn't exists.")
+    # Save temporal file
+    if (isinstance(AudioData, bytes)):
+        audioPath = tempFiles.CreateTemporalFile("audio", AudioData)
+    elif (isinstance(AudioData, str)):
+        # Check if the audio path is valid
+        if (not os.path.exists(AudioData)):
+            raise FileNotFoundError("Invalid audio path.")
+        
+        # Use the audio path as is
+        audioPath = AudioData
+    else:
+        # Invalid audio data type
+        raise ValueError("Invalid audio data type. Must be 'bytes' or 'str'.")
 
     # Inference the model
     tgt_sr, audio_opt, _, _ = __models__[Index][0].vc_inference(
         1,
-        Path(AudioPath),
+        Path(audioPath),
         f0_up_key = F0UpKey,
         protect = Protect,
         filter_radius = FilterRadius,
@@ -188,12 +199,16 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def MakeRVC(Data: dict[str]) -> bytes:
-    # Get the input file name
+def MakeRVC(Data: dict[str, any]) -> bytes:
+    # Get the input bytes
     try:
-        InputFile = Data["input"]
+        InputBytes = Data["input"]
+
+        # Check if the input bytes are valid
+        if ((not isinstance(InputBytes, bytes) and not isinstance(InputBytes, str)) or len(InputBytes) == 0):
+            raise Exception()
     except:
-        raise Exception("Input file not found.")
+        raise Exception("Input bytes not found.")
 
     # Get the index
     try:
@@ -259,7 +274,7 @@ def MakeRVC(Data: dict[str]) -> bytes:
         MixRate = 0.25
     
     # Inference the model
-    return __make_rvc__(Index, InputFile, Protect, FilterRadius, F0UpKey, IndexRate, MixRate)
+    return __make_rvc__(Index, InputBytes, Protect, FilterRadius, F0UpKey, IndexRate, MixRate)
 
 # Disable logging
 logging.disable(logging.CRITICAL)

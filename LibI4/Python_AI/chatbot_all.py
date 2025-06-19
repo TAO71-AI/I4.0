@@ -18,7 +18,8 @@ import ai_config as cfg
 import conversation_multimodal as conv
 import ai_memory as memories
 import chatbot_basics as cbbasics
-import temporal_files as temp
+import db_dataset as dts
+import documents as docs
 
 # Import other libraries
 from collections.abc import Iterator
@@ -130,7 +131,7 @@ def __offload_model__(Service: str, Index: int) -> None:
     else:
         print(f"Invalid offload service '{Service}'; ignoring...")
 
-def OffloadAll(Exclude: dict[str, list[int]]) -> None:
+def OffloadAll(Exclude: dict[str, list[int]], Force: bool = False) -> None:
     # Get tasks
     tasks = cfg.GetAllTasks()
 
@@ -140,12 +141,13 @@ def OffloadAll(Exclude: dict[str, list[int]]) -> None:
         for index in range(len(tasks[task])):
             aOffloading = True
 
-            try:
-                # Get offloading from the config
-                aOffloading = tasks[task][index]["allow_offloading"]
-            except:
-                # Error getting the offloading from the config; probable not specified. Default to True.
-                pass
+            if (not Force):
+                try:
+                    # Get offloading from the config
+                    aOffloading = tasks[task][index]["allow_offloading"]
+                except:
+                    # Error getting the offloading from the config; probable not specified. Default to True.
+                    pass
 
             # Check if the task and index is in the exclude list or if it doesn't allow offloading
             if ((task in list(Exclude.keys()) and index in Exclude[task]) or not aOffloading):
@@ -166,8 +168,39 @@ def GetResponseFromInternet(
         MaxLength: int | None,
         Temperature: float | None,
         TopP: float | None,
-        TopK: int | None
+        TopK: int | None,
+        MinP: float | None = None,
+        TypicalP: float | None = None
     ) -> Iterator[dict[str, any]]:
+    # Get response from the dataset
+    datasetResponses = dts.GetResponse(Keywords)
+
+    # Check responses length
+    if (len(datasetResponses) > 0):
+        # Save all the dataset responses into a string
+        datasetResponse = "\n".join(datasetResponses)
+        datasetResponse = datasetResponse.strip()
+
+        # Send the prompt to I4.0
+        return MakePrompt(
+            Index,
+            f"Internet data:\n{datasetResponse}\nQuestion to answer: {Question}",
+            [],
+            "chatbot",
+            AIArgs,
+            ExtraSystemPrompts,
+            Conversation,
+            UseDefaultSystemPrompts,
+            [],
+            [],
+            MaxLength,
+            Temperature,
+            TopP,
+            TopK,
+            MinP,
+            TypicalP
+        )
+    
     # Search for websites
     internetResults = internet.Search__Websites(Keywords, Count, None)
     return GetResponseFromInternet_URL(
@@ -181,7 +214,9 @@ def GetResponseFromInternet(
         MaxLength,
         Temperature,
         TopP,
-        TopK
+        TopK,
+        MinP,
+        TypicalP
     )
 
 def GetResponseFromInternet_URL(
@@ -195,7 +230,9 @@ def GetResponseFromInternet_URL(
         MaxLength: int | None,
         Temperature: float | None,
         TopP: float | None,
-        TopK: int | None
+        TopK: int | None,
+        MinP: float | None = None,
+        TypicalP: float | None = None
     ) -> Iterator[dict[str, any]]:
     # Set system prompt
     if (isinstance(ExtraSystemPrompts, list)):
@@ -245,7 +282,9 @@ def GetResponseFromInternet_URL(
         MaxLength,
         Temperature,
         TopP,
-        TopK
+        TopK,
+        MinP,
+        TypicalP
     )
 
 def InternetResearch(
@@ -259,7 +298,9 @@ def InternetResearch(
         MaxLength: int | None,
         Temperature: float | None,
         TopP: float | None,
-        TopK: int | None
+        TopK: int | None,
+        MinP: float | None = None,
+        TypicalP: float | None = None
     ) -> Iterator[dict[str, any]]:
     # Get the internet results
     internetResults = internet.Search__Websites(Keywords, cfg.current_data["internet"]["max_results"], None)
@@ -344,7 +385,9 @@ def InternetResearch(
         MaxLength,
         Temperature,
         TopP,
-        TopK
+        TopK,
+        MinP,
+        TypicalP
     )
 
     # For each token
@@ -366,7 +409,9 @@ def MakePrompt(
         MaxLength: int | None = None,
         Temperature: float | None = None,
         TopP: float | None = None,
-        TopK: int | None = None
+        TopK: int | None = None,
+        MinP: float | None = None,
+        TypicalP: float | None = None
     ) -> Iterator[dict[str, any]]:
     # Define I4.0's personality
     if (AIArgs == None):
@@ -377,12 +422,12 @@ def MakePrompt(
     # Check conversation to prevent errors
     if (Conversation[0] is None):
         Conversation[0] = ""
-    elif (type(Conversation[0]) != str):
+    elif (not isinstance(Conversation[0], str)):
         raise ValueError("Conversation [0] MUST be a string.")
     
     if (Conversation[1] is None):
         Conversation[1] = ""
-    elif (type(Conversation[1]) != str):
+    elif (not isinstance(Conversation[1], str)):
         raise ValueError("Conversation [1] MUST be a string.")
 
     # Get the info of the model
@@ -401,7 +446,8 @@ def MakePrompt(
     
     # Add system prompt if tools > 0
     if (len(tools) > 0):
-        sp.append("To use a tool, you must write something like this:\n```plaintext\n<tool_call>\n{function parameters}\n</tool_call>\n[RESPONSE TO USER'S PROMPT]\n```")
+        #sp.append("To use any tool, write something like this:\n```plaintext\n<tool_call>\n{function}\n</tool_call>\n```")
+        sp.append("You can respond to the user's prompt before or after using any tool.")
     
     # Get the personality
     sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
@@ -455,7 +501,6 @@ def MakePrompt(
 
         # Add sprompts
         sp += [
-            "",
             f"The current date is {cDate.day} of {calendar.month_name[cDate.month]}, {cDate.year}.",
             f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
         ]
@@ -478,7 +523,20 @@ def MakePrompt(
             sp.append(f"Memory #{mem}: {mems[mem]}")
     
     # Check NSFW in prompt
-    if ((Service == "chatbot" or Service == "sc" or Service == "tr" or Service == "text2img" or Service == "text2audio" or Service == "tts" or Service == "qa") and not cfg.current_data["allow_processing_if_nsfw"][0] and Service != "nsfw_filter-text" and len(cfg.GetAllInfosOfATask("nsfw_filter-text")) > 0):
+    if (
+        (
+            Service == "chatbot" or
+            Service == "sc" or
+            Service == "tr" or
+            Service == "text2img" or
+            Service == "text2audio" or
+            Service == "tts" or
+            Service == "qa"
+        ) and
+        not cfg.current_data["allow_processing_if_nsfw"][0] and
+        Service != "nsfw_filter-text" and
+        len(cfg.GetAllInfosOfATask("nsfw_filter-text")) > 0
+    ):
         # Pick random text NSFW filter
         filterIdx = random.randint(0, len(cfg.GetAllInfosOfATask("nsfw_filter-text")) - 1)
         
@@ -488,6 +546,9 @@ def MakePrompt(
         # Return error if it's NSFW
         if (isNSFW):
             raise Exception("NSFW detected!")
+    
+    # Create document files count
+    documentFiles = 0
 
     # For each file
     for file in Files:
@@ -496,14 +557,23 @@ def MakePrompt(
             # Bigger than the server allows, return an error
             raise Exception("File exceeds the maximum file size allowed by the server.")
 
-        # Create file
-        f = temp.CreateTemporalFile(file["type"], base64.b64decode(file["data"]) if (isinstance(file["data"], str)) else file["data"])
+        # Get file bytes
+        f = base64.b64decode(file["data"]) if (isinstance(file["data"], str)) else file["data"]
 
         # Replace from the list
-        Files[Files.index(file)]["data"] = f
+        file["data"] = f
 
-        # Check NSFW
-        if (file["type"] == "image" and not cfg.current_data["allow_processing_if_nsfw"][1] and Service != "nsfw_filter-image"  and len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0):
+        # Lower the file type
+        file["type"] = file["type"].lower()
+
+        # Check file type
+        if (
+            file["type"] == "image" and
+            not cfg.current_data["allow_processing_if_nsfw"][1] and
+            Service != "nsfw_filter-image" and
+            len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0
+        ):
+            # Check NSFW
             # Pick random image NSFW filter
             filterIdx = random.randint(0, len(cfg.GetAllInfosOfATask("nsfw_filter-image")) - 1)
 
@@ -516,16 +586,50 @@ def MakePrompt(
         elif (file["type"] == "audio"):
             # Ignore, the NSFW filter for audio is not created yet
             pass
+        elif (file["type"] == "video"):
+            # Ignore, the NSFW filter for video is not created yet
+            pass
+        elif (file["type"] == "pdf"):
+            # Add one to the document files count
+            documentFiles += 1
+
+            # Extract PDF text
+            pdfPages = docs.PDF2PLAINTEXT(f)
+            pdfText = "\n".join(pdfPages)
+
+            # Strip the text
+            pdfText = pdfText.strip()
+
+            # Add to the system prompt
+            sp.append(f"Document file #{documentFiles} (PDF file):\n```plaintext\n{pdfText}\n```")
+        elif (file["type"] == "csv"):
+            # Add one to the document files count
+            documentFiles += 1
+
+            # Convert the data to text
+            csvText = f.decode("utf-8")
+
+            # Add to the system prompt
+            sp.append(f"Document file #{documentFiles} (CSV file):\n```csv\n{csvText}\n```")
+        elif (file["type"] == "xlsx"):
+            # Add one to the document files count
+            documentFiles += 1
+
+            # Convert the file to CSV
+            csvText = docs.XLSX2CSV(f)
+
+            # Add to the system prompt
+            sp.append(f"Document file #{documentFiles} (XLSX file):\n```csv\n{csvText}\n```")
     
     # Check service
     if (Service == "chatbot" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get chatbot response
         if (len(cfg.GetInfoOfTask(Service, Index)["multimodal"].strip()) > 0):
             # Use multimodal chatbot
-            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK)
+            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK, MinP, TypicalP)
         else:
             # Use normal chatbot
-            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK)
+            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK, MinP, TypicalP)
 
         # For every token
         for token in textResponse:
@@ -717,7 +821,7 @@ def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Return the generated images
     return images
 
-def EstimateDepth(Index: int, Img: str) -> str:
+def EstimateDepth(Index: int, Img: bytes) -> str:
     # Estimate depth
     img_response = de.Inference(Index, Img)
     # Encode the image in base64
@@ -733,15 +837,15 @@ def GenerateAudio(Index: int, Prompt: str) -> str:
     # Return generated audio
     return base64.b64encode(aud_response).decode("utf-8")
 
-def ImageToText(Index: int, Img: str) -> str:
+def ImageToText(Index: int, Img: bytes) -> str:
     # Get and return the text from an image
     return itt.Inference(Index, Img)
 
-def RecognizeAudio(Index: int, Audio: str) -> dict[str, str]:
+def RecognizeAudio(Index: int, Audio: bytes) -> dict[str, str]:
     # Recognize and return an audio
-    return sr.Inference(Index, sr.GetAudioDataFromFile(Audio))
+    return sr.Inference(Index, Audio)
 
-def DetectObjects(Index: int, Img: str) -> dict[str]:
+def DetectObjects(Index: int, Img: bytes) -> dict[str]:
     # Get objects data
     data = od.Inference(Index, Img)
     # Encode the image into base64
@@ -760,6 +864,7 @@ def DoRVC(AudioData: str | dict[str, any]) -> str:
 
     # Get RVC audio response
     data = rvc.MakeRVC(AudioData)
+
     # Encode the audio into base64
     audio = base64.b64encode(data).decode("utf-8")
 
@@ -798,7 +903,7 @@ def IsTextNSFW(Prompt: str, Index: int) -> bool:
     return None
 
 # Check if an image prompt is NSFW
-def IsImageNSFW(Image: str | Image.Image, Index: int) -> bool:
+def IsImageNSFW(Image: bytes, Index: int) -> bool:
     # If the model is loaded, check NSFW
     if (len(cfg.GetAllInfosOfATask("nsfw_filter-image")) > 0):
         return filters.InferenceImage(Image, Index)

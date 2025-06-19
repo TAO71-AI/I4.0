@@ -19,7 +19,9 @@ def LoadModel(ModelName: str, Dtype: torch.dtype, Device: str) -> whisper.Whispe
     # Set dtype
     try:
         # Check dtype
-        if (Dtype == torch.float32 or Dtype == torch.int32 or Dtype == torch.uint32):
+        if (Dtype == torch.float32):
+            pass
+        elif (Dtype == torch.int32 or Dtype == torch.uint32):
             Dtype = torch.qint32
         elif (Dtype == torch.int8):
             Dtype = torch.qint8

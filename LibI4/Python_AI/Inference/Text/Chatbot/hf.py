@@ -1,12 +1,11 @@
-# Import HuggingFace Transformers
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
-
-# Import some other libraries
-from collections.abc import Iterator
-import threading
-
 # Import I4.0's utilities
 import ai_config as cfg
+
+# Import other libraries
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from collections.abc import Iterator
+import threading
+import json
 
 def __load_model__(Config: dict[str, any], Index: int) -> tuple[AutoModelForCausalLM, AutoTokenizer, str, str]:
     modelExtraKWargs = {}
@@ -32,11 +31,19 @@ def __inference__(
         Dtype: str,
         Config: dict[str, any],
         ContentForModel: list[dict[str, str]],
+        Seed: int | None,
+        Tools: list[dict[str, str | dict[str, any]]],
         MaxLength: int,
         Temperature: float,
         TopP: float,
-        TopK: int
+        TopK: int,
+        MinP: float,
+        TypicalP: float
     ) -> Iterator[str]:
+    # Add the tools to the system prompt
+    if (len(Tools) > 0):
+        ContentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\nTo use any tool, use this template:\n```plaintext\n<tool_call>\n{{function}}\n</tool_call>\n```\n\n---\n\n{ContentForModel[0]['content']}"
+
     # Apply the chat template using the tokenizer
     text = Tokenizer.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
 
@@ -55,6 +62,8 @@ def __inference__(
         streamer = streamer,
         top_p = TopP,
         top_k = TopK,
+        min_p = MinP,
+        typical_p = TypicalP,
         do_sample = True
     )
 
@@ -69,13 +78,6 @@ def __inference__(
         if (firstToken):
             firstToken = False
             continue
-
-        # Cut the response
-        if (token.count("<|im_end|>")):
-            token = token[:token.index("<|im_end|>")]
-
-        if (token.count("<|im_start|>")):
-            token = token[token.index("<|im_start|>") + 12:]
 
         # Print the token and yield it
         print(token, end = "", flush = True)

@@ -85,14 +85,16 @@ def LoadModels() -> None:
 def Inference(
         Index: int,
         Prompt: str,
-        Files: list[dict[str, str]],
+        Files: list[dict[str, str | bytes]],
         SystemPrompts: list[str],
         Tools: list[dict[str, str | dict[str, any]]],
         Conversation: list[str] = ["", ""],
         MaxLength: int | None = None,
         Temperature: float | None = None,
         TopP: float | None = None,
-        TopK: int | None = None
+        TopK: int | None = None,
+        MinP: float | None = None,
+        TypicalP: float | None = None
     ) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Load the model
     __load_model__(Index)
@@ -101,11 +103,20 @@ def Inference(
     files = []
 
     for file in Files:
-        with open(file["data"], "rb") as f:
+        if (isinstance(file["data"], str)):
+            with open(file["data"], "rb") as f:
+                files.append({
+                    "type": file["type"],
+                    file["type"]: f"data:{file['type']};base64,{base64.b64encode(f.read()).decode('utf-8')}"
+                })
+        elif (isinstance(file["data"], bytes)):
             files.append({
                 "type": file["type"],
-                file["type"]: f"data:{file['type']};base64,{base64.b64encode(f.read()).decode('utf-8')}"
+                file["type"]: f"data:{file['type']};base64,{base64.b64encode(file['data']).decode('utf-8')}"
             })
+        else:
+            # Invalid file type, raise an error
+            raise Exception(f"Invalid file type '{type(file['data'])}' for file '{file['name']}'.")
 
     # Strip the prompt and set the system prompts
     Prompt = Prompt.strip()
@@ -160,6 +171,19 @@ def Inference(
     contentForModel.append({"role": "user", "content": files + [{"type": "text", "text": Prompt}]})
     contentToShow += f"\n\n### USER: {Prompt}"
 
+    # Set the seed
+    try:
+        # Get the seed
+        seed = __models__[Index][1]["seed"]
+
+        # Check the seed
+        if (seed < 0):
+            # Invalid seed, set to None
+            seed = None
+    except:
+        # Error; probably `seed` is not configured. Set to None
+        seed = None
+
     # Set the maximum length
     if (MaxLength is None):
         try:
@@ -212,6 +236,26 @@ def Inference(
             TopK = __models__[Index][1]["top_k"]
         except:
             TopK = 40
+    
+    # Set min_p
+    if (MinP is None):
+        try:
+            MinP = __models__[Index][1]["min_p"]
+
+            if (MinP == None):
+                raise Exception()
+        except:
+            MinP = 0.05
+    
+    # Set typical_p
+    if (TypicalP is None):
+        try:
+            TypicalP = __models__[Index][1]["typical_p"]
+
+            if (TypicalP == None):
+                raise Exception()
+        except:
+            TypicalP = 1
 
     # Print the prompt
     print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
@@ -226,10 +270,14 @@ def Inference(
             __models__[Index][0][3],
             __models__[Index][1],
             contentForModel,
+            seed,
+            Tools,
             maxLength,
             temp,
             TopP,
-            TopK
+            TopK,
+            MinP,
+            TypicalP
         )
     else:
         # It's an invalid model type

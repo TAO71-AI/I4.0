@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "I4_0-Client-PY",
-    version = "14.1.0",
+    version = "15.0.0",
     description = "Client Python bindings for I4.0.",
     author = "TAO71-AI",
     url = "https://github.com/TAO71-AI/I4.0",
@@ -24,7 +24,7 @@ setup(
         "License :: Other/Proprietary License",
         "Operating System :: OS Independent"
     ],
-    python_requires = ">=3.8",
+    python_requires = ">=3.11",
     project_urls = {
         "Source": "https://github.com/TAO71-AI/I4.0/tree/development/LibI4/ClientPythonPackage",
         "License": "https://github.com/TAO71-AI/I4.0/blob/main/LICENSE.md"

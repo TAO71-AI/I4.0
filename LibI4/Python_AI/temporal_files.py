@@ -81,6 +81,12 @@ def CreateTemporalFile(FileType: str, FileData: bytes) -> str:
         fileExt = "wav"
     elif (FileType == "video"):
         fileExt = "mp4"
+    elif (FileType == "pdf"):
+        fileExt = "pdf"
+    elif (FileType == "csv"):
+        fileExt = "csv"
+    elif (FileType == "xlsx"):
+        fileExt = "xlsx"
     else:
         raise Exception("Invalid file type.")
 

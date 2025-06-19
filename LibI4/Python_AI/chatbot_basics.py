@@ -1,6 +1,9 @@
 import ai_config as cfg
 
 def GetPersonalitySystemPrompts(Personality: str | list[str] | None = None) -> str:
+    """
+    Get the system prompts of the AIArgs.
+    """
     msg = ""
 
     if (Personality == None):
@@ -38,14 +41,18 @@ def GetPersonalitySystemPrompts(Personality: str | list[str] | None = None) -> s
     return msg.strip()
 
 def GetDefaultSystemPrompts() -> str:
-    msg = "Your name is \"I4.0\".\n"
-    msg += "You have your own thoughts, emotions, opinions and sensations.\n"
-    msg += "The user might not always be right.\n"
-    msg += "Do not start a message with a JSON unless you're using a tool. Tools must be on top of the message."
+    """
+    Get default I4.0 system prompts.
+    """
+    msg = "Your name is 'I4.0'.\n"
+    msg += "You have your own thoughts, emotions, opinions, and sensations."
 
     return msg
 
 def IsToolValid(Tool: dict[str, str | dict[str, any]]) -> bool:
+    """
+    Check if a tool is valid.
+    """
     try:
         toolType = Tool["type"]
         toolFunc = Tool["function"]
@@ -84,14 +91,21 @@ def IsToolValid(Tool: dict[str, str | dict[str, any]]) -> bool:
         elif (not isinstance(toolParametersReq, list)):
             raise Exception("Tool parameter required is not a list.")
         
+        for reqParam in toolParametersReq:
+            if (reqParam not in list(toolParametersProperties.keys())):
+                raise Exception("Tool required parameter not created.")
+        
         return True
     except Exception as e:
         print(f"Error validating client tool: {str(e)}")
         return False
 
 def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str | dict[str, any]]]:
+    """
+    Get all the tools allowed.
+    """
     TOOLS_AVAILABLE = {
-        "image_generation": {
+        "image-generation": {
             "type": "function",
             "function": {
                 "name": "image_generation",
@@ -112,7 +126,7 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                 }
             }
         },
-        "audio_generation": {
+        "audio-generation": {
             "type": "function",
             "function": {
                 "name": "audio_generation",
@@ -141,16 +155,12 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                             "type": "string",
                             "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
                         },
-                        "prompt": {
-                            "type": "string",
-                            "description": "Prompt or question to answer using the internet. Give as many details as possible."
-                        },
                         "count": {
                             "type": "integer",
-                            "description": "Max number of results to search."
+                            "description": "Max number of results to search. More results means more information, but more latency."
                         }
                     },
-                    "required": ["keywords", "prompt"]
+                    "required": ["keywords"]
                 }
             }
         },
@@ -165,13 +175,9 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                         "url": {
                             "type": "string",
                             "description": "URL of the website."
-                        },
-                        "prompt": {
-                            "type": "string",
-                            "description": "Prompt or question to answer using the internet. Give as many details as possible."
                         }
                     },
-                    "required": ["url", "prompt"]
+                    "required": ["url"]
                 }
             }
         },
@@ -186,13 +192,9 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                         "keywords": {
                             "type": "string",
                             "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
-                        },
-                        "prompt": {
-                            "type": "string",
-                            "description": "Prompt or question to answer using the internet. Give as many details as possible."
                         }
                     },
-                    "required": ["keywords", "prompt"]
+                    "required": ["keywords"]
                 }
             }
         },
@@ -204,12 +206,12 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "memory": {
+                        "content": {
                             "type": "string",
-                            "description": "Memory to save. Add as many details as possible."
+                            "description": "Memory content."
                         }
                     },
-                    "required": ["memory"]
+                    "required": ["content"]
                 }
             }
         },
@@ -225,12 +227,12 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                             "type": "integer",
                             "description": "Memory index or ID."
                         },
-                        "new_memory": {
+                        "new_content": {
                             "type": "string",
-                            "description": "New memory text. Add as many details as possible."
+                            "description": "New memory content."
                         }
                     },
-                    "required": ["memory_id", "new_memory"]
+                    "required": ["memory_id", "new_content"]
                 }
             }
         },
@@ -255,20 +257,20 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "document_creator",
-                "description": "This function creates a PDF document.",
+                "description": "This function creates a document.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "html": {
+                        "code": {
                             "type": "string",
-                            "description": "Content of the document, in HTML format. Example: `<html><head><style>...</style>...</head><body>...</body></html>`."
+                            "description": "Code required to create the document. Depending the document you want to create this parameter can be in HTML or CSV."
                         },
                         "document_type": {
                             "type": "string",
-                            "description": "Type of document to create. This parameter can be `pdf` or `docx`."
+                            "description": "Type of document to create. This parameter can be `html2pdf`, `html2docx`, or `csv2xlsx`."
                         }
                     },
-                    "required": ["html", "document_type"]
+                    "required": ["code", "document_type"]
                 }
             }
         }
@@ -279,12 +281,14 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
         AllowedTools = cfg.current_data["enabled_tools"].split(" ")
     elif (isinstance(AllowedTools, str)):
         AllowedTools = AllowedTools.split(" ")
+    elif (not isinstance(AllowedTools, list)):
+        raise ValueError("AllowedTools is not a string nor a list.")
 
     for tool in list(TOOLS_AVAILABLE.keys()):
         if (AllowedTools.count(tool) > 0 and cfg.current_data["enabled_tools"].count(tool) > 0):
             if (
-                (tool == "image_generation" and len(cfg.GetAllInfosOfATask("text2img")) == 0) or
-                (tool == "audio_generation" and len(cfg.GetAllInfosOfATask("text2audio")) == 0)
+                (tool == "image-generation" and len(cfg.GetAllInfosOfATask("text2img")) == 0) or
+                (tool == "audio-generation" and len(cfg.GetAllInfosOfATask("text2audio")) == 0)
             ):
                 continue
 

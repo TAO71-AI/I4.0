@@ -321,16 +321,21 @@ def __update_config__() -> None:
     """
     ServerCon.Conf = ServerCon.Conf.__from_dict__(Conf.__to_dict__())
 
-async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> AsyncIterator[dict[str, any]]:
+async def ExecuteCommand(
+        Service: str,
+        Prompt: str = "",
+        Index: int | None = None
+    ) -> AsyncIterator[dict[str, any]]:
     """
     Executes a very-basic command on the server.
     You can use this, for example, to delete your conversation or get the queue for a service.
-
-    Index == -1 automatically gets the model with the smallest queue size.
     """
-
     # Update config
     __update_config__()
+
+    # Set index
+    if (Index is None):
+        Index = Conf.DefaultIndex
 
     # Serialize a very basic, minimum, data to send to the server
     jsonData = json.dumps({
@@ -343,25 +348,40 @@ async def ExecuteCommand(Service: str, Prompt: str = "", Index: int = -1) -> Asy
         "PublicKey": ServerCon.PublicKey.decode("utf-8"),
         "MaxLength": Conf.MaxLength,
         "Temperature": Conf.Temperature,
-        "AllowDataSave": Conf.AllowDataSave
+        "AllowDataSave": Conf.AllowDataSave,
+        "SeeTools": Conf.SeeTools,
+        "TopP": Conf.Chatbot_TopP,
+        "TopK": Conf.Chatbot_TopK,
+        "MinP": Conf.Chatbot_MinP,
+        "TypicalP": Conf.Chatbot_TypicalP
     })
 
     # Return the response (probably serialized)
     async for token in ServerCon.SendAndWaitForStreaming(jsonData):
         yield token
 
-async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService: Service, Index: int = -1, ForceNoConnect: bool = False, FilesPath: bool = True) -> AsyncIterator[dict[str, any]]:
+async def ExecuteService(
+        Prompt: str,
+        Files: list[dict[str, str]],
+        ServerService: Service,
+        Index: int | None = None,
+        ForceNoConnect: bool = False,
+        FilesPath: bool = True
+    ) -> AsyncIterator[dict[str, any]]:
     """
     This will automatically get a response a server.
     If the service requires it, this will serialize your prompt.
     This will also do other things before and after I4.0's response to your prompt.
 
-    Index == -1 automatically gets the model with the smallest queue size.
-    If FilesPath is false, the Files list MUST have the bytes of the files, in base64.
-    If ForceNoConnect is true, this will not connect to any server, so you must be connected to one first.
+    If FilesPath is False, the Files list must have the bytes of the files, in base64.
+    If ForceNoConnect is True, this will not connect to any server, so you must be connected to one first.
     """
     # Update config
     __update_config__()
+
+    # Set index
+    if (Index is None):
+        Index = Conf.DefaultIndex
 
     # Connect to a server
     currentServer = ServerCon.Connected[1] if (ServerCon.Connected is not None) else None
@@ -527,9 +547,12 @@ async def ExecuteService(Prompt: str, Files: list[dict[str, str]], ServerService
         "ExtraTools": Conf.ExtraTools,
         "MaxLength": Conf.MaxLength,
         "Temperature": Conf.Temperature,
+        "SeeTools": Conf.SeeTools,
         "AllowDataSave": Conf.AllowDataSave,
         "TopP": Conf.Chatbot_TopP,
-        "TopK": Conf.Chatbot_TopK
+        "TopK": Conf.Chatbot_TopK,
+        "MinP": Conf.Chatbot_MinP,
+        "TypicalP": Conf.Chatbot_TypicalP
     })
 
     # Return the response

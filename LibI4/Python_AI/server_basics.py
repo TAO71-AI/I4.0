@@ -73,7 +73,7 @@ async def AsyncExecuteCommandOnDatabase(Command: str, Objects: list[any] | None 
 
     # Encrypt the data using the public server key file
     hash = enc.__parse_hash__(cfg.current_data["db"]["hash"])
-    data = enc.EncryptMessage(data, ServerPublicKey, hash)
+    data = enc.EncryptMessage(data, ServerPublicKey, hash, True)
 
     # Convert to bytes
     data = data.encode("utf-8")

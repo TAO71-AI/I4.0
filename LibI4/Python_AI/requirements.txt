@@ -41,6 +41,9 @@ click<9.0.0,>=8.1.7
 weasyprint>=65.1,<66
 html2docx
 googlesearch-python
+pandas
+openpyxl
+PyPDF2
 
 # Requirements for inference
 gpt4all==2.8.2
