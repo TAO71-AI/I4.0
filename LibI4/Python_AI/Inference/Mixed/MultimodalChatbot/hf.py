@@ -54,7 +54,7 @@ def __inference__(
     for msg in ContentForModel:
         if (msg["role"] == "system" and len(Tools) > 0):
             # Append the tools
-            msg["content"][0]["text"] = ""f"\nAvailable tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```" + "\nTo use any tool, use this template:\n```plaintext\n<tool_call>\n{function}\n</tool_call>\n```" + msg["content"][0]["text"]
+            msg["content"][0]["text"] = ""f"\nAvailable tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n" + msg["content"][0]["text"]
     
     # Apply the chat template using the processor
     text = Processor.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)

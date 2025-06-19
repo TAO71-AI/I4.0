@@ -214,7 +214,7 @@ def __inference__(
     # Check if the tools must be in the system prompt
     if ("lcpp_tools_in_system_prompt" in list(Config.keys()) and Config["lcpp_tools_in_system_prompt"] and len(Tools) > 0):
         # Add the tools to the system prompt
-        ContentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\nTo use any tool, use this template:\n```plaintext\n<tool_call>\n{{function}}\n</tool_call>\n```\n\n---\n\n{ContentForModel[0]['content']}"
+        ContentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n{ContentForModel[0]['content']}"
         Tools = None
     elif (len(Tools) == 0):
         # No tools, set to None

@@ -109,7 +109,7 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 modelsUsed: dict[str, list[int]] = {}
-ServerVersion: int = 150000
+ServerVersion: int = 150100
 
 # Server sockets
 serverWS: serve | None = None
@@ -388,7 +388,6 @@ def __infer__(
     responseFiles = []
     tools = []
     tempTool = ""
-    firstToken = True
 
     # Start timer
     timer = time.time()
@@ -421,19 +420,11 @@ def __infer__(
         timer = time.time()
 
         # Check if the chatbot is using a tool
-        if (
-            ((
-                (firstToken and token["response"].startswith("{")) or
-                (token["response"] == "<tool_call>")
-            ) or len(tempTool) > 0)
-        ):
+        if (token["response"].strip() == "<tool_call>" or len(tempTool) > 0):
             tempTool += token["response"]
 
-            if (token["response"].endswith("}") and not tempTool.startswith("<tool_call>")):
-                tools.append(tempTool[:tempTool.rfind("}") + 1])
-                tempTool = ""
-            elif (token["response"] == "</tool_call>" and tempTool.startswith("<tool_call>")):
-                tools.append(tempTool[11:-12])
+            if (token["response"] == "</tool_call>"):
+                tools.append(tempTool)
                 tempTool = ""
             
             if (SeeTools):
@@ -442,7 +433,6 @@ def __infer__(
             continue
 
         # Yield the token
-        firstToken = False
         yield token
     
     # Delete the timer
@@ -455,15 +445,17 @@ def __infer__(
     # For each tool used
     for toolStr in tools:
         # Remove special tokens
-        while (toolStr.startswith("<tool_call>")):
-            toolStr = toolStr[11:]
+        toolStrCut = toolStr.strip()
+
+        while (toolStrCut.startswith("<tool_call>")):
+            toolStrCut = toolStrCut[11:]
         
-        while (toolStr.endswith("</tool_call>")):
-            toolStr = toolStr[:-12]
+        while (toolStrCut.endswith("</tool_call>")):
+            toolStrCut = toolStrCut[:-12]
 
         # Parse the JSON
         try:
-            tool = cfg.JSONDeserializer(toolStr)
+            tool = cfg.JSONDeserializer(toolStrCut)
         except:
             continue
 
@@ -616,8 +608,12 @@ def __infer__(
                 text += token["response"]
                 yield {"response": token["response"], "files": token["files"], "ended": False, "errors": []}
             
-            # Save the response from the internet in the memory
-            memories.SaveMemory(Key["key"], f"```plaintext\n{text}\n```")
+            # Remove CoT from the response
+            while (text.count("<think>") > 0 and text.count("</think>") > 0):
+                text = text[text.index("</think>") + 8:].strip()
+            
+            # Add a response to the tool
+            fullResponse = fullResponse.replace(toolStr, f"{toolStr}\n<tool_response>\n{text}\n</tool_response>")
         elif (tool["name"] == "internet_url"):
             # Internet search tool (using a URL)
             # Check if the user has enough tokens
@@ -663,8 +659,12 @@ def __infer__(
                 text += token["response"]
                 yield {"response": token["response"], "files": token["files"], "ended": False, "errors": []}
             
-            # Save the response from the internet in the memory
-            memories.SaveMemory(Key["key"], f"```plaintext\n{text}\n```")
+            # Remove CoT from the response
+            while (text.count("<think>") > 0 and text.count("</think>") > 0):
+                text = text[text.index("</think>") + 8:].strip()
+            
+            # Add a response to the tool
+            fullResponse = fullResponse.replace(toolStr, f"{toolStr}\n<tool_response>\n{text}\n</tool_response>")
         elif (tool["name"] == "internet_research"):
             # Internet research tool
             # Check if the user has enough tokens
@@ -714,8 +714,12 @@ def __infer__(
                 text += token["response"]
                 yield {"response": token["response"], "files": token["files"], "ended": False, "errors": []}
             
-            # Save the response from the internet in the memory
-            memories.SaveMemory(Key["key"], f"```plaintext\n{text}\n```")
+            # Remove CoT from the response
+            while (text.count("<think>") > 0 and text.count("</think>") > 0):
+                text = text[text.index("</think>") + 8:].strip()
+            
+            # Add a response to the tool
+            fullResponse = fullResponse.replace(toolStr, f"{toolStr}\n<tool_response>\n{text}\n</tool_response>")
         elif (tool["name"] == "save_memory"):
             # Save memory tool
             # Get the prompt

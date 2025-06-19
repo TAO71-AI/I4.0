@@ -42,7 +42,7 @@ def __inference__(
     ) -> Iterator[str]:
     # Add the tools to the system prompt
     if (len(Tools) > 0):
-        ContentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\nTo use any tool, use this template:\n```plaintext\n<tool_call>\n{{function}}\n</tool_call>\n```\n\n---\n\n{ContentForModel[0]['content']}"
+        ContentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n{ContentForModel[0]['content']}"
 
     # Apply the chat template using the tokenizer
     text = Tokenizer.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
