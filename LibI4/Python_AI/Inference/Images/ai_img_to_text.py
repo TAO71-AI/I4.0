@@ -39,19 +39,19 @@ def Inference(Index: int, Img: str | bytes | PIL.Image.Image) -> str:
     imgBuffer = None
 
     # Check the image type
-    if (type(Img) == str):
+    if (isinstance(Img, str)):
         # The image is a string, open the file
         image = PIL.Image.open(Img)
-    elif (type(Img) == bytes):
+    elif (isinstance(Img, bytes)):
         # It's an image from bytes
         imgBuffer = BytesIO(Img)
         image = PIL.Image.open(imgBuffer)
-    elif (type(Img) == PIL.Image.Image):
+    elif (isinstance(Img, PIL.Image.Image)):
         # The image is already an image, set the variable
         image = Img
     else:
         # Invalid image type
-        raise Exception("Invalid image type.")
+        raise ValueError("Invalid image type.")
 
     # Get the response from the model
     response = __models__[Index](image)[0]["generated_text"]

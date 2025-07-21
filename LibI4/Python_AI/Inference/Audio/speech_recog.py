@@ -1,5 +1,6 @@
 # Import I4.0 utilities
 import Inference.Audio.SpeechRecognition.whisper_lib as whisperl
+import temporal_files as tempFiles
 import ai_config as cfg
 
 # Import other libraries
@@ -7,6 +8,7 @@ from io import BytesIO
 from pydub import AudioSegment
 from transformers import Pipeline
 import whisper
+import os
 
 __models__: dict[int, tuple[whisper.Whisper | Pipeline, dict[str, any]]] = {}
 
@@ -73,14 +75,20 @@ def Inference(Index: int, Data: bytes) -> dict[str, str]:
         result = whisperl.Inference(__models__[Index][0], data, __models__[Index][1]["temp"])
     elif (isinstance(__models__[Index][0], Pipeline)):
         # Use transformers
+        # Save the buffer into a temporal file
+        dataInput = tempFiles.CreateTemporalFile("wav", data.getvalue())
+
         # Inference the model
-        result = __models__[Index][0](data)
+        result = __models__[Index][0](dataInput, return_timestamps = True)
 
         # Set the result
         result = {
             "text": result["text"],
             "lang": "unknown"
         }
+
+        # Remove the temporal file
+        os.remove(dataInput)
     else:
         # Invalid model type
         data.close()

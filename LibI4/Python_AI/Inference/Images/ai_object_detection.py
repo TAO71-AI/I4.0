@@ -52,14 +52,16 @@ def Inference(Index: int, Img: str | bytes | PIL.Image.Image) -> dict[str, str |
     imgBuffer = None
 
     # Check the image type
-    if (type(Img) == str):
+    if (isinstance(Img, str)):
         # It's a string, open the file
         image = PIL.Image.open(Img)
-    elif (type(Img) == bytes):
+    elif (isinstance(Img, bytes)):
         # It's an image from bytes
         imgBuffer = BytesIO(Img)
         image = PIL.Image.open(imgBuffer)
-    elif (type(Img) != PIL.Image.Image):
+    elif (isinstance(Img, PIL.Image.Image)):
+        image = Img
+    else:
         # Invalid image type
         raise Exception("Invalid image type.")
     

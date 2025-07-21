@@ -261,11 +261,15 @@ def GetResponseFromInternet_URL(
         except:
             internetData = "Error reading data from the internet."
     else:
+        internetData = ""
+
         for url in URL:
             try:
-                internetData = f"Website \"{url}\":\n```plaintext\n{internet.ReadTextFromWebsite(url, maxLength, minLength)}\n```"
+                internetData += f"Website `{url}`:\n```plaintext\n{internet.ReadTextFromWebsite(url, maxLength, minLength)}\n```"
             except:
-                internetData = "Error reading data from the website."
+                internetData += f"Error reading data from the website `{url}`."
+            
+            internetData += "\n\n"
     
     # Return the response
     return MakePrompt(
@@ -558,7 +562,7 @@ def MakePrompt(
             raise Exception("File exceeds the maximum file size allowed by the server.")
 
         # Get file bytes
-        f = base64.b64decode(file["data"]) if (isinstance(file["data"], str)) else file["data"]
+        f = base64.b64decode(file["data"])
 
         # Replace from the list
         file["data"] = f

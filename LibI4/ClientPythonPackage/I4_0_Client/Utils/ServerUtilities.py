@@ -1,10 +1,12 @@
 # Import libraries
 from collections.abc import AsyncIterator
+from io import BytesIO
+from PIL import Image as PILImage
+import av
+import cv2
 import json
 import base64
 import os
-import cv2
-import numpy as np
 
 # Import I4.0 utilities
 from .. import ServerConnection as ServerCon
@@ -32,6 +34,35 @@ class SimulatedVisionV1():
         
         # Return the files
         return files
+    
+    @staticmethod
+    def GetImageInfo(Image: str | bytes) -> dict[str, any]:
+        """
+        Gets information of an image.
+        """
+        # Create image buffer
+        if (isinstance(Image, str)):
+            buffer = BytesIO(base64.b64decode(Image))
+        elif (isinstance(Image, bytes)):
+            buffer = BytesIO(Image)
+        else:
+            raise ValueError("Invalid image type.")
+        
+        # Convert image to Pillow
+        image = PILImage.open(buffer)
+
+        # Extract properties
+        metdata = {
+            "width": image.width,
+            "height": image.height
+        }
+
+        # Close the buffers
+        image.close()
+        buffer.close()
+
+        # Return the metadata
+        return metdata
 
     @staticmethod
     async def __execute_simulated_vision__(Template: str, Files: list[dict[str, str]], VisionService: Service, Index: int, ForceNoConnect: bool) -> str:
@@ -44,23 +75,30 @@ class SimulatedVisionV1():
         # Check files
         if (len(files) == 0):
             return ""
-
-        # Try to send the message
-        res = ExecuteService("", files, VisionService, Index, ForceNoConnect, False)
-        img = 0
+        
+        # For each file
+        img = 1
         response = ""
 
-        # For each response
-        async for token in res:
-            # Check if the response ended
-            if (token["ended"]):
-                # Break the loop
-                break
+        for file in files:
+            # Send the message
+            res = ExecuteService("", [file], VisionService, Index, ForceNoConnect, False)
 
-            # Get the response from the service
-            img += 1
-            response += Template.replace("[IMAGE_ID]", str(img)).replace("[RESPONSE]", str(token["response"]))
+            # For each token
+            async for token in res:
+                # Check if the response ended
+                if (token["ended"]):
+                    # Break the loop
+                    break
+
+                # Get the response from the service and apply to the template
+                response += Template.replace("[IMAGE_ID]", str(img)).replace("[RESPONSE]", str(token["response"])) + "\n"
+                img += 1
         
+        # Strip the response
+        response = response.strip()
+        
+        # Return the response
         return response
     
     @staticmethod
@@ -70,7 +108,7 @@ class SimulatedVisionV1():
         """
         # Return the response
         response = await SimulatedVisionV1.__execute_simulated_vision__(
-            "> Image [IMAGE_ID] description: [RESPONSE]\n",
+            "Image [IMAGE_ID] description:\n```plaintext\n[RESPONSE]\n```\n",
             Files,
             Service.ImageToText,
             Conf.SimulatedVision_v1_Image2Text_Index,
@@ -85,7 +123,7 @@ class SimulatedVisionV1():
         """
         # Return the response
         response = await SimulatedVisionV1.__execute_simulated_vision__(
-            "> Image [IMAGE_ID] list of objects detected and their position: [RESPONSE]\n",
+            "Image [IMAGE_ID] list of objects detected and their position:\n```json\n[RESPONSE]\n```\n",
             Files,
             Service.ObjectDetection,
             Conf.SimulatedVision_v1_ObjectDetection_Index,
@@ -118,40 +156,46 @@ class SimulatedVisionV2():
         Gets information of a video.
         """
         # Check if the video data is valid
-        if (VideoData is str):
+        if (isinstance(VideoData, str)):
             VideoData = base64.b64decode(VideoData)
-        elif (VideoData is not bytes):
+        elif (not isinstance(VideoData, bytes)):
             raise ValueError("VideoData must be bytes or str.")
         
-        # Create variables
-        videoArray = np.frombuffer(VideoData, dtype = np.uint8)
-        videoCapture = cv2.VideoCapture()
+        # Create buffer and variables
+        videoBuffer = BytesIO(VideoData)
 
-        # Open the video
-        videoCapture.open(cv2.imdecode(videoArray, cv2.IMREAD_COLOR))
+        try:
+            # Open video metadata
+            reader = av.open(videoBuffer)
+            stream = next(s for s in reader.streams if (s.type == "video"))
 
-        # Check if the video is open
-        if (not videoCapture.isOpened()):
-            raise Exception("Unable to open video.")
-        
-        # Get video info
-        fps = videoCapture.get(cv2.CAP_PROP_FPS)
-        width = int(videoCapture.get(cv2.CAP_PROP_FRAME_WIDTH))
-        height = int(videoCapture.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        numberOfFrames = int(videoCapture.get(cv2.CAP_PROP_FRAME_COUNT))
-        duration = numberOfFrames / fps if (fps > 0) else 0
+            # Extract properties
+            fps = float(stream.average_rate) if (stream.average_rate) else 0
+            size = [stream.codec_context.width, stream.codec_context.height]
+            numberOfFrames = stream.frames
+            duration = float(reader.duration / av.time_base) if (reader.duration) else (numberOfFrames / fps if (fps) else 0)
 
-        # Release the video capture
-        videoCapture.release()
+            # Save into the dictionary
+            metdata = {
+                "fps": fps,
+                "width": size[0],
+                "height": size[1],
+                "frame_count": numberOfFrames,
+                "duration": duration
+            }
 
-        # Return the video info
-        return {
-            "fps": fps,
-            "width": width,
-            "height": height,
-            "frame_count": numberOfFrames,
-            "duration": duration
-        }
+            # Close the buffers
+            reader.close()
+            videoBuffer.close()
+
+            # Return the metadata
+            return metdata
+        except Exception as ex:
+            # Close the buffer
+            videoBuffer.close()
+
+            # Raise exception
+            raise Exception("Unable to get video info.") from ex
 
     @staticmethod
     def GetVideoFrames(VideoData: bytes | str, GetFrameEvery: int = 1) -> list[str]:
@@ -159,50 +203,51 @@ class SimulatedVisionV2():
         Gets the frames of the video.
         """
         # Check if the video data is valid
-        if (VideoData is str):
+        if (isinstance(VideoData, str)):
             VideoData = base64.b64decode(VideoData)
-        elif (VideoData is not bytes):
+        elif (not isinstance(VideoData, bytes)):
             raise ValueError("VideoData must be bytes or str.")
         
-        # Create variables
-        videoArray = np.frombuffer(VideoData, dtype = np.uint8)
-        videoCapture = cv2.VideoCapture()
+        # Create buffer
+        videoBuffer = BytesIO(VideoData)
 
-        # Open the video
-        videoCapture.open(cv2.imdecode(videoArray, cv2.IMREAD_COLOR))
+        try:
+            # Open video
+            reader = av.open(videoBuffer)
+            frames = []
+            frameCount = 0
 
-        # Check if the video is open
-        if (not videoCapture.isOpened()):
-            raise Exception("Unable to open video.")
-        
-        # Create frames variables
-        frameCount = 0
-        frames = []
+            # For each frame
+            for frame in reader.decode(video = 0):
+                # Check if the frame should be extracted
+                if (frameCount % GetFrameEvery == 0):
+                    # Encode to JPG buffer
+                    buffer = frame.to_ndarray(format = "bgr24")
+                    success, buffer = cv2.imencode(".jpg", buffer)
 
-        # Create loop
-        while (True):
-            # Read frame
-            ret, frame = videoCapture.read()
+                    # Check there are no errors
+                    if (not success):
+                        continue
 
-            # Check if the video ended
-            if (not ret):
-                break
-
-            # Check if the frame should be extracted
-            if (frameCount % GetFrameEvery == 0):
-                # Encode the frame to base64
-                _, buffer = cv2.imencode(".jpg", frame)
-                buffer = base64.b64encode(buffer).decode("utf-8")
-
-                # Append it to the frames list
-                frames.append(buffer)
+                    # Encode the buffer and save it
+                    buffer = base64.b64encode(buffer).decode("utf-8")
+                    frames.append(buffer)
+                
+                # Increment frame count
+                frameCount += 1
             
-            # Increment the frame count
-            frameCount += 1
-        
-        # Release the video capture and return the frames
-        videoCapture.release()
-        return frames
+            # Close the buffers
+            reader.close()
+            videoBuffer.close()
+
+            # Return the frames
+            return frames
+        except Exception as ex:
+            # Close the buffer
+            videoBuffer.close()
+
+            # Raise exception
+            raise Exception("Unable to open video.") from ex
     
     @staticmethod
     async def ExecuteSimulatedVision(Files: list[dict[str, str]], ForceNoConnect: bool) -> str:
@@ -226,24 +271,53 @@ class SimulatedVisionV2():
 
             # Get the frames of the video
             frames = SimulatedVisionV2.GetVideoFrames(videoData, Conf.SimulatedVision_v2_Video_ProcessFrames)
-            framesD = []
+            
+            # Create result string variable
+            simulatedVisionResult = ""
 
             # For each frame
-            for frame in frames:
-                # Convert to a valid file
-                framesD.append({"type": "image", "data": frame})
-            
-            # Get the simulated vision v1 of the frames
-            simulatedVisionFrames = {}
+            for frameIdx, frame in enumerate(frames):
+                # Use img2text from simulated vision 1
+                if (Conf.SimulatedVision_v1_Image2Text_Allow):
+                    try:
+                        # Execute the service
+                        res = ExecuteService("", [{"type": "image", "data": frame}], Service.ImageToText, Conf.SimulatedVision_v1_Image2Text_Index, ForceNoConnect, False)
+                        strRes = ""
 
-            if (Conf.SimulatedVision_v1_Image2Text_Allow):
-                simulatedVisionFrames[f"Frame {len(list(simulatedVisionFrames.keys())) + 1} description"] = await SimulatedVisionV1.__execute_simulated_vision__("[RESPONSE]", framesD, Service.ImageToText, Conf.SimulatedVision_v1_Image2Text_Index, ForceNoConnect)
+                        # Receive all tokens and save into the string
+                        async for token in res:
+                            if (len(token["errors"]) > 0):
+                                continue
+                            
+                            strRes += token["response"]
+                        
+                        # Save into the result variable
+                        if (len(strRes.strip()) > 0):
+                            simulatedVisionResult += f"Frame {frameIdx * Conf.SimulatedVision_v2_Video_ProcessFrames} description: {strRes}\n"
+                    except:
+                        pass
             
-            if (Conf.SimulatedVision_v1_ObjectDetection_Allow):
-                simulatedVisionFrames[f"Frame {len(list(simulatedVisionFrames.keys())) + 1} objects detected"] = await SimulatedVisionV1.__execute_simulated_vision__("[RESPONSE]", framesD, Service.ObjectDetection, Conf.SimulatedVision_v1_ObjectDetection_Index, ForceNoConnect)
+                if (Conf.SimulatedVision_v1_ObjectDetection_Allow):
+                    try:
+                        # Execute the service
+                        res = ExecuteService("", [{"type": "image", "data": frame}], Service.ObjectDetection, Conf.SimulatedVision_v1_ObjectDetection_Index, ForceNoConnect, False)
+                        strRes = ""
+
+                        # Receive all tokens and save into the string
+                        async for token in res:
+                            if (len(token["errors"]) > 0):
+                                continue
+                            
+                            strRes += token["response"]
+                        
+                        # Save into the result variable
+                        if (len(strRes.strip()) > 0):
+                            simulatedVisionResult += f"Frame {frameIdx * Conf.SimulatedVision_v2_Video_ProcessFrames} objects detected: {strRes}\n"
+                    except:
+                        pass
             
             # Append the simulated vision of the video
-            simulatedVision += f"Video {files.index(video) + 1}: {json.dumps(simulatedVisionFrames)}\n"
+            simulatedVision += f"Video {files.index(video) + 1} frames:\n```plaintext\n{simulatedVisionResult.strip()}\n```\n"
         
         return simulatedVision
     
@@ -281,23 +355,30 @@ class SimulatedAuditionV1():
         # Check files
         if (len(files) == 0):
             return ""
-
-        # Try to send the message
-        res = ExecuteService("", files, AuditionService, Index, ForceNoConnect, False)
-        aud = 0
+        
+        # For each file
+        aud = 1
         response = ""
 
-        # For each response
-        async for token in res:
-            # Check if the response ended
-            if (token["ended"]):
-                # Break the loop
-                break
+        for file in files:
+            # Send the message
+            res = ExecuteService("", [file], AuditionService, Index, ForceNoConnect, False)
 
-            # Get the response from the service
-            aud += 1
-            response += Template.replace("[AUDIO_ID]", str(aud)).replace("[RESPONSE]", str(token["response"]))
+            # For each token
+            async for token in res:
+                # Check if the response ended
+                if (token["ended"]):
+                    # Break the loop
+                    break
+
+                # Get the response from the service and apply to the template
+                response += Template.replace("[AUDIO_ID]", str(aud)).replace("[RESPONSE]", str(token["response"])) + "\n"
+                aud += 1
         
+        # Strip the response
+        response = response.strip()
+        
+        # Return the response
         return response
     
     @staticmethod
@@ -473,9 +554,9 @@ async def ExecuteService(
                 break
 
             # Not an error, set string
-            chatbotMultimodal = token["response"].lower()
+            chatbotMultimodal += token["response"].lower()
 
-        if ("image" not in chatbotMultimodal):
+        if ("image" not in chatbotMultimodal and len(SimulatedVisionV1.SeparateFiles(files)) > 0):
             # Model doesn't support images. Use Simulated Vision V1
 
             # Use the `img2text` service if allowed in the configuration
@@ -497,8 +578,21 @@ async def ExecuteService(
                         simulatedPrompt += res
                 except:
                     pass  # Error. Ignore
+            
+            # Separate the images
+            imgs = SimulatedVisionV1.SeparateFiles(files)
+
+            # Get the metadata of each image and save into the simulated prompt
+            for imgIdx, img in enumerate(imgs):
+                imgMetadata = SimulatedVisionV1.GetImageInfo(img["data"])
+                simulatedPrompt += f"Image {imgIdx + 1} metadata:\n```json\n{json.dumps(imgMetadata, indent = 4)}\n```\n"
+
+            # Remove all the images from the files
+            for file in files:
+                if (file["type"] == "image"):
+                    files.remove(file)
         
-        if ("video" not in chatbotMultimodal):
+        if ("video" not in chatbotMultimodal and len(SimulatedVisionV2.SeparateFiles(files)) > 0):
             # Model doesn't support videos. Use Simulated Vision V2
 
             if (Conf.SimulatedVision_v2_Video_Allow):
@@ -507,10 +601,23 @@ async def ExecuteService(
                     
                     if (len(res) > 0):
                         simulatedPrompt += res
-                except:
+                except Exception as ex:
                     pass  # Error. Ignore
+            
+            # Separate the videos
+            vids = SimulatedVisionV2.SeparateFiles(files)
+
+            # Get the metadata of each video and save into the simulated prompt
+            for vidIdx, vid in enumerate(vids):
+                vidMetadata = SimulatedVisionV2.GetVideoInfo(vid["data"])
+                simulatedPrompt += f"Video {vidIdx + 1} metadata:\n```json\n{json.dumps(vidMetadata, indent = 4)}\n```\n"
+            
+            # Remove all the videos from the files
+            for file in files:
+                if (file["type"] == "video"):
+                    files.remove(file)
         
-        if ("audio" not in chatbotMultimodal):
+        if ("audio" not in chatbotMultimodal and len(SimulatedAuditionV1.SeparateFiles(files)) > 0):
             # Model doesn't support audios. Use Simulated Audition V1
 
             # Use the `speech2text` service if allowed in the configuration
@@ -522,10 +629,15 @@ async def ExecuteService(
                         simulatedPrompt += res
                 except:
                     pass  # Error. Ignore
+            
+            # Remove all the audios from the files
+            for file in files:
+                if (file["type"] == "audio"):
+                    files.remove(file)
 
         # Add into the system prompts
         if (len(simulatedPrompt.strip()) > 0):
-            systemPrompt += f"\n{simulatedPrompt}"
+            systemPrompt += f"\n{simulatedPrompt.strip()}"
         
         # Reconnect to the server if disconnected
         if (ServerCon.Connected is not None and currentServer is not None and ServerCon.Connected[1] != currentServer and not ForceNoConnect):

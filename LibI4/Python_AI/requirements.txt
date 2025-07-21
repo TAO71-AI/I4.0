@@ -2,11 +2,11 @@
 
 # General requirements
 numpy<1.27,>=1.22
-torch>=2.0.0
+torch>=2.0.0,<2.6.0
 torchtext
 torchvision
 torchaudio
-transformers<4.51.0,>=4.50.0
+transformers<4.60.0,>=4.52.1
 diffusers<=0.31.0
 
 # Server requirements
@@ -28,7 +28,7 @@ safetensors
 sentencepiece
 emoji
 pydub
-#git+https://github.com/Tps-F/fairseq.git@main
+#git+https://github.com/Tps-F/fairseq.git@main  # This is installed in the automated script
 psutil
 pyyaml
 omegaconf>=2.2,<2.4
@@ -46,11 +46,11 @@ openpyxl
 PyPDF2
 
 # Requirements for inference
-gpt4all==2.8.2
-#llama-cpp-python
-#stable-diffusion-cpp-python
+#gpt4all==2.8.2  # Removed support because it was outdated
+#llama-cpp-python  # This is installed in the automated script
+#stable-diffusion-cpp-python  # This is installed in the automated script
 SpeechRecognition==3.10.4
 openai-whisper>=20240930
 qwen-omni-utils[decord]
-#git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop
-#git+https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git@intel_support  # For Intel GPUs
+#git+https://github.com/RVC-Project/Retrieval-based-Voice-Conversion.git@develop    # This is installed in the automated script
+#git+https://github.com/TAO71-AI/Retrieval-based-Voice-Conversion.git@intel_support  # For Intel GPUs, this is installed in the automated script

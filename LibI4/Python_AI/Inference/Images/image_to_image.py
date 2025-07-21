@@ -74,14 +74,14 @@ def __process__(Index: int, Prompt: str, Steps: int, Img: str | bytes | Image.Im
     imgBuffer = None
     
     # Convert into an image if it's a string
-    if (type(Img) == str):
+    if (isinstance(Img, str)):
         # The image is a string, open the file
         image = Image.open(image)
-    elif (type(Img) == bytes):
+    elif (isinstance(Img, bytes)):
         # It's an image from bytes
         imgBuffer = BytesIO(Img)
         image = Image.open(imgBuffer)
-    elif (type(Img) == Image.Image):
+    elif (isinstance(Img, Image.Image)):
         # The image is already an image, set the variable
         image = Img
     else:

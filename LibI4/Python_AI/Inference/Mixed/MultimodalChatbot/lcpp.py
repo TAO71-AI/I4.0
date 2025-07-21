@@ -1,7 +1,10 @@
 # Import other libraries
 from llama_cpp import Llama
 from collections.abc import Iterator
+from io import BytesIO
+from PIL import Image as PILImage
 import json
+import base64
 
 def __inference__(
         Model: Llama,
@@ -16,6 +19,31 @@ def __inference__(
         MinP: float,
         TypicalP: float
     ) -> Iterator[str]:
+    # Convert the all the images to a valid format
+    for msg in ContentForModel:
+        if (msg["role"] == "system"):
+            continue
+
+        for content in msg["content"]:
+            if (content["type"] == "image"):
+                imgInputBuffer = BytesIO(base64.b64decode(content["image"][18:]))
+                img = PILImage.open(imgInputBuffer)
+
+                imgOutputBuffer = BytesIO()
+                img.save(imgOutputBuffer, format = "PNG")
+
+                img.close()
+                imgInputBuffer.close()
+
+                img = imgOutputBuffer.getvalue()
+                imgOutputBuffer.close()
+
+                img = base64.b64encode(img).decode("utf-8")
+
+                content["type"] = "image_url"
+                content["image_url"] = {"url": f"data:image/png;base64,{img}"}
+                del content["image"]
+
     # Get a response from the model
     response = Model.create_chat_completion(
         messages = ContentForModel,

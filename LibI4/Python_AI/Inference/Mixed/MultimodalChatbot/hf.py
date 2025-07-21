@@ -50,14 +50,8 @@ def __inference__(
         MinP: float,
         TypicalP: float
     ) -> Iterator[tuple[str, list[dict[str, any]]]]:
-    # For each message
-    for msg in ContentForModel:
-        if (msg["role"] == "system" and len(Tools) > 0):
-            # Append the tools
-            msg["content"][0]["text"] = ""f"\nAvailable tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n" + msg["content"][0]["text"]
-    
     # Apply the chat template using the processor
-    text = Processor.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
+    text = Processor.apply_chat_template(ContentForModel, xml_tools = Tools, tokenize = False, add_generation_prompt = True)
 
     # Tokenize the prompt
     audio_inputs, image_inputs, video_inputs = process_mm_info(ContentForModel, use_audio_in_video = True)  # Should work for all models, even if it's not a Qwen model

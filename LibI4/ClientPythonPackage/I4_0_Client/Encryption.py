@@ -48,7 +48,12 @@ def __is_hybrid_message__(Message: str) -> bool:
     except:
         return False
 
-def EncryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes.HashAlgorithm, UseHybrid: bool = False) -> str:
+def EncryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes.HashAlgorithm | None, UseHybrid: bool = False) -> str:
+    # Check if the hash algorithm is null
+    if (HashAlgorithm is None):
+        return Message.decode("utf-8") if (isinstance(Message, bytes)) else Message
+
+    # Encrypt
     if (UseHybrid):
         return __encrypt_hybrid__(Message, Key, HashAlgorithm)
     else:
@@ -131,12 +136,12 @@ def DecryptMessage(Message: str | bytes, Key: str | bytes, HashAlgorithm: hashes
     if (isinstance(Message, bytes)):
         Message = Message.decode("utf-8")
     elif (not isinstance(Message, str)):
-        raise Exception("Invalid message.")
+        raise RuntimeError("Invalid message.")
 
     if (isinstance(Key, str)):
         Key = Key.encode("utf-8")
     elif (not isinstance(Key, bytes)):
-        raise Exception("Invalid key.")
+        raise RuntimeError("Invalid key.")
 
     if (HashAlgorithm is None):
         return Message

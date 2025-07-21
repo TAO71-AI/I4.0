@@ -2,16 +2,22 @@
 from transformers import AutoModelForImageTextToText, AutoProcessor
 import Inference.Mixed.MultimodalChatbot.hf as hf
 
+# Import LLaMA-CPP-Python chatbot
+from llama_cpp import Llama
+from Inference.Mixed.MultimodalChatbot.lcpp_model import LoadModel as LCPP_LoadModel
+import Inference.Mixed.MultimodalChatbot.lcpp as lcpp
+
 # Import some other libraries
 from collections.abc import Iterator
 import psutil
 import base64
+import json
 
 # Import I4.0's utilities
 import ai_config as cfg
 import conversation_multimodal as conv
 
-__models__: dict[int, tuple[tuple[AutoModelForImageTextToText, AutoProcessor, str, str], dict[str, any]]] = {}
+__models__: dict[int, Llama | tuple[tuple[AutoModelForImageTextToText, AutoProcessor, str, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -39,15 +45,38 @@ def __load_model__(Index: int) -> None:
     else:
         threads = info["threads"]
     
+    # Get batch threads and check if the number of batch threads are valid
+    if (info["b_threads"] == -1):
+        b_threads = psutil.cpu_count()
+    elif (info["b_threads"] == -2):
+        b_threads = threads
+    elif (info["b_threads"] == -3):
+        b_threads = None
+    elif (info["b_threads"] <= 0 or info["b_threads"] > psutil.cpu_count()):
+        raise Exception("Invalid number of b_threads.")
+    else:
+        b_threads = info["b_threads"]
+    
     # Check if the batch size is valid
     if (info["batch"] <= 0):
         raise Exception("Invalid batch size.")
+    
+    # Check if the ubatch size is valid
+    if (info["ubatch"] <= 0):
+        raise Exception("Invalid ubatch size.")
     
     # Set model
     if (info["type"] == "hf"):
         # Use Transformers
         # Load the model
         model, processor, dev, dtype = hf.__load_model__(info, Index)
+    elif (info["type"] == "lcpp"):
+        # Use LLaMA-CPP-Python
+        # Print loading message
+        print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
+
+        # Load the model
+        model = LCPP_LoadModel(info, threads, b_threads, device)
     else:
         raise Exception(f"Invalid chatbot type '{info['type']}'.")
     
@@ -58,6 +87,15 @@ def __load_model__(Index: int) -> None:
     else:
         # Add the model only
         __models__[Index] = (model, info)
+    
+    # Fill the ctx if needed
+    if ("fill_ctx_at_start" in info and info["fill_ctx_at_start"]):
+        # Do inference
+        response = Inference(Index, "a " * (info["ctx"] - 15), [], [], ["", ""], None, None, None, None, None, None)
+
+        # Wait for it to respond
+        for token in response:
+            pass
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -123,7 +161,7 @@ def Inference(
     SystemPrompts = "".join(sp + "\n" for sp in SystemPrompts).strip()
 
     # Create the content for the model with the system prompts
-    contentForModel = [{"role": "system", "content": [{"type": "text", "text": SystemPrompts}]}]
+    contentForModel = [{"role": "system", "content": SystemPrompts}]
 
     # Get the conversation of the user
     conversation = conv.GetConversation(Conversation[0], Conversation[1]).copy()
@@ -149,27 +187,7 @@ def Inference(
         # Append the message in the new template to contentForModel
         contentForModel.append({"role": role, "content": msgFiles})
 
-    # Set the prompt that will be displayed
-    contentToShow = "### Conversation:\n"
-
-    for msg in contentForModel:
-        # Find the text message in the conversation
-        textMsg = ""
-
-        # For each message in the content
-        for m in msg["content"]:
-            # Check if the type is text
-            if (m["type"] == "text"):
-                textMsg = m["text"]
-                break
-
-        if (msg["role"] == "user"):
-            contentToShow += f"User: {textMsg}\n"
-        elif (msg["role"] == "assistant"):
-            contentToShow += f"Assistant: {textMsg}\n"
-
     contentForModel.append({"role": "user", "content": files + [{"type": "text", "text": Prompt}]})
-    contentToShow += f"\n\n### USER: {Prompt}"
 
     # Set the seed
     try:
@@ -256,9 +274,15 @@ def Inference(
                 raise Exception()
         except:
             TypicalP = 1
-
-    # Print the prompt
-    print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
+    
+    # Check if the tools must be in the system prompt
+    if ("tools_in_system_prompt" in list(__models__[Index][1].keys()) and __models__[Index][1]["tools_in_system_prompt"] and len(Tools) > 0):
+        # Add the tools to the system prompt
+        contentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n{contentForModel[0]['content']}"
+        Tools = None
+    elif (len(Tools) == 0):
+        # No tools, set to None
+        Tools = None
     
     # Get the model type to use
     if (isinstance(__models__[Index][0], tuple)):
@@ -268,6 +292,21 @@ def Inference(
             __models__[Index][0][1],
             __models__[Index][0][2],
             __models__[Index][0][3],
+            __models__[Index][1],
+            contentForModel,
+            seed,
+            Tools,
+            maxLength,
+            temp,
+            TopP,
+            TopK,
+            MinP,
+            TypicalP
+        )
+    elif (isinstance(__models__[Index][0], Llama)):
+        # Use lcpp
+        return lcpp.__inference__(
+            __models__[Index][0],
             __models__[Index][1],
             contentForModel,
             seed,

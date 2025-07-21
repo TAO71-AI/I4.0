@@ -153,11 +153,15 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                     "properties": {
                         "keywords": {
                             "type": "string",
-                            "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
+                            "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc. Please write the keywords in English."
                         },
                         "count": {
                             "type": "integer",
-                            "description": "Max number of results to search. More results means more information, but more latency."
+                            "description": "Optional. Maximum number of results to fetch from the internet. More results will use information of more websites, but response latency is bigger and the information per page is less."
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "Optional. Prompt or question to answer. If not set it will use the user's prompt."
                         }
                     },
                     "required": ["keywords"]
@@ -168,16 +172,23 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
             "type": "function",
             "function": {
                 "name": "internet_url",
-                "description": "This function reads the content of a website from internet.",
+                "description": "This function reads the content of all the websites mentioned using internet.",
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "url": {
+                        "urls": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            },
+                            "description": "URLs of all the websites to read."
+                        },
+                        "prompt": {
                             "type": "string",
-                            "description": "URL of the website."
+                            "description": "Optional prompt or question to answer. If not set it will use the user's prompt."
                         }
                     },
-                    "required": ["url"]
+                    "required": ["urls"]
                 }
             }
         },
@@ -191,7 +202,11 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                     "properties": {
                         "keywords": {
                             "type": "string",
-                            "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc."
+                            "description": "Keywords to search. You can use special keywords such as `filetype:`, `site:`, etc. Please write the keywords in English."
+                        },
+                        "prompt": {
+                            "type": "string",
+                            "description": "Optional prompt or question to answer. If not set it will use the user's prompt."
                         }
                     },
                     "required": ["keywords"]
@@ -261,16 +276,16 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
                 "parameters": {
                     "type": "object",
                     "properties": {
-                        "code": {
+                        "content": {
                             "type": "string",
-                            "description": "Code required to create the document. Depending the document you want to create this parameter can be in HTML or CSV."
+                            "description": "Content of the document. Depending the document this parameter can be in HTML format, or CSV format."
                         },
                         "document_type": {
                             "type": "string",
                             "description": "Type of document to create. This parameter can be `html2pdf`, `html2docx`, or `csv2xlsx`."
                         }
                     },
-                    "required": ["code", "document_type"]
+                    "required": ["content", "document_type"]
                 }
             }
         }
@@ -285,7 +300,10 @@ def GetTools(AllowedTools: list[str] | str | None = None) -> list[dict[str, str 
         raise ValueError("AllowedTools is not a string nor a list.")
 
     for tool in list(TOOLS_AVAILABLE.keys()):
-        if (AllowedTools.count(tool) > 0 and cfg.current_data["enabled_tools"].count(tool) > 0):
+        if (
+            (AllowedTools.count(tool) > 0 and cfg.current_data["enabled_tools"].count(tool) > 0) or
+            (AllowedTools.count("*") > 0 and cfg.current_data["enabled_tools"].count(tool) > 0)
+        ):
             if (
                 (tool == "image-generation" and len(cfg.GetAllInfosOfATask("text2img")) == 0) or
                 (tool == "audio-generation" and len(cfg.GetAllInfosOfATask("text2audio")) == 0)

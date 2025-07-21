@@ -68,6 +68,10 @@ async def __connect_str__(Server: str, Port: int = 8060) -> None:
 
         await asyncio.sleep(0.1)
         waited += 1
+    
+    # Check client state
+    if (ClientSocket.state != State.OPEN):
+        raise RuntimeError(f"Error connecting. WebSocket state: {ClientSocket.state}")
 
     # Set connected server
     Connected = (Server, f"{ext}{Server}:{Port}", -1)
@@ -156,6 +160,7 @@ async def SendAndReceive(Data: bytes | str, Encrypt: bool = True) -> bytes:
 
     # Check if you're connected
     if (not IsConnected()):
+        await Disconnect()
         raise Exception("Connect to a server first.")
     
     # Convert the data to bytes
@@ -164,8 +169,10 @@ async def SendAndReceive(Data: bytes | str, Encrypt: bool = True) -> bytes:
 
     # Encrypt the data
     if (Encrypt):
-        Data = Encryption.EncryptMessage(Data, ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm), Connected[2] >= 140100).encode("utf-8")
-        Data = json.dumps({"Hash": Conf.HashAlgorithm, "Message": Data.decode("utf-8"), "Version": str(ClientVersion)}).encode("utf-8")
+        Data = Encryption.EncryptMessage(Data, ServerPublicKey, Encryption.__parse_hash__(Conf.HashAlgorithm), Connected[2] >= 140100)
+        Data = json.dumps({"Hash": Conf.HashAlgorithm, "Message": Data, "Version": str(ClientVersion)})
+    else:
+        Data = Data.decode("utf-8") if (isinstance(Data, bytes)) else Data
 
     # Send the data
     await ClientSocket.send(Data)
@@ -184,11 +191,6 @@ async def GetServicesFromServer() -> list[Service]:
     This will get all the available services from the current connected server.
     The user must be connected to a server before using this.
     """
-
-    # Check if you're connected
-    if (not IsConnected()):
-        raise Exception("Connect to a server first.")
-
     # Ask the server for the models, then deserialize the response into a dictionary and create a services list
     received = await SendAndReceive(json.dumps({
         "Service": "get_all_services",
@@ -269,6 +271,9 @@ async def FindFirstServer(ServiceToExecute: Service, DeleteData: bool = False) -
     raise Exception("Could not find any server.")
 
 def IsConnected() -> bool:
+    # Define globals
+    global Connected, ClientSocket
+
     # Check if the user is connected to a server
     return Connected is not None and ClientSocket != None and ClientSocket.state == State.OPEN
 

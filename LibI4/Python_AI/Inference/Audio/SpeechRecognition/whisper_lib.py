@@ -53,7 +53,7 @@ def Inference(Model: whisper.Whisper, AudioPath: str | BytesIO | bytes, Temperat
         AudioPath, _ = sf.read(AudioPath)
 
     # Inference the model
-    result = Model.transcribe(AudioPath, temperature = Temperature, verbose = True)
+    result = Model.transcribe(AudioPath, temperature = Temperature, verbose = Tru, word_timestamps = True)
 
     # Set the result
     result = {

@@ -40,12 +40,8 @@ def __inference__(
         MinP: float,
         TypicalP: float
     ) -> Iterator[str]:
-    # Add the tools to the system prompt
-    if (len(Tools) > 0):
-        ContentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n{ContentForModel[0]['content']}"
-
     # Apply the chat template using the tokenizer
-    text = Tokenizer.apply_chat_template(ContentForModel, tokenize = False, add_generation_prompt = True)
+    text = Tokenizer.apply_chat_template(ContentForModel, xml_tools = Tools, tokenize = False, add_generation_prompt = True)
 
     # Tokenize the prompt
     inputs = Tokenizer([text], return_tensors = "pt")
@@ -79,9 +75,5 @@ def __inference__(
             firstToken = False
             continue
 
-        # Print the token and yield it
-        print(token, end = "", flush = True)
+        # Yield the token
         yield token
-        
-    # Print an empty message when done
-    print("", flush = True)

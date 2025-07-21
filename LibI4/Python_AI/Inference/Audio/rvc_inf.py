@@ -93,8 +93,16 @@ def __load_model__(ModelPath: str, ModelIndex: str, ModelType: str, Index: int) 
     # Set the threads number to use
     vc.config.n_cpu = threads
 
+    # Check if the model path exists
+    if (not os.path.exists(ModelPath)):
+        raise FileNotFoundError()
+
     # Set the VC
-    vc.get_vc(f"{os.getcwd()}/rvc_assets/{ModelPath}")
+    vc.get_vc(ModelPath)
+
+    # Set the model index
+    if (not os.path.exists(ModelIndex)):
+        ModelIndex = None
 
     # Add to the models dict
     __models__[Index] = (vc, ModelIndex, ModelType)
@@ -108,7 +116,7 @@ def __make_rvc__(Index: int, AudioData: bytes | str, Protect: float, FilterRadiu
 
     # Save temporal file
     if (isinstance(AudioData, bytes)):
-        audioPath = tempFiles.CreateTemporalFile("audio", AudioData)
+        audioPath = tempFiles.CreateTemporalFile("wav", AudioData)
     elif (isinstance(AudioData, str)):
         # Check if the audio path is valid
         if (not os.path.exists(AudioData)):
@@ -122,8 +130,8 @@ def __make_rvc__(Index: int, AudioData: bytes | str, Protect: float, FilterRadiu
 
     # Inference the model
     tgt_sr, audio_opt, _, _ = __models__[Index][0].vc_inference(
-        1,
-        Path(audioPath),
+        sid = 1,
+        input_audio_path = Path(audioPath),
         f0_up_key = F0UpKey,
         protect = Protect,
         filter_radius = FilterRadius,
@@ -133,6 +141,9 @@ def __make_rvc__(Index: int, AudioData: bytes | str, Protect: float, FilterRadiu
         index_rate = IndexRate,
         rms_mix_rate = MixRate
     )
+
+    # Remove the input audio file
+    os.remove(audioPath)
     
     # Write the audio buffer
     buffer = BytesIO()
@@ -166,16 +177,8 @@ def __prepare_model__(Index: int) -> None:
     # Get the info
     info = cfg.GetInfoOfTask("rvc", Index)
 
-    # Move the files
-    __move_file__(info["model"][1], "rvc_assets/" + __get_file_name__(info["model"][1]))
-    __move_file__(info["model"][2], "rvc_assets/" + __get_file_name__(info["model"][2]))
-
-    # Update the info
-    mPath = __get_file_name__(info["model"][1])
-    mIndex = f"{os.getcwd()}/rvc_assets/{__get_file_name__(info['model'][2])}"
-
     # Load the model
-    __load_model__(mPath, mIndex, info["model"][3], Index)
+    __load_model__(info["model"][1], info["model"][2], info["model"][3], Index)
 
 def LoadModels(AllowDownloads: bool = True) -> None:
     # Check if the downloads are enabled
@@ -208,7 +211,7 @@ def MakeRVC(Data: dict[str, any]) -> bytes:
         if ((not isinstance(InputBytes, bytes) and not isinstance(InputBytes, str)) or len(InputBytes) == 0):
             raise Exception()
     except:
-        raise Exception("Input bytes not found.")
+        raise RuntimeError("Input bytes not found.")
 
     # Get the index
     try:
@@ -217,7 +220,7 @@ def MakeRVC(Data: dict[str, any]) -> bytes:
         if (Index >= len(cfg.GetAllInfosOfATask("rvc"))):
             raise Exception()
     except:
-        raise Exception("Invalid Index.")
+        raise RuntimeError("Invalid Index.")
     
     # Get the filter radius
     try:

@@ -48,21 +48,21 @@ def Inference(Index: int, Image: str | bytes | PIL.Image.Image) -> bytes:
     imgBuffer = None
 
     # Check the type of the image
-    if (type(Image) == str):
+    if (isinstance(Image, str)):
         # It's an image from a path
-        # Open it
-        Image = PIL.Image.open(Image)
-    elif (type(Image) == bytes):
+        image = PIL.Image.open(Image)
+    elif (isinstance(Image, bytes)):
         # It's an image from bytes
-        # Open it
         imgBuffer = BytesIO(Image)
-        Image = PIL.Image.open(imgBuffer)
-    elif (type(Image) != PIL.Image.Image):
+        image = PIL.Image.open(imgBuffer)
+    elif (isinstance(Image, PIL.Image.Image)):
+        image = Image
+    else:
         # It's not a valid image
         raise Exception("Image is not 'str', 'bytes' or 'PIL.Image.Image'.")
     
     # Tokenize the image and move to the device
-    inputs = __models__[Index][1](images = [Image], return_tensors = "pt")
+    inputs = __models__[Index][1](images = [image], return_tensors = "pt")
     inputs = inputs.to(__models__[Index][2]).to(__models__[Index][3])
 
     # Inference the model
@@ -71,7 +71,7 @@ def Inference(Index: int, Image: str | bytes | PIL.Image.Image) -> bytes:
         predicted_depth = outputs.predicted_depth
 
     # Get the output
-    prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = Image.size[::-1], mode = "bicubic", align_corners = False)
+    prediction = nn.functional.interpolate(predicted_depth.unsqueeze(1), size = image.size[::-1], mode = "bicubic", align_corners = False)
     output = prediction.squeeze().cpu().numpy().astype(np.float32)
     maxVal = np.max(output)
 
@@ -93,7 +93,7 @@ def Inference(Index: int, Image: str | bytes | PIL.Image.Image) -> bytes:
     buffer.close()
 
     # Close the image buffer if needed
-    Image.close()
+    image.close()
     
     if (imgBuffer is not None):
         imgBuffer.close()

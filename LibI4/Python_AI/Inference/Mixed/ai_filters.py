@@ -99,14 +99,16 @@ def InferenceImage(Prompt: str | bytes | Image.Image, Index: int) -> bool:
     imgBuffer = None
 
     # Check the image variable type
-    if (type(Prompt) == str):
+    if (isinstance(Prompt, str)):
         # It's a string, open the image
         Prompt = Image.open(Prompt)
-    elif (type(Prompt) == bytes):
+    elif (isinstance(Prompt, bytes)):
         # It's an image from bytes
         imgBuffer = BytesIO(Prompt)
         image = Image.open(imgBuffer)
-    elif (type(Prompt) != Image.Image):
+    elif (isinstance(Prompt, Image.Image)):
+        image = Prompt
+    else:
         # Invalid type
         raise Exception("The image in the NSFW filter must be 'str' or 'PIL.Image.Image'.")
     
@@ -114,7 +116,7 @@ def InferenceImage(Prompt: str | bytes | Image.Image, Index: int) -> bool:
     pipe, device, info = __models_image__[Index]
 
     # Inference the model
-    result = pipe(Prompt)
+    result = pipe(image)
     result = [item["score"] for item in result]
     result = torch.log(torch.tensor(result) / (1 - torch.tensor(result))).to(device).unsqueeze(0)
 

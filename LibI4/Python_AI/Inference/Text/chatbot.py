@@ -4,11 +4,8 @@ import conversation_multimodal as conv
 
 # Import LLaMA-CPP-Python chatbot
 from llama_cpp import Llama
+from Inference.Mixed.MultimodalChatbot.lcpp_model import LoadModel as LCPP_LoadModel
 import Inference.Text.Chatbot.lcpp as lcpp
-
-# Import GPT4All chatbot
-from gpt4all import GPT4All
-import Inference.Text.Chatbot.g4a as g4a
 
 # Import HuggingFace chatbot
 from transformers import AutoModelForCausalLM, AutoTokenizer
@@ -17,8 +14,9 @@ import Inference.Text.Chatbot.hf as hf
 # Import other libraries
 from collections.abc import Iterator
 import psutil
+import json
 
-__models__: dict[int, tuple[GPT4All | Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str, str], dict[str, any]]] = {}
+__models__: dict[int, tuple[Llama | tuple[AutoModelForCausalLM, AutoTokenizer, str, str], dict[str, any]]] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -67,20 +65,13 @@ def __load_model__(Index: int) -> None:
         raise Exception("Invalid ubatch size.")
     
     # Set model
-    if (info["type"] == "gpt4all"):
-        # Use GPT4All
-        # Print loading message
-        print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
-
-        # Load the model
-        model = g4a.__load_model__(info, threads, device)
-    elif (info["type"] == "lcpp"):
+    if (info["type"] == "lcpp"):
         # Use Llama-CPP-Python
         # Print loading message
         print(f"Loading model for 'chatbot [INDEX {Index}]' on the device '{device}'...")
 
         # Load the model
-        model = lcpp.LoadModel(info, threads, b_threads, device)
+        model = LCPP_LoadModel(info, threads, b_threads, device)
     elif (info["type"] == "hf"):
         # Use Transformers
         # Load the model
@@ -95,6 +86,15 @@ def __load_model__(Index: int) -> None:
     else:
         # Add the model only
         __models__[Index] = (model, info)
+    
+    # Fill the ctx if needed
+    if ("fill_ctx_at_start" in info and info["fill_ctx_at_start"]):
+        # Do inference
+        response = Inference(Index, "a " * (info["ctx"] - 15), [], [], ["", ""], None, None, None, None, None, None)
+
+        # Wait for it to respond
+        for token in response:
+            pass
 
 def __offload_model__(Index: int) -> None:
     # Check the index is valid
@@ -103,9 +103,7 @@ def __offload_model__(Index: int) -> None:
         return
     
     # Offload the model
-    if (type(__models__[Index][0]) == GPT4All):
-        __models__[Index][0].close()
-    elif (type(__models__[Index][0]) == Llama):
+    if (type(__models__[Index][0]) == Llama):
         __models__[Index][0].close()
     elif (type(__models__[Index][0]) == tuple or type(__models__[Index][0]) == tuple[AutoModelForCausalLM, AutoTokenizer, str, str]):
         __models__[Index] = None
@@ -172,18 +170,9 @@ def Inference(
 
         # Append the message in the old template to contentForModel
         contentForModel.append({"role": role, "content": text})
-
-    # Set the prompt that will be displayed (or passed to GPT4All)
-    contentToShow = f"### Conversation:\n"
-
-    for msg in contentForModel:
-        if (msg["role"] == "user"):
-            contentToShow += f"User: {msg['content']}\n"
-        elif (msg["role"] == "assistant"):
-            contentToShow += f"Assistant: {msg['content']}\n"
     
+    # Append the user prompt
     contentForModel.append({"role": "user", "content": Prompt})
-    contentToShow += f"\n\n### USER: {Prompt}"
 
     # Set the seed
     try:
@@ -276,22 +265,18 @@ def Inference(
                 raise Exception()
         except:
             TypicalP = 1
-
-    # Print the prompt
-    print(f"### SYSTEM PROMPT:\n{SystemPrompts}\n\n{contentToShow}\n### RESPONSE:")
+    
+    # Check if the tools must be in the system prompt
+    if ("tools_in_system_prompt" in list(__models__[Index][1].keys()) and __models__[Index][1]["tools_in_system_prompt"] and len(Tools) > 0):
+        # Add the tools to the system prompt
+        contentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n{contentForModel[0]['content']}"
+        Tools = None
+    elif (len(Tools) == 0):
+        # No tools, set to None
+        Tools = None
     
     # Get the model type to use
-    if (isinstance(__models__[Index][0], GPT4All)):
-        # Use GPT4All
-        return g4a.__inference__(
-            __models__[Index][0],
-            __models__[Index][1],
-            contentForModel,
-            contentToShow,
-            maxLength,
-            temp
-        )
-    elif (isinstance(__models__[Index][0], Llama)):
+    if (isinstance(__models__[Index][0], Llama)):
         # Use Llama-CPP-Python
         return lcpp.__inference__(
             __models__[Index][0],

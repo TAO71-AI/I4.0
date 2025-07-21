@@ -12,77 +12,6 @@ import gc
 import base64
 import ssl
 
-class GlobalConnection:
-    def __init__(self, BaseConnection: ServerConnection) -> None:
-        # Set class variables
-        self.__base_conn__ = BaseConnection
-        self.Closed = False
-        
-        # Set remote address
-        if (isinstance(BaseConnection, ServerConnection)):
-            self.RemoteAddress = BaseConnection.remote_address
-        else:
-            raise RuntimeError("Invalid connection type.")
-    
-    async def Receive(self, ReturnAsBytes: bool = False) -> str | bytes | None:
-        # Try to receive
-        if (isinstance(self.__base_conn__, ServerConnection)):
-            # Receive as websockets
-            try:
-                msg = await self.__base_conn__.recv(not ReturnAsBytes)
-            except ConnectionClosedOK:
-                try:
-                    await self.Close()
-                except:
-                    self.Closed = True
-                
-                return None
-        else:
-            raise RuntimeError("Invalid connection type.")
-
-        # Return message
-        return msg
-    
-    async def Send(self, Data: str | bytes) -> None:
-        # Check Data length
-        if (len(Data) == 0):
-            return
-
-        # Encode the message if needed
-        if (isinstance(Data, str)):
-            Data = Data.encode("utf-8")
-
-        # Send the message
-        if (isinstance(self.__base_conn__, ServerConnection)):
-            # Send as websockets
-            try:
-                await self.__base_conn__.send(Data)
-            except ConnectionClosedOK:
-                try:
-                    await self.Close()
-                except:
-                    self.Closed = True
-                
-                return
-        else:
-            raise RuntimeError("Invalid connection type.")
-    
-    async def Close(self) -> None:
-        # Check if the connection is closed
-        if (self.Closed):
-            return
-
-        # Close the connection
-        if (isinstance(self.__base_conn__, ServerConnection)):
-            # Close as websockets
-            await self.__base_conn__.close()
-        
-        # Set closed
-        self.Closed = True
-
-        # Delete variables
-        self.__base_conn__ = None
-
 try:
     # Try to import I4.0 utilities
     import server_basics as sb
@@ -117,23 +46,6 @@ serverWS: serve | None = None
 # Keys
 ServerPublicKey: bytes | None = None
 ServerPrivateKey: bytes | None = None
-
-def __clear_cache_loop__() -> None:
-    # Check if cache clear time is less or equal to 0
-    if (cfg.current_data["clear_cache_time"] <= 0):
-        # Do not clear the cache
-        return
-
-    # While the server in running
-    while (started):
-        # Wait the specified time
-        time.sleep(cfg.current_data["clear_cache_time"])
-
-        # Clear the cache
-        temp.DeleteAllFiles()
-
-        # Save old data
-        SaveOldData()
 
 def __clear_queue_loop__() -> None:
     # Check if queue clear time is less or equal to 0
@@ -330,6 +242,10 @@ def __infer__(
         SeeTools: bool,
         DataSave: bool
     ) -> Iterator[dict[str, any]]:
+    # Check service and files length
+    if (Service != "chatbot" and len(Files) > 1):
+        raise ValueError("Please, upload only a file per request unless you're using a chatbot.")
+
     # Copy the key
     Key = Key.copy()
 
@@ -364,6 +280,9 @@ def __infer__(
         modelsUsed[Service].append(Index)
     except:
         modelsUsed[Service] = [Index]
+    
+    # Print processing message
+    print(f"Processing prompt at {Service}:{Index}", flush = True)
 
     # Process the prompt and get a response
     response = cb.MakePrompt(
@@ -388,6 +307,7 @@ def __infer__(
     responseFiles = []
     tools = []
     tempTool = ""
+    firstToken = True
 
     # Start timer
     timer = time.time()
@@ -410,14 +330,17 @@ def __infer__(
         token["ended"] = False
         token["errors"] = []
 
-        # Set the timer and transform to milliseconds
-        timer = int((time.time() - timer) * 1000)
+        # Add the timer to the service if it's not the first token
+        if (not firstToken or Service != "chatbot"):
+            # Set the timer and transform to milliseconds
+            timerMs = int((time.time() - timer) * 1000)
 
-        # Add the timer to the service
-        qs.AddNewTime(Service, Index, timer)
+            # Add the timer to the service
+            qs.AddNewTime(Service, Index, timerMs)
         
         # Restart the timer
         timer = time.time()
+        firstToken = False
 
         # Check if the chatbot is using a tool
         if (token["response"].strip() == "<tool_call>" or len(tempTool) > 0):
@@ -569,23 +492,20 @@ def __infer__(
 
             # Get the variables
             keywords = tool["arguments"]["keywords"]
-
-            try:
-                searchCount = int(tool["arguments"]["count"])
-            except:
-                searchCount = cfg.current_data["internet"]["min_results"]
+            internetPrompt = tool["arguments"]["prompt"] if ("prompt" in tool["arguments"]) else Prompt
+            searchCount = tool["arguments"]["count"] if ("count" in tool["arguments"]) else -1
             
             # Check if the search count is valid
             if (searchCount > cfg.current_data["internet"]["max_results"]):
                 searchCount = cfg.current_data["internet"]["max_results"]
-            elif (searchCount <= cfg.current_data["internet"]["min_results"]):
+            elif (searchCount < cfg.current_data["internet"]["min_results"]):
                 searchCount = cfg.current_data["internet"]["min_results"]
 
             # Get the response from internet
             toolResponse = cb.GetResponseFromInternet(
                 Index,
                 keywords,
-                Prompt,
+                internetPrompt,
                 searchCount,
                 AIArgs,
                 SystemPrompts,
@@ -615,7 +535,7 @@ def __infer__(
             # Add a response to the tool
             fullResponse = fullResponse.replace(toolStr, f"{toolStr}\n<tool_response>\n{text}\n</tool_response>")
         elif (tool["name"] == "internet_url"):
-            # Internet search tool (using a URL)
+            # Internet search tool (using URLs)
             # Check if the user has enough tokens
             enoughTokens = CheckIfHasEnoughTokens("chatbot", Index, Key["tokens"])
 
@@ -631,13 +551,18 @@ def __infer__(
                 sb.SaveKey(Key)
 
             # Get the variables
-            url = tool["arguments"]["url"]
+            urls = tool["arguments"]["urls"]
+            internetPrompt = tool["arguments"]["prompt"] if ("prompt" in tool["arguments"]) else Prompt
+
+            # Convert URL to a string if it's only one
+            if (len(urls) == 1):
+                urls = urls[0]
 
             # Get the response from internet
             toolResponse = cb.GetResponseFromInternet_URL(
                 Index,
-                url,
-                Prompt,
+                urls,
+                internetPrompt,
                 AIArgs,
                 SystemPrompts,
                 UseDefaultSystemPrompts,
@@ -684,6 +609,7 @@ def __infer__(
 
             # Get the variables
             keywords = tool["arguments"]["keywords"]
+            internetPrompt = tool["arguments"]["prompt"] if ("prompt" in tool["arguments"]) else Prompt
 
             # Yield another line
             yield {"response": "\n", "files": [], "ended": False, "errors": []}
@@ -692,7 +618,7 @@ def __infer__(
             toolResponse = cb.InternetResearch(
                 Index,
                 keywords,
-                Prompt,
+                internetPrompt,
                 AIArgs,
                 SystemPrompts,
                 UseDefaultSystemPrompts,
@@ -747,8 +673,8 @@ def __infer__(
             memories.DeleteMemory(Key["key"], memories.GetMemory(Key["key"], memID))
         elif (tool["name"] == "document_creator"):
             # Create a document tool
-            # Get the code and document type
-            fileCode = tool["arguments"]["code"]
+            # Get the content of the document and document type
+            fileCode = tool["arguments"]["content"]
             documentType = tool["arguments"]["document_type"].lower().strip()
 
             # Check the document type and create the document
@@ -1100,66 +1026,37 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             # It isn't, apply not admin system prompts to the extra messages
             systemPrompts.append(cfg.current_data["custom_api_nadmin_system_messages"])
         
+        # Set done in the prompt
+        Prompt["Done"] = False
+        
         try:
-            # Check files length and service
-            if (len(files) == 0 or service == "chatbot"):
-                # Execute the service with all the files
-                inf = __infer__(
-                    service,
-                    index,
-                    prompt,
-                    files,
-                    aiArgs,
-                    systemPrompts,
-                    key,
-                    conversation,
-                    useDefSystemPrompts,
-                    aTools,
-                    eTools,
-                    maxLength,
-                    temperature,
-                    top_p,
-                    top_k,
-                    min_p,
-                    typical_p,
-                    seeTools,
-                    dataSave
-                )
+            # Execute the service with all the files
+            inf = __infer__(
+                service,
+                index,
+                prompt,
+                files,
+                aiArgs,
+                systemPrompts,
+                key,
+                conversation,
+                useDefSystemPrompts,
+                aTools,
+                eTools,
+                maxLength,
+                temperature,
+                top_p,
+                top_k,
+                min_p,
+                typical_p,
+                seeTools,
+                dataSave
+            )
 
-                # For each token
-                for inf_t in inf:
-                    inf_t["pubKey"] = clientPublicKey
-                    yield inf_t
-            else:
-                # For each file
-                for file in files:
-                    # Execute the service with the current file
-                    inf = __infer__(
-                        service,
-                        index,
-                        prompt,
-                        [file],
-                        aiArgs,
-                        systemPrompts,
-                        key,
-                        conversation,
-                        useDefSystemPrompts,
-                        aTools,
-                        eTools,
-                        maxLength,
-                        temperature,
-                        top_p,
-                        top_k,
-                        min_p,
-                        typical_p,
-                        seeTools,
-                        dataSave
-                    )
-
-                    # For each token
-                    for inf_t in inf:
-                        inf_t["pubKey"] = clientPublicKey
-                        yield inf_t
+            # For each token
+            for inf_t in inf:
+                inf_t["pubKey"] = clientPublicKey
+                yield inf_t
             
             # Clear
             inf = None
@@ -1191,9 +1088,16 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
             
             # Return the exception
             print("Unknown exception found in a service.")
-            traceback.print_exc()
+            traceback.print_exception(ex)
 
             yield {"response": "", "files": [], "ended": True, "errors": [f"Unknown error: {ex}"], "pubKey": clientPublicKey}
+        
+        # Set done in the prompt
+        Prompt["Done"] = True
+
+        # Save the banned IP addresses and keys
+        with open("BannedIPs.json", "w+") as f:
+            f.write(json.dumps(banned))
     elif (service == "clear_my_history" or service == "clear_conversation"):
         # Clear the conversation
         # Check the key
@@ -1405,58 +1309,59 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         yield {"response": "", "files": [], "ended": True, "errors": ["Invalid command."], "pubKey": clientPublicKey}
 
 async def ExecuteServiceAndSendToClient(
-        Client: GlobalConnection,
+        Client: ServerConnection,
         Prompt: dict[str, any],
         HashAlgorithm: enc.hashes.HashAlgorithm | None,
-        ClientVersion: int
+        ClientVersion: int,
     ) -> None:
     clPubKey = None
     
     try:
         # Try to execute the service
-        for response in ExecuteService(Prompt, Client.RemoteAddress[0]):
+        for response in ExecuteService(Prompt, Client.remote_address[0]):
             # Get the public key from the response
             clPubKey = response["pubKey"]
             response.pop("pubKey")
 
             # Send the response
             await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey, HashAlgorithm, ClientVersion)
-    except (
-        ConnectionError, ConnectionClosed, ConnectionClosedError,
-        ConnectionClosedOK, ConnectionAbortedError, ConnectionRefusedError,
-        ConnectionResetError
-    ):
+    except ConnectionClosed as ex:
         # Print error
         print("Connection closed while processing!")
 
-        # Check if the service is valid
-        if (len(cfg.GetAllInfosOfATask(Prompt["Service"])) == 0):
-            # Not valid, return
-            return
+        # Check if the processing was done
+        if ("Done" not in list(Prompt.keys()) or ("Done" in list(Prompt.keys()) and not Prompt["Done"])):
+            # Check if the service is valid
+            if (len(cfg.GetAllInfosOfATask(Prompt["Service"])) == 0):
+                # Not valid, return
+                return
 
-        try:
-            # Try to get the index of the model to use
-            index = int(Prompt["Index"])
+            try:
+                # Try to get the index of the model to use
+                index = int(Prompt["Index"])
 
-            # Check if the index is less than 0
-            if (index < 0):
-                index = GetAutoIndex(Prompt["Service"], index)
+                # Check if the index is less than 0
+                if (index < 0):
+                    index = GetAutoIndex(Prompt["Service"], index)
 
-            # Throw an error if the index is invalid
-            if (index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
-                raise Exception()
-        except:
-            # If an error occurs, auto get index
-            index = GetAutoIndex(Prompt["Service"], -2)
+                # Throw an error if the index is invalid
+                if (index >= len(cfg.GetAllInfosOfATask(Prompt["Service"]))):
+                    raise Exception()
+            except:
+                # If an error occurs, auto get index
+                index = GetAutoIndex(Prompt["Service"], -2)
 
-        # Remove from the queue
-        qs.RemoveUserFromQueue(Prompt["Service"], index)
+            # Remove from the queue
+            qs.RemoveUserFromQueue(Prompt["Service"], index)
+
+        # Raise the exception
+        raise ex
     except Exception as ex:
         # Print error
         print(f"Error processing! Could not send data to client. Error: {ex}")
 
         # Print error info
-        traceback.print_exc()
+        traceback.print_exception(ex)
 
         # Check if the service is valid
         if (len(cfg.GetAllInfosOfATask(Prompt["Service"])) == 0):
@@ -1493,18 +1398,9 @@ async def ExecuteServiceAndSendToClient(
             # Error, ignore
             pass
 
-async def WaitForReceive(Client: GlobalConnection, Message: bytes | str | None) -> None:
-    # Wait for receive
-    clientHashType = None
-
-    # Check the length of the received data
-    if (len(Message) == 0 or Message is None):
-        # Received nothing, close the connection
-        await Client.Close()
-        raise ConnectionClosed(None, None)
-
+async def ProcessMessage(Client: ServerConnection, Message: bytes | str | None) -> None:
     # Print received length
-    print(f"Received {len(Message)} bytes from '{Client.RemoteAddress[0]}'")
+    print(f"Received {len(Message)} bytes from '{Client.remote_address[0]}'")
 
     # Convert message to string
     if (isinstance(Message, bytes)):
@@ -1521,6 +1417,7 @@ async def WaitForReceive(Client: GlobalConnection, Message: bytes | str | None) 
         return
 
     try:
+        clientHashType = None
         clientVersion = -1
 
         # Get the message and hash algorithm of the client
@@ -1551,6 +1448,8 @@ async def WaitForReceive(Client: GlobalConnection, Message: bytes | str | None) 
         
         # Execute service and send data
         await ExecuteServiceAndSendToClient(Client, prompt, clientHashType, clientVersion)
+    except ConnectionClosed as ex:
+        raise ex
     except Exception as ex:
         # If there's an error, send the response
         await __send_to_client__(Client, json.dumps({
@@ -1561,7 +1460,7 @@ async def WaitForReceive(Client: GlobalConnection, Message: bytes | str | None) 
         }).encode("utf-8"), None, None, -1)
 
 async def __send_to_client__(
-        Client: GlobalConnection,
+        Client: ServerConnection,
         Message: str | bytes,
         EncryptKey: bytes | None,
         HashAlgorithm: enc.hashes.HashAlgorithm | None,
@@ -1575,52 +1474,20 @@ async def __send_to_client__(
 
     # Send the message
     try:
-        await Client.Send(msg)
-    except (
-        ConnectionError, ConnectionClosed, ConnectionClosedError,
-        ConnectionClosedOK, ConnectionAbortedError, ConnectionRefusedError,
-        ConnectionResetError
-    ) as ex:
+        await Client.send(msg)
+    except ConnectionClosed as ex:
         raise ex
     except Exception as ex:
-        print(f"Error sending message. Details: ({type(ex)}) {ex}")
-        
+        print(f"Error sending message. Details:")
+        traceback.print_exception(ex)
+
+async def __receive_loop__(Client: ServerConnection) -> None:
+    # Receive every message from the client
+    async for msg in Client:
         try:
-            await Client.Send(msg)
-            print("Message sent at 2nd attempt!")
-        except Exception as ex2:
-            print(f"Error sending message (2nd attempt). Details: ({type(ex2)}) {ex2}")
-            raise ConnectionClosedError(None, None)
-
-def __receive_thread__(Client: GlobalConnection, Message: str | bytes) -> None:
-    # Create new event loop
-    clientLoop = asyncio.new_event_loop()
-
-    # Run the receive function
-    clientLoop.run_until_complete(WaitForReceive(Client, Message))
-
-    # Close the event loop
-    clientLoop.close()
-
-async def __receive_loop__(Client: GlobalConnection) -> None:
-    while (not Client.Closed and started):
-        # Receive the message
-        message = await Client.Receive(False)
-
-        # Break if the received data is None
-        if (message is None or len(message) == 0):
-            break
-
-        try:
-            # Create and start a new thread
-            clientThread = threading.Thread(target = __receive_thread__, args = (Client, message), daemon = True)
-            clientThread.start()
-        except (
-            ConnectionError, ConnectionClosed, ConnectionClosedError,
-            ConnectionClosedOK, ConnectionAbortedError, ConnectionRefusedError,
-            ConnectionResetError
-        ):
-            # Connection closed
+            await ProcessMessage(Client, msg)
+        except ConnectionClosed:
+            # Close the client
             break
         except Exception as ex:
             # Error returned
@@ -1637,22 +1504,24 @@ async def __receive_loop__(Client: GlobalConnection) -> None:
 
                 # Print the error
                 print("Error executing service. Traceback:")
-                traceback.print_exc()
+                traceback.print_exception(ex)
             except:
                 # Print an error
                 print("Could not send response to a client.")
-        
-        # Save the banned IP addresses and keys
-        with open("BannedIPs.json", "w+") as f:
-            f.write(json.dumps(banned))
+    
+    # Close the connection
+    await Client.close()
+    print("Client closed!")
 
-async def OnConnect(Client: GlobalConnection) -> None:
+async def OnConnect(Client: ServerConnection) -> None:
     try:
-        print(f"'{Client.RemoteAddress[0]}' has connected.")
+        # Print connection message
+        print(f"'{Client.remote_address[0]}' has connected.")
 
-        if (Client.RemoteAddress[0] in banned["ip"]):
+        # Check if the IP is in the banned IPs list
+        if (Client.remote_address[0] in banned["ip"]):
             try:
-                # Print
+                # Print message
                 print("Banned user. Closing connection.")
 
                 # Send banned message
@@ -1664,36 +1533,20 @@ async def OnConnect(Client: GlobalConnection) -> None:
                 }), None, None, -1)
 
                 # Close the connection
-                await Client.Close()
+                await Client.close()
                 return
             except:
                 # Error closing the connection, print
                 print("Error closing the connection. Ignoring...")
                 return
-
+            
         # Receive
         await __receive_loop__(Client)
     except Exception as ex:
         print(f"Error while the client was connecting.")
         traceback.print_exception(ex)
 
-async def __connect__(Client: ServerConnection) -> None:
-    try:
-        # Create global client
-        globalClient = GlobalConnection(Client)
-
-        # Execute OnConnect function
-        await OnConnect(globalClient)
-    except Exception as ex:
-        # Print exception
-        print("Error during client connection.")
-        traceback.print_exception(ex)
-
 async def __start_server__() -> tuple[str, int]:
-    # Create thread for the cache cleanup
-    cacheThread = threading.Thread(target = __clear_cache_loop__)
-    cacheThread.start()
-
     # Create thread for the queue cleanup
     queueThread = threading.Thread(target = __clear_queue_loop__)
     queueThread.start()
@@ -1742,8 +1595,8 @@ async def StartWebSocketsServer(IP: str, Port: int) -> None:
         print("SSL enabled for WebSockets server.")
 
     # Start WebSockets server
-    serverWS = await serve(
-        __connect__,
+    async with serve(
+        OnConnect,
         IP,
         Port,
         max_size = None,
@@ -1751,10 +1604,9 @@ async def StartWebSocketsServer(IP: str, Port: int) -> None:
         ping_timeout = None,
         close_timeout = None,
         ssl = sslContext
-    )
-    print(f"Started WebSockets at {IP}:{Port}")
-
-    await serverWS.wait_closed()
+    ):
+        print(f"Started WebSockets at {IP}:{Port}")
+        await asyncio.Future()
 
 async def StartServer() -> None:
     # Get IP and port
@@ -1798,12 +1650,9 @@ if (__name__ == "__main__"):
         # Close loop
         serverLoop.close()
 
-        # Delete the cache
-        temp.DeleteAllFiles()
-
         # Close
         started = False
         os._exit(0)
     except Exception as ex:
         print("ERROR! Running traceback.\n\n")
-        traceback.print_exc()
+        traceback.print_exception(ex)
