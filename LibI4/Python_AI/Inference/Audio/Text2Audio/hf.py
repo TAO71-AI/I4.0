@@ -3,6 +3,7 @@ import ai_config as cfg
 
 # Import other libraries
 import soundfile as sf
+import torch
 from io import BytesIO
 from transformers import AutoModelForTextToWaveform, AutoProcessor
 
@@ -19,7 +20,12 @@ def InferenceModel(Prompt: str, Model: AutoModelForTextToWaveform, Processor: Au
     
     # Save the audio into a buffer
     buffer = BytesIO()
-    sf.write(buffer, result.cpu().numpy().squeeze(), Model.generation_config.sample_rate, format = "WAV")
+    sf.write(
+        buffer,
+        result.to(torch.float32).cpu().numpy().squeeze(),
+        Model.generation_config.sample_rate,
+        format = "WAV"
+    )
 
     buffer.seek(0)
     data = buffer.getvalue()

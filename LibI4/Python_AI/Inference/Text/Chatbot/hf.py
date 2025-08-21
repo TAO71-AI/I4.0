@@ -38,10 +38,11 @@ def __inference__(
         TopP: float,
         TopK: int,
         MinP: float,
-        TypicalP: float
+        TypicalP: float,
+        ExtraKWargs: dict[str, any]
     ) -> Iterator[str]:
     # Apply the chat template using the tokenizer
-    text = Tokenizer.apply_chat_template(ContentForModel, xml_tools = Tools, tokenize = False, add_generation_prompt = True)
+    text = Tokenizer.apply_chat_template(ContentForModel, xml_tools = Tools, tokenize = False, add_generation_prompt = True, **ExtraKWargs)
 
     # Tokenize the prompt
     inputs = Tokenizer([text], return_tensors = "pt")

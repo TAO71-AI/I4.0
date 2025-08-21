@@ -20,6 +20,12 @@ def __load_model__(Index: int) -> None:
     # Get the model info
     info = cfg.GetInfoOfTask("speech2text", Index)
 
+    # Get the batch size
+    if ("batch" in list(info.keys())):
+        batch = info["batch"]
+    else:
+        batch = None
+
     # Check the model type
     if (info["type"] == "whisper"):
         # Load the model using whisper (library)
@@ -33,7 +39,9 @@ def __load_model__(Index: int) -> None:
         model = whisperl.LoadModel(info["model"], dt, device)
     elif (info["type"] == "hf"):
         # Load the model using transformers
-        model, _ = cfg.LoadPipeline("automatic-speech-recognition", "speech2text", Index)
+        model, _ = cfg.LoadPipeline("automatic-speech-recognition", "speech2text", Index, {
+            "batch_size": batch
+        })
     else:
         # Invalid model type
         raise Exception("Invalid model type.")
@@ -84,6 +92,7 @@ def Inference(Index: int, Data: bytes) -> dict[str, str]:
         # Set the result
         result = {
             "text": result["text"],
+            "chunks": result["chunks"],
             "lang": "unknown"
         }
 

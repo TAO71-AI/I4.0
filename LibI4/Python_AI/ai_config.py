@@ -68,9 +68,13 @@ __config_data__: dict[str] = {
             "price": 40,                                                                                # Extra price of the internet research (WARNING: The tokens that this will take will be `[chatbot price] * ([internet max websites] + 1) + [this price]`).
             "reasoning_mode": -1                                                                        # -1 = Switch automatically between using reasoning or not. 0 = ALWAYS use reasoning. 1 = NEVER use reasoning.
         },
-        "system": "auto"                                                                            # Library to use when searching from internet.
+        "system": "auto",                                                                           # Library to use when searching from internet.
+        "models": {                                                                                 # Models that I4.0 will use from internet.
+            "allow": True,                                                                              # Allow the usage of these models.
+            "update_from_url": "https://tao71.org/I4.0/available_internet_models.json"                  # Update the available models list from this URL. Will not update if not specified.
+        }
     },
-    "enabled_tools": "image-generation audio-generation internet internet-url internet-research memory memory-edit memory-delete document-creator",
+    "enabled_tools": "image-generation audio-generation internet internet-url internet-research internet-chatbot memory memory-edit memory-delete document-creator",
     # ^-- I4.0 tools.
     "allow_processing_if_nsfw": [False, False],                                                 # Allows the processing of a prompt even if it's detected as NSFW.
     #                           [Text, Image]
@@ -97,10 +101,6 @@ __config_data__: dict[str] = {
     "allow_data_save": True,                                                                    # Allow the usage of data save.
     "data_save_max_fs": 0,                                                                      # Max file size allowed (in MB) to use the data save. Set to 0 to don't save any files.
     "allow_response_cache": True,                                                               # Allow response cache.             WORKING ON THIS.
-    "ssl": {                                                                                    # SSL configuration.
-        "cert": "",                                                                                 # Path to the SSL certificate.
-        "key": ""                                                                                   # Path to the SSL key.
-    },
     "models": []                                                                                # Models to be used.
 }
 
@@ -238,6 +238,10 @@ def LoadPipeline(PipeTask: str, Task: str, Index: int, ExtraKWargs: dict[str, an
         args["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
     except:
         args["torch_dtype"] = torch.float32
+    
+    # Set Flash Attention 2
+    #if ("flash_attn" in info):
+    #    args["use_flash_attention_2"] = info["flash_attn"]
 
     # Set the required args
     args["task"] = PipeTask
@@ -290,6 +294,10 @@ def LoadDiffusersPipeline(Task: str, Index: int, CustomPipelineType: type | None
         args["safety_checker"] = None
         args["requires_safety_checker"] = False
     
+    # Set Flash Attention 2
+    #if ("flash_attn" in info):
+    #    args["use_flash_attention_2"] = info["flash_attn"]
+    
     # Load the pipeline using the specified args
     pipe = CustomPipelineType.from_pretrained(**args)
     
@@ -333,6 +341,10 @@ def LoadModel(Task: str, Index: int, ModelType: type | None = None, TokenizerTyp
         argsModel["torch_dtype"] = __get_dtype_from_str__(info["dtype"])
     except:
         argsModel["torch_dtype"] = torch.float32
+    
+    # Set Flash Attention 2
+    if ("flash_attn" in info):
+        argsModel["use_flash_attention_2"] = info["flash_attn"]
     
     # Set the model and tokenizer
     argsModel["pretrained_model_name_or_path"] = info["model"]

@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name = "I4_0-Client-PY",
-    version = "15.2.0",
+    version = "16.0.0",
     description = "Client Python bindings for I4.0.",
     author = "TAO71-AI",
     url = "https://github.com/TAO71-AI/I4.0",
@@ -13,7 +13,7 @@ setup(
         "websockets>=15.0.0,<16.0.0",
         "asyncio",
         "pyaudio",
-        "cryptography>=44.0.0,<45.0.0",
+        "cryptography",
         "numpy",
         "pydub",
         "ffmpeg-python",

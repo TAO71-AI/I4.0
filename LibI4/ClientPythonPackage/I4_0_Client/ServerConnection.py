@@ -7,15 +7,14 @@ import json
 
 # Import I4.0 utilities
 from .Config import Conf as Config
-from .Service import Service as Service
-from .Service import ServiceManager as ServiceManager
+from .Service import Service
 from . import Encryption
 
 # Servers variables
 ServersTasks: dict[int, list[Service]] = {}
 Connected: tuple[str, str, int] | None = None
 Conf: Config = Config()
-ClientVersion: int = 150000
+ClientVersion: int = 160000
 
 # WebSocket variables
 ClientSocket: ClientConnection | None = None
@@ -51,7 +50,7 @@ async def __connect_str__(Server: str, Port: int = 8060) -> None:
         ext = "ws://"
     
     # Get port
-    if (Server.count(":") > 0):
+    if (":" in Server):
         Server = Server.split(":")
         Port = int(Server[1])
         Server = Server[0]
@@ -207,9 +206,9 @@ async def GetServicesFromServer() -> list[Service]:
 
     for service in list(jsonData.keys()):
         # Ignore if it alredy exists on the list
-        if (ServiceManager.FromString(service) not in services):
+        if (Service.FromString(service) not in services):
             # Add the service to the list if don't exists
-            services.append(ServiceManager.FromString(service))
+            services.append(Service.FromString(service))
 
     # Return all the services
     return services

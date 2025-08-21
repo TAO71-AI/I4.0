@@ -4,20 +4,45 @@ import Inference.Mixed.MultimodalChatbot.hf as hf
 
 # Import LLaMA-CPP-Python chatbot
 from llama_cpp import Llama
-from Inference.Mixed.MultimodalChatbot.lcpp_model import LoadModel as LCPP_LoadModel
+from Inference.Mixed.MultimodalChatbot.utils import (
+    LoadModel as LCPP_LoadModel,
+    GetReasoningMode
+)
 import Inference.Mixed.MultimodalChatbot.lcpp as lcpp
 
 # Import some other libraries
 from collections.abc import Iterator
+from PIL import Image
 import psutil
 import base64
 import json
+import requests
+import os
 
 # Import I4.0's utilities
 import ai_config as cfg
 import conversation_multimodal as conv
 
 __models__: dict[int, Llama | tuple[tuple[AutoModelForImageTextToText, AutoProcessor, str, str], dict[str, any]]] = {}
+
+def __download_sample_file__(URL: str, SaveInDisk: tuple[bool, str] = (False, "")) -> bytes:
+    # Make sure the file doesn't exists
+    if (SaveInDisk[0] and os.path.exists(SaveInDisk[1])):
+        with open(SaveInDisk[1], "rb") as f:
+            data = f.read()
+        
+        return data
+
+    # Request the URL
+    response = requests.get(URL)
+
+    # Save in the disk
+    if (SaveInDisk[0]):
+        with open(SaveInDisk[1], "wb") as f:
+            f.write(response.content)
+    
+    # Return the bytes
+    return response.content
 
 def __load_model__(Index: int) -> None:
     # Check if the model is loaded
@@ -70,6 +95,10 @@ def __load_model__(Index: int) -> None:
         # Use Transformers
         # Load the model
         model, processor, dev, dtype = hf.__load_model__(info, Index)
+        
+        # Get the chat template
+        ct = processor.chat_template
+        cts = len(processor.tokenize(ct))
     elif (info["type"] == "lcpp"):
         # Use LLaMA-CPP-Python
         # Print loading message
@@ -77,6 +106,10 @@ def __load_model__(Index: int) -> None:
 
         # Load the model
         model = LCPP_LoadModel(info, threads, b_threads, device)
+        
+        # Get the chat template
+        ct = model.metadata["tokenizer.chat_template"]
+        cts = len(model.tokenize(ct.encode("utf-8")))
     else:
         raise Exception(f"Invalid chatbot type '{info['type']}'.")
     
@@ -89,9 +122,38 @@ def __load_model__(Index: int) -> None:
         __models__[Index] = (model, info)
     
     # Fill the ctx if needed
-    if ("fill_ctx_at_start" in info and info["fill_ctx_at_start"]):
+    if ("fill_ctx_at_start" in list(info.keys()) and info["fill_ctx_at_start"]):
+        # Download sample files
+        __download_sample_file__(
+            "https://raw.githubusercontent.com/TAO71-AI/I4.0/refs/heads/main/Assets/Thumbnails/v15.0.0.png",
+            (True, "multimodal_cb_sample_image.png")
+        )
+        __download_sample_file__(
+            "https://cloud.video.taobao.com/vod/4szTT1B0LqXvJzmuEURfGRA-nllnqN_G2AT0ZWkQXoQ.mp4",
+            (True, "multimodal_cb_sample_video.mp4")
+        )
+        __download_sample_file__(
+            "https://huggingface.co/hexgrad/Kokoro-82M/resolve/main/samples/HEARME.wav",
+            (True, "multimodal_cb_sample_audio.wav")
+        )
+        files = []
+
+        img = Image.open("multimodal_cb_sample_image.png")
+        img = img.resize((128, 128))
+        img.save("multimodal_cb_sample_image.png")
+        img.close()
+
+        if ("image" in info["multimodal"].strip().split(" ")):
+            files.append({"type": "image", "data": "multimodal_cb_sample_image.png"})
+        
+        if ("video" in info["multimodal"].strip().split(" ")):
+            files.append({"type": "video", "data": "multimodal_cb_sample_video.mp4"})
+        
+        if ("audio" in info["multimodal"].strip().split(" ")):
+            files.append({"type": "audio", "data": "multimodal_cb_sample_audio.wav"})
+
         # Do inference
-        response = Inference(Index, "a " * (info["ctx"] - 15), [], [], ["", ""], None, None, None, None, None, None)
+        response = Inference(Index, "a " * (info["ctx"] - cts - 1), files, [], [], ["", ""], 1, None, None, None, None, None, True)
 
         # Wait for it to respond
         for token in response:
@@ -132,7 +194,9 @@ def Inference(
         TopP: float | None = None,
         TopK: int | None = None,
         MinP: float | None = None,
-        TypicalP: float | None = None
+        TypicalP: float | None = None,
+        Reasoning: str | int | bool | None = None,
+        ToolsInSystemPrompt: bool = False
     ) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Load the model
     __load_model__(Index)
@@ -158,7 +222,30 @@ def Inference(
 
     # Strip the prompt and set the system prompts
     Prompt = Prompt.strip()
-    SystemPrompts = "".join(sp + "\n" for sp in SystemPrompts).strip()
+    SystemPrompts = "\n".join(SystemPrompts).strip()
+
+    # Set extra kwargs variable
+    extraKwargs = {}
+
+    # Set extra kwargs
+    if ("extra_kwargs" in list(__models__[Index][1].keys())):
+        for kw_n, kw_v in __models__[Index][1]["extra_kwargs"].values():
+            extraKwargs[kw_n] = kw_v
+
+    # Set reasoning
+    if ("reasoning" in list(__models__[Index][1].keys())):
+        # Get all the reasoning variables
+        rKW, rSP, rUP = GetReasoningMode(__models__[Index][1], Reasoning)
+        
+        # Append all the kwargs
+        for kw_n, kw_v in rKW.values():
+            extraKwargs[kw_n] = kw_v
+        
+        # Set the system prompt
+        SystemPrompts = rSP.replace("[SYSTEM PROMPT]", SystemPrompts)
+
+        # Set the user prompt
+        Prompt = rUP.replace("[USER PROMPT]", Prompt)
 
     # Create the content for the model with the system prompts
     contentForModel = [{"role": "system", "content": SystemPrompts}]
@@ -190,93 +277,80 @@ def Inference(
     contentForModel.append({"role": "user", "content": files + [{"type": "text", "text": Prompt}]})
 
     # Set the seed
-    try:
-        # Get the seed
+    if ("seed" in list(__models__[Index][1].keys())):
         seed = __models__[Index][1]["seed"]
 
-        # Check the seed
-        if (seed < 0):
-            # Invalid seed, set to None
+        if (seed is not None and seed < 0):
             seed = None
-    except:
-        # Error; probably `seed` is not configured. Set to None
+    else:
         seed = None
-
+    
     # Set the maximum length
     if (MaxLength is None):
-        try:
-            # Get the max length
+        if ("max_length" in list(__models__[Index][1].keys())):
             maxLength = __models__[Index][1]["max_length"]
 
-            # Check the max length
             if (maxLength is None or maxLength <= 0):
-                # Invalid max length, set to the server's default
                 maxLength = cfg.current_data["max_length"]
-        except:
-            # Error; probably `max_length` is not configured. Set to the server's default
+        else:
             maxLength = cfg.current_data["max_length"]
     else:
-        # Set max length to the user's config
         maxLength = MaxLength
 
-        try:
-            # Check if max length is greater than the model's max length
-            if (maxLength > __models__[Index][1]["max_length"]):
-                # Set max length to the model's max length
-                maxLength = __models__[Index][1]["max_length"]
+        if (
+            "max_length" in list(__models__[Index][1].keys()) and
+            __models__[Index][1]["max_length"] is not None and
+            __models__[Index][1]["max_length"] > 0 and
+            maxLength > __models__[Index][1]["max_length"]
+        ):
+            maxLength = __models__[Index][1]["max_length"]
 
-                # Check the max length
-                if (maxLength is None or maxLength <= 0):
-                    # Invalid max length, set to the server's default
-                    maxLength = cfg.current_data["max_length"]
-        except:
-            # Error; probably `max_length` is not configured. Check if max length is greater than the servers's max length
-            if (maxLength > cfg.current_data["max_length"]):
-                # Set max length to the server's max length
+            if (maxLength is None or maxLength <= 0):
                 maxLength = cfg.current_data["max_length"]
+        elif (maxLength > cfg.current_data["max_length"]):
+            maxLength = cfg.current_data["max_length"]
     
     # Set the temperature
     if (Temperature is None):
-        temp = __models__[Index][1]["temp"]
+        temp = __models__[Index][1]["temp"] if ("temp" in list(__models__[Index][1].keys())) else 0.5
     else:
         temp = Temperature
-    
+
     # Set top_p
     if (TopP is None):
-        try:
+        if ("top_p" in list(__models__[Index][1].keys()) and __models__[Index][1]["top_p"] is not None):
             TopP = __models__[Index][1]["top_p"]
-        except:
+        else:
             TopP = 0.95
     
     # Set top_k
     if (TopK is None):
-        try:
+        if ("top_k" in list(__models__[Index][1].keys()) and __models__[Index][1]["top_k"] is not None):
             TopK = __models__[Index][1]["top_k"]
-        except:
+        else:
             TopK = 40
     
     # Set min_p
     if (MinP is None):
-        try:
+        if ("min_p" in list(__models__[Index][1].keys()) and __models__[Index][1]["min_p"] is not None):
             MinP = __models__[Index][1]["min_p"]
-
-            if (MinP == None):
-                raise Exception()
-        except:
+        else:
             MinP = 0.05
     
     # Set typical_p
     if (TypicalP is None):
-        try:
+        if ("typical_p" in list(__models__[Index][1].keys()) and __models__[Index][1]["typical_p"] is not None):
             TypicalP = __models__[Index][1]["typical_p"]
-
-            if (TypicalP == None):
-                raise Exception()
-        except:
+        else:
             TypicalP = 1
     
     # Check if the tools must be in the system prompt
-    if ("tools_in_system_prompt" in list(__models__[Index][1].keys()) and __models__[Index][1]["tools_in_system_prompt"] and len(Tools) > 0):
+    if (
+        (
+            "tools_in_system_prompt" in list(__models__[Index][1].keys()) and __models__[Index][1]["tools_in_system_prompt"] or
+            ToolsInSystemPrompt
+        ) and len(Tools) > 0
+    ):
         # Add the tools to the system prompt
         contentForModel[0]["content"] = f"Available tools:\n```json\n{json.dumps(Tools, indent = 4)}\n```\n\n---\n\n{contentForModel[0]['content']}"
         Tools = None
@@ -301,7 +375,8 @@ def Inference(
             TopP,
             TopK,
             MinP,
-            TypicalP
+            TypicalP,
+            extraKwargs
         )
     elif (isinstance(__models__[Index][0], Llama)):
         # Use lcpp
@@ -316,7 +391,8 @@ def Inference(
             TopP,
             TopK,
             MinP,
-            TypicalP
+            TypicalP,
+            extraKwargs
         )
     else:
         # It's an invalid model type

@@ -14,7 +14,8 @@ def __inference__(
         TopP: float,
         TopK: int,
         MinP: float,
-        TypicalP: float
+        TypicalP: float,
+        ExtraKWargs: dict[str, any]
     ) -> Iterator[str]:
     # Get a response from the model
     response = Model.create_chat_completion(
@@ -27,8 +28,9 @@ def __inference__(
         typical_p = TypicalP,
         seed = Seed,
         tools = Tools,
-        tool_choice = None,
-        stream = True
+        tool_choice = "auto",
+        stream = True,
+        **ExtraKWargs
     )
 
     # For every token

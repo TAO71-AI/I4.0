@@ -3,7 +3,7 @@ from io import BytesIO
 import PIL.Image
 import ai_config as cfg
 
-__models__: dict[int, Pipeline] = {}
+__models__: dict[int, tuple[Pipeline, dict[str, any]] | None] = {}
 
 def __load_model__(Index: int) -> None:
     # Check if the model is already loaded
@@ -12,7 +12,7 @@ def __load_model__(Index: int) -> None:
 
     # Load the model and add it to the list of models
     model, _ = cfg.LoadPipeline("image-to-text", "img2text", Index)
-    __models__[Index] = model
+    __models__[Index] = (model, cfg.GetInfoOfTask("img2text", Index))
 
 def LoadModels() -> None:
     # For each model of the service
@@ -31,7 +31,11 @@ def __offload_model__(Index: int) -> None:
     # Delete from the models list
     __models__.pop(Index)
 
-def Inference(Index: int, Img: str | bytes | PIL.Image.Image) -> str:
+def Inference(
+        Index: int,
+        Img: str | bytes | PIL.Image.Image,
+        MaxLength: int | None
+    ) -> str:
     # Load the model
     __load_model__(Index)
 
@@ -52,9 +56,33 @@ def Inference(Index: int, Img: str | bytes | PIL.Image.Image) -> str:
     else:
         # Invalid image type
         raise ValueError("Invalid image type.")
+    
+    # Set max length
+    if (
+        MaxLength is None and
+        "max_length" in __models__[Index][1] and
+        __models__[Index][1]["max_length"] is not None and
+        __models__[Index][1]["max_length"] > 0
+    ):
+        maxLength = __models__[Index][1]["max_length"]
+    elif (
+        MaxLength is not None and
+        MaxLength > 0
+    ):
+        if ("max_length" in __models__[Index][1] and MaxLength > __models__[Index][1]["max_length"]):
+            maxLength = __models__[Index][1]["max_length"]
+        elif (MaxLength > cfg.current_data["max_length"]):
+            maxLength = cfg.current_data["max_length"]
+        else:
+            maxLength = MaxLength
+    elif (cfg.current_data["max_length"] > 0):
+        maxLength = cfg.current_data["max_length"]
 
     # Get the response from the model
-    response = __models__[Index](image)[0]["generated_text"]
+    response = __models__[Index][0](
+        image,
+        max_new_tokens = maxLength
+    )[0]["generated_text"]
 
     # Close the image buffer if needed
     image.close()

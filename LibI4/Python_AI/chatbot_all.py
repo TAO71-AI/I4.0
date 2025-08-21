@@ -13,6 +13,7 @@ import Inference.Audio.rvc_inf as rvc
 import Inference.Images.image_to_image as img2img
 import Inference.Text.ai_question_answering as qa
 import Inference.Mixed.multimodal_chatbot as mmcb
+import Inference.Other.External.internet_chatbot as internet_chatbot
 import internet_connection as internet
 import ai_config as cfg
 import conversation_multimodal as conv
@@ -158,20 +159,23 @@ def OffloadAll(Exclude: dict[str, list[int]], Force: bool = False) -> None:
             __offload_model__(task, index)
 
 def GetResponseFromInternet(
-        Index: int,
-        Keywords: str,
-        Question: str,
-        Count: int, AIArgs: str | list[str] | None,
-        ExtraSystemPrompts: list[str] | str,
-        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
-        Conversation: list[str],
-        MaxLength: int | None,
-        Temperature: float | None,
-        TopP: float | None,
-        TopK: int | None,
-        MinP: float | None = None,
-        TypicalP: float | None = None
-    ) -> Iterator[dict[str, any]]:
+    Index: int,
+    Keywords: str,
+    Question: str,
+    Count: int, AIArgs: str | list[str] | None,
+    ExtraSystemPrompts: list[str] | str,
+    UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+    Conversation: list[str],
+    MaxLength: int | None,
+    Temperature: float | None,
+    TopP: float | None,
+    TopK: int | None,
+    MinP: float | None = None,
+    TypicalP: float | None = None,
+    Reasoning: str | int | bool | None = None,
+    AllowMemoriesUsage: bool = True,
+    ToolsInSystemPrompt: bool = False
+) -> Iterator[dict[str, any]]:
     # Get response from the dataset
     datasetResponses = dts.GetResponse(Keywords)
 
@@ -184,11 +188,11 @@ def GetResponseFromInternet(
         # Send the prompt to I4.0
         return MakePrompt(
             Index,
-            f"Internet data:\n{datasetResponse}\nQuestion to answer: {Question}",
+            f"Internet data:\n```plaintext\n{datasetResponse}\n```\nQuestion to answer: {Question}",
             [],
             "chatbot",
             AIArgs,
-            ExtraSystemPrompts,
+            ["You're answering a question with the results obtained from internet."] + ExtraSystemPrompts,
             Conversation,
             UseDefaultSystemPrompts,
             [],
@@ -198,7 +202,10 @@ def GetResponseFromInternet(
             TopP,
             TopK,
             MinP,
-            TypicalP
+            TypicalP,
+            Reasoning,
+            AllowMemoriesUsage,
+            ToolsInSystemPrompt
         )
     
     # Search for websites
@@ -216,24 +223,30 @@ def GetResponseFromInternet(
         TopP,
         TopK,
         MinP,
-        TypicalP
+        TypicalP,
+        Reasoning,
+        AllowMemoriesUsage,
+        ToolsInSystemPrompt
     )
 
 def GetResponseFromInternet_URL(
-        Index: int,
-        URL: str | list[str],
-        Question: str,
-        AIArgs: str | list[str] | None,
-        ExtraSystemPrompts: list[str] | str,
-        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
-        Conversation: list[str],
-        MaxLength: int | None,
-        Temperature: float | None,
-        TopP: float | None,
-        TopK: int | None,
-        MinP: float | None = None,
-        TypicalP: float | None = None
-    ) -> Iterator[dict[str, any]]:
+    Index: int,
+    URL: str | list[str],
+    Question: str,
+    AIArgs: str | list[str] | None,
+    ExtraSystemPrompts: list[str] | str,
+    UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+    Conversation: list[str],
+    MaxLength: int | None,
+    Temperature: float | None,
+    TopP: float | None,
+    TopK: int | None,
+    MinP: float | None = None,
+    TypicalP: float | None = None,
+    Reasoning: str | int | bool | None = None,
+    AllowMemoriesUsage: bool = True,
+    ToolsInSystemPrompt: bool = False
+) -> Iterator[dict[str, any]]:
     # Set system prompt
     if (isinstance(ExtraSystemPrompts, list)):
         ExtraSystemPrompts = "\n".join(ExtraSystemPrompts)
@@ -288,24 +301,30 @@ def GetResponseFromInternet_URL(
         TopP,
         TopK,
         MinP,
-        TypicalP
+        TypicalP,
+        Reasoning,
+        AllowMemoriesUsage,
+        ToolsInSystemPrompt
     )
 
 def InternetResearch(
-        Index: int,
-        Keywords: str,
-        Question: str,
-        AIArgs: str | list[str] | None,
-        ExtraSystemPrompts: list[str] | str,
-        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
-        Conversation: list[str],
-        MaxLength: int | None,
-        Temperature: float | None,
-        TopP: float | None,
-        TopK: int | None,
-        MinP: float | None = None,
-        TypicalP: float | None = None
-    ) -> Iterator[dict[str, any]]:
+    Index: int,
+    Keywords: str,
+    Question: str,
+    AIArgs: str | list[str] | None,
+    ExtraSystemPrompts: list[str] | str,
+    UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+    Conversation: list[str],
+    MaxLength: int | None,
+    Temperature: float | None,
+    TopP: float | None,
+    TopK: int | None,
+    MinP: float | None = None,
+    TypicalP: float | None = None,
+    Reasoning: str | int | bool | None = None,
+    AllowMemoriesUsage: bool = True,
+    ToolsInSystemPrompt: bool = False
+) -> Iterator[dict[str, any]]:
     # Get the internet results
     internetResults = internet.Search__Websites(Keywords, cfg.current_data["internet"]["max_results"], None)
     internetResponses = []
@@ -330,7 +349,12 @@ def InternetResearch(
             None,
             Temperature,
             TopP,
-            TopK
+            TopK,
+            MinP,
+            TypicalP,
+            Reasoning,
+            False,
+            ToolsInSystemPrompt
         )
         strResponse = ""
 
@@ -391,7 +415,10 @@ def InternetResearch(
         TopP,
         TopK,
         MinP,
-        TypicalP
+        TypicalP,
+        Reasoning,
+        AllowMemoriesUsage,
+        ToolsInSystemPrompt
     )
 
     # For each token
@@ -400,29 +427,26 @@ def InternetResearch(
         yield token
 
 def MakePrompt(
-        Index: int,
-        Prompt: str,
-        Files: list[dict[str, str]],
-        Service: str,
-        AIArgs: str | list[str] | None = None,
-        ExtraSystemPrompts: list[str] | str = [],
-        Conversation: list[str] = ["", ""],
-        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None,
-        AllowedTools: list[str] | str | None = None,
-        ExtraTools: list[dict[str, str | dict[str, any]]] = [],
-        MaxLength: int | None = None,
-        Temperature: float | None = None,
-        TopP: float | None = None,
-        TopK: int | None = None,
-        MinP: float | None = None,
-        TypicalP: float | None = None
-    ) -> Iterator[dict[str, any]]:
-    # Define I4.0's personality
-    if (AIArgs == None):
-        AIArgs = cfg.current_data["ai_args"].split("+")
-    else:
-        AIArgs = AIArgs.split("+")
-    
+    Index: int,
+    Prompt: str,
+    Files: list[dict[str, str]],
+    Service: str,
+    AIArgs: str | list[str] | None = None,
+    ExtraSystemPrompts: list[str] | str = [],
+    Conversation: list[str] = ["", ""],
+    UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None,
+    AllowedTools: list[str] | str | None = None,
+    ExtraTools: list[dict[str, str | dict[str, any]]] = [],
+    MaxLength: int | None = None,
+    Temperature: float | None = None,
+    TopP: float | None = None,
+    TopK: int | None = None,
+    MinP: float | None = None,
+    TypicalP: float | None = None,
+    Reasoning: str | int | bool | None = None,
+    AllowMemoriesUsage: bool = True,
+    ToolsInSystemPrompt: bool = False
+) -> Iterator[dict[str, any]]:
     # Check conversation to prevent errors
     if (Conversation[0] is None):
         Conversation[0] = ""
@@ -437,94 +461,25 @@ def MakePrompt(
     # Get the info of the model
     info = cfg.GetInfoOfTask(Service, Index)
 
-    # Set system prompts
-    sp = []
+    # Update the models list
+    internet_chatbot.UpdateModelsList()
 
     # Get the tools
-    tools = cbbasics.GetTools(AllowedTools)
+    tools = cbbasics.GetTools(AllowedTools, internet_chatbot.GetModelsList(True))
 
     # Get the extra tools
     for etool in ExtraTools:
         if (cbbasics.IsToolValid(etool)):
             tools.append(etool)
     
-    # Add system prompt if tools > 0
-    if (len(tools) > 0):
-        #sp.append("To use any tool, write something like this:\n```plaintext\n<tool_call>\n{function}\n</tool_call>\n```")
-        sp.append("You can respond to the user's prompt before or after using any tool.")
-    
-    # Get the personality
-    sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
-
-    # Define the use of the default system prompts
-    if (isinstance(UseDefaultSystemPrompts, list) or isinstance(UseDefaultSystemPrompts, tuple)):
-        udsp1 = udsp2 = udsp3 = cfg.current_data["use_default_system_messages"]
-        udsp4 = cfg.current_data["use_dynamic_system_args"]
-
-        if (len(UseDefaultSystemPrompts) >= 1 and UseDefaultSystemPrompts[0] is not None):
-            udsp1 = bool(UseDefaultSystemPrompts[0])
-            
-        if (len(UseDefaultSystemPrompts) >= 2 and UseDefaultSystemPrompts[1] is not None):
-            udsp2 = bool(UseDefaultSystemPrompts[1])
-            
-        if (len(UseDefaultSystemPrompts) >= 3 and UseDefaultSystemPrompts[2] is not None):
-            udsp3 = bool(UseDefaultSystemPrompts[2])
-            
-        if (len(UseDefaultSystemPrompts) >= 4 and UseDefaultSystemPrompts[3] is not None):
-            udsp4 = bool(UseDefaultSystemPrompts[3])
-
-        UseDefaultSystemPrompts = (udsp1, udsp2, udsp3, udsp4)
-    elif (isinstance(UseDefaultSystemPrompts, bool)):
-        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts)
-    else:
-        UseDefaultSystemPrompts = (cfg.current_data["use_default_system_messages"], cfg.current_data["use_default_system_messages"], cfg.current_data["use_default_system_messages"], cfg.current_data["use_dynamic_system_args"])
-    
-    if (UseDefaultSystemPrompts[0]):
-        # Get default system prompts
-        sp.append(cbbasics.GetDefaultSystemPrompts())
-    
-    # Add the system prompts from the configuration
-    if (len(cfg.current_data["custom_system_messages"].strip()) > 0 and UseDefaultSystemPrompts[1]):
-        sp += cfg.current_data["custom_system_messages"].split("\n")
+    # Add some system prompts
+    spBefore = []
+    spAfter = []
     
     # Check if the info contains information about the model and it's not empty
     if (list(info.keys()).count("model_info") == 1 and len(str(info["model_info"]).strip()) > 0 and UseDefaultSystemPrompts[2]):
         # Add the model info to the model
-        sp.append(str(info["model_info"]))
-    
-    # Add extra system prompts
-    if (isinstance(ExtraSystemPrompts, list) and len(ExtraSystemPrompts) > 0):
-        sp += ExtraSystemPrompts
-    elif (len(ExtraSystemPrompts) > 0):
-        sp.append(str(ExtraSystemPrompts))
-    
-    if (UseDefaultSystemPrompts[3]):
-        # Get dynamic system prompts (for current date, etc.)
-        # Get the current date
-        cDate = datetime.datetime.now()
-
-        # Add sprompts
-        sp += [
-            f"The current date is {cDate.day} of {calendar.month_name[cDate.month]}, {cDate.year}.",
-            f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
-        ]
-
-        if (cDate.day == 16 and cDate.month == 9 and UseDefaultSystemPrompts[0]):
-            # I4.0's birthday!!!!
-            sp.append("Today it's your birthday.")
-    
-    # Get the memories
-    mems = memories.GetMemories(Conversation[0])
-
-    # Check if the length of the memories is higher than 0
-    if (len(mems) > 0):
-        # It is
-        sp.append("\n")
-
-        # For each memory
-        for mem in range(len(mems)):
-            # Add the memory
-            sp.append(f"Memory #{mem}: {mems[mem]}")
+        spBefore.append(str(info["model_info"]))
     
     # Check NSFW in prompt
     if (
@@ -605,7 +560,7 @@ def MakePrompt(
             pdfText = pdfText.strip()
 
             # Add to the system prompt
-            sp.append(f"Document file #{documentFiles} (PDF file):\n```plaintext\n{pdfText}\n```")
+            spAfter.append(f"Document file #{documentFiles} (PDF file):\n```plaintext\n{pdfText}\n```")
         elif (file["type"] == "csv"):
             # Add one to the document files count
             documentFiles += 1
@@ -614,7 +569,7 @@ def MakePrompt(
             csvText = f.decode("utf-8")
 
             # Add to the system prompt
-            sp.append(f"Document file #{documentFiles} (CSV file):\n```csv\n{csvText}\n```")
+            spAfter.append(f"Document file #{documentFiles} (CSV file):\n```csv\n{csvText}\n```")
         elif (file["type"] == "xlsx"):
             # Add one to the document files count
             documentFiles += 1
@@ -623,17 +578,23 @@ def MakePrompt(
             csvText = docs.XLSX2CSV(f)
 
             # Add to the system prompt
-            sp.append(f"Document file #{documentFiles} (XLSX file):\n```csv\n{csvText}\n```")
+            spAfter.append(f"Document file #{documentFiles} (XLSX file):\n```csv\n{csvText}\n```")
+    
+    # Append the extra system prompts
+    spAfter += ExtraSystemPrompts if (isinstance(ExtraSystemPrompts, list)) else [str(ExtraSystemPrompts)] if (len(ExtraSystemPrompts) > 0) else []
+    
+    # Set the system prompts
+    sp = GetSystemPrompts(AIArgs, spBefore, spAfter, UseDefaultSystemPrompts, AllowMemoriesUsage, Conversation[0])
     
     # Check service
     if (Service == "chatbot" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Get chatbot response
         if (len(cfg.GetInfoOfTask(Service, Index)["multimodal"].strip()) > 0):
             # Use multimodal chatbot
-            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK, MinP, TypicalP)
+            textResponse = mmcb.Inference(Index, Prompt, Files, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK, MinP, TypicalP, Reasoning, ToolsInSystemPrompt)
         else:
             # Use normal chatbot
-            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK, MinP, TypicalP)
+            textResponse = cb.Inference(Index, Prompt, sp, tools, Conversation, MaxLength, Temperature, TopP, TopK, MinP, TypicalP, Reasoning, ToolsInSystemPrompt)
 
         # For every token
         for token in textResponse:
@@ -673,7 +634,7 @@ def MakePrompt(
             raise Exception("File must be an image.")
 
         # Get the response of file 0
-        response = ImageToText(Index, Files[0]["data"])
+        response = ImageToText(Index, Files[0]["data"], MaxLength)
 
         # Return the response
         yield {"response": response, "files": []}
@@ -689,7 +650,10 @@ def MakePrompt(
         # Check if the language is unknown and at least one language detector is available
         if (response["lang"] == "unknown" and len(cfg.GetAllInfosOfATask("ld")) > 0):
             # Detect the language
-            response["lang"] = DetectLanguage(random.randint(0, len(cfg.GetAllInfosOfATask("ld")) - 1), response["text"])
+            try:
+                response["lang"] = DetectLanguage(random.randint(0, len(cfg.GetAllInfosOfATask("ld")) - 1), response["text"])
+            except:
+                pass
 
         # Return the response
         yield {"response": response, "files": []}
@@ -697,8 +661,13 @@ def MakePrompt(
         # Process audio
         audioFiles = GenerateAudio(Index, Prompt)
 
+        # For each audio
+        for audio in audioFiles:
+            # Return the audio token
+            yield {"response": "", "files": [{"type": "audio", "data": audio}]}
+
         # Return the audios
-        yield {"response": "", "files": [{"type": "audio", "data": audioFiles}]}
+        yield {"response": "", "files": []}
     elif (Service == "nsfw_filter-text" and len(cfg.GetAllInfosOfATask(Service)) > 0):
         # Check if it's NSFW
         nsfw = IsTextNSFW(Prompt, Index)
@@ -813,6 +782,95 @@ def MakePrompt(
         # Return an error
         yield {"response": "ERROR! Service not found.", "files": []}
 
+def GetSystemPrompts(
+    AIArgs: str | list[str] | None = None,
+    ExtraSystemPrompts_Before: list[str] | str = [],
+    ExtraSystemPrompts_After: list[str] | str = [],
+    UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None = None,
+    AllowMemoriesUsage: bool = True,
+    MemoriesAPIKey: str = ""
+) -> list[str]:
+    # Define I4.0's personality
+    if (AIArgs == None):
+        AIArgs = cfg.current_data["ai_args"].split("+")
+    else:
+        AIArgs = AIArgs.split("+")
+    
+    # Set system prompts
+    sp = ExtraSystemPrompts_Before.copy() if (isinstance(ExtraSystemPrompts_Before, list)) else ExtraSystemPrompts_Before.split("\n") if (len(ExtraSystemPrompts_Before) > 0) else []
+    
+    # Get the memories if allowed
+    if (AllowMemoriesUsage):
+        mems = memories.GetMemories(MemoriesAPIKey)
+
+        # Check if the length of the memories is higher than 0
+        if (len(mems) > 0):
+            # It is
+            sp.append("\n")
+
+            # For each memory
+            for mem in range(len(mems)):
+                # Add the memory
+                sp.append(f"Memory #{mem}: {mems[mem]}")
+
+    # Get the personality
+    sp.append(cbbasics.GetPersonalitySystemPrompts(AIArgs))
+
+    # Define the use of the default system prompts
+    if (isinstance(UseDefaultSystemPrompts, list) or isinstance(UseDefaultSystemPrompts, tuple)):
+        udsp1 = udsp2 = udsp3 = cfg.current_data["use_default_system_messages"]
+        udsp4 = cfg.current_data["use_dynamic_system_args"]
+
+        if (len(UseDefaultSystemPrompts) >= 1 and UseDefaultSystemPrompts[0] is not None):
+            udsp1 = bool(UseDefaultSystemPrompts[0])
+            
+        if (len(UseDefaultSystemPrompts) >= 2 and UseDefaultSystemPrompts[1] is not None):
+            udsp2 = bool(UseDefaultSystemPrompts[1])
+            
+        if (len(UseDefaultSystemPrompts) >= 3 and UseDefaultSystemPrompts[2] is not None):
+            udsp3 = bool(UseDefaultSystemPrompts[2])
+            
+        if (len(UseDefaultSystemPrompts) >= 4 and UseDefaultSystemPrompts[3] is not None):
+            udsp4 = bool(UseDefaultSystemPrompts[3])
+
+        UseDefaultSystemPrompts = (udsp1, udsp2, udsp3, udsp4)
+    elif (isinstance(UseDefaultSystemPrompts, bool)):
+        UseDefaultSystemPrompts = (UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts, UseDefaultSystemPrompts)
+    else:
+        UseDefaultSystemPrompts = (cfg.current_data["use_default_system_messages"], cfg.current_data["use_default_system_messages"], cfg.current_data["use_default_system_messages"], cfg.current_data["use_dynamic_system_args"])
+    
+    if (UseDefaultSystemPrompts[0]):
+        # Get default system prompts
+        sp.append(cbbasics.GetDefaultSystemPrompts())
+    
+    # Add the system prompts from the configuration
+    if (len(cfg.current_data["custom_system_messages"].strip()) > 0 and UseDefaultSystemPrompts[1]):
+        sp += cfg.current_data["custom_system_messages"].split("\n")
+    
+    if (UseDefaultSystemPrompts[3]):
+        # Get dynamic system prompts (for current date, etc.)
+        # Get the current date
+        cDate = datetime.datetime.now()
+
+        # Add sprompts
+        sp += [
+            f"The current date is {cDate.day} of {calendar.month_name[cDate.month]}, {cDate.year}.",
+            f"The current time is {'0' + str(cDate.hour) if (cDate.hour < 10) else str(cDate.hour)}:{'0' + str(cDate.minute) if (cDate.minute < 10) else str(cDate.minute)}."
+        ]
+
+        if (cDate.day == 16 and cDate.month == 9 and UseDefaultSystemPrompts[0]):
+            # I4.0's birthday!!!!
+            sp.append("Today it's your birthday.")
+    
+    # Add extra system prompts
+    if (isinstance(ExtraSystemPrompts_After, list) and len(ExtraSystemPrompts_After) > 0):
+        sp += ExtraSystemPrompts_After
+    elif (len(ExtraSystemPrompts_After) > 0):
+        sp.append(str(ExtraSystemPrompts_After))
+    
+    # Return the system prompts
+    return sp
+
 def GenerateImages(Index: int, Prompt: str) -> list[str]:
     # Get generated images
     imgs_response = text2img.Inference(Index, Prompt)
@@ -834,16 +892,17 @@ def EstimateDepth(Index: int, Img: bytes) -> str:
     # Return the image
     return image
 
-def GenerateAudio(Index: int, Prompt: str) -> str:
+def GenerateAudio(Index: int, Prompt: str) -> Iterator[str]:
     # Get generated audio
     aud_response = text2audio.GenerateAudio(Index, Prompt)
 
     # Return generated audio
-    return base64.b64encode(aud_response).decode("utf-8")
+    for audioBytes in aud_response:
+        yield base64.b64encode(audioBytes).decode("utf-8")
 
-def ImageToText(Index: int, Img: bytes) -> str:
+def ImageToText(Index: int, Img: bytes, MaxLength: int | None) -> str:
     # Get and return the text from an image
-    return itt.Inference(Index, Img)
+    return itt.Inference(Index, Img, MaxLength)
 
 def RecognizeAudio(Index: int, Audio: bytes) -> dict[str, str]:
     # Recognize and return an audio

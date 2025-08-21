@@ -2,8 +2,8 @@
 import ai_config as cfg
 
 # Import DuckDuckGo
-from duckduckgo_search import DDGS
-from duckduckgo_search.exceptions import RatelimitException, DuckDuckGoSearchException
+from ddgs import DDGS
+from ddgs.exceptions import RatelimitException
 
 # Import Google
 from googlesearch import search as google_search
@@ -96,11 +96,11 @@ def Search__Websites(Prompt: str, MaxResults: int, InternetSystem: str | None = 
         try:
             # Try to search the prompt using the API
             searchResults = DDGS().text(Prompt, max_results = MaxResults)
-        except (RatelimitException, DuckDuckGoSearchException):
+        except RatelimitException:
             try:
                 # Rate limit error, try again using DuckDuckGo Lite
                 searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "lite")
-            except (RatelimitException, DuckDuckGoSearchException):
+            except RatelimitException:
                 # Rate limit error, try again using DuckDuckGo HTML
                 searchResults = DDGS().text(Prompt, max_results = MaxResults, backend = "html")
 

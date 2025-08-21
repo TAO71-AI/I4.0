@@ -1,6 +1,6 @@
 from collections.abc import Iterator
 from websockets.asyncio.server import serve, ServerConnection
-from websockets.exceptions import ConnectionClosed, ConnectionClosedError, ConnectionClosedOK
+from websockets.exceptions import ConnectionClosed
 import asyncio
 import threading
 import os
@@ -21,7 +21,6 @@ try:
     import conversation_multimodal as conv
     import ai_memory as memories
     import queue_system as qs
-    import temporal_files as temp
     import data_save as ds
     import documents as docs
 except ImportError:
@@ -38,7 +37,7 @@ banned: dict[str, list[str]] = {
 }
 started: bool = False
 modelsUsed: dict[str, list[int]] = {}
-ServerVersion: int = 150100
+ServerVersion: int = 160000
 
 # Server sockets
 serverWS: serve | None = None
@@ -222,26 +221,29 @@ def GetQueueForService(Service: str, Index: int) -> tuple[int, int]:
     return (users, t)
 
 def __infer__(
-        Service: str,
-        Index: int,
-        Prompt: str,
-        Files: list[dict[str, str]],
-        AIArgs: str | None,
-        SystemPrompts: str | list[str],
-        Key: dict[str, any],
-        Conversation: str,
-        UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
-        AllowedTools: str | list[str] | None,
-        ExtraTools: list[dict[str, str | dict[str, any]]],
-        MaxLength: int | None,
-        Temperature: float | None,
-        TopP: float | None,
-        TopK: int | None,
-        MinP: float | None,
-        TypicalP: float | None,
-        SeeTools: bool,
-        DataSave: bool
-    ) -> Iterator[dict[str, any]]:
+    Service: str,
+    Index: int,
+    Prompt: str,
+    Files: list[dict[str, str]],
+    AIArgs: str | None,
+    SystemPrompts: str | list[str],
+    Key: dict[str, any],
+    Conversation: str,
+    UseDefaultSystemPrompts: bool | tuple[bool, bool] | list[bool] | None,
+    AllowedTools: str | list[str] | None,
+    ExtraTools: list[dict[str, str | dict[str, any]]],
+    MaxLength: int | None,
+    Temperature: float | None,
+    TopP: float | None,
+    TopK: int | None,
+    MinP: float | None,
+    TypicalP: float | None,
+    SeeTools: bool,
+    DataSave: bool,
+    Reasoning: str | int | bool | None,
+    AllowMemoriesUsage: bool,
+    ToolsInSystemPrompt: bool
+) -> Iterator[dict[str, any]]:
     # Check service and files length
     if (Service != "chatbot" and len(Files) > 1):
         raise ValueError("Please, upload only a file per request unless you're using a chatbot.")
@@ -301,7 +303,10 @@ def __infer__(
         TopP,
         TopK,
         MinP,
-        TypicalP
+        TypicalP,
+        Reasoning,
+        AllowMemoriesUsage,
+        ToolsInSystemPrompt
     )
     fullResponse = ""
     responseFiles = []
@@ -421,7 +426,10 @@ def __infer__(
                 MinP,
                 TypicalP,
                 SeeTools,
-                DataSave
+                DataSave,
+                Reasoning,
+                AllowMemoriesUsage,
+                ToolsInSystemPrompt
             )
 
             # Append all the files
@@ -465,7 +473,10 @@ def __infer__(
                 MinP,
                 TypicalP,
                 SeeTools,
-                DataSave
+                DataSave,
+                Reasoning,
+                AllowMemoriesUsage,
+                ToolsInSystemPrompt
             )
 
             # Append all the files
@@ -516,7 +527,10 @@ def __infer__(
                 TopP,
                 TopK,
                 MinP,
-                TypicalP
+                TypicalP,
+                Reasoning,
+                AllowMemoriesUsage,
+                ToolsInSystemPrompt
             )
             text = ""
 
@@ -572,7 +586,10 @@ def __infer__(
                 TopP,
                 TopK,
                 MinP,
-                TypicalP
+                TypicalP,
+                Reasoning,
+                AllowMemoriesUsage,
+                ToolsInSystemPrompt
             )
             text = ""
 
@@ -628,7 +645,10 @@ def __infer__(
                 TopP,
                 TopK,
                 MinP,
-                TypicalP
+                TypicalP,
+                Reasoning,
+                AllowMemoriesUsage,
+                ToolsInSystemPrompt
             )
             text = ""
 
@@ -698,6 +718,27 @@ def __infer__(
 
             # Send message
             yield {"response": "", "files": [{"type": documentType, "data": document}], "ended": False, "errors": []}
+        elif (tool["name"] == "internet_chatbot"):
+            # Use the internet chatbot
+            # Get the variables
+            internetModelToUse = tool["arguments"]["model"]
+            internetPrompt = tool["arguments"]["prompt"] if ("prompt" in tool["arguments"]) else Prompt
+
+            # Yield an empty token
+            yield {"response": "\n", "files": [], "ended": False, "errors": []}
+            
+            # Inference the model
+            internetResponse = cb.internet_chatbot.InferenceModel(
+                internetModelToUse,
+                cfg.GetInfoOfTask(Service, Index),
+                internetPrompt,
+                cb.GetSystemPrompts(AIArgs, [], SystemPrompts, UseDefaultSystemPrompts, AllowMemoriesUsage, Key["key"]),
+                [],
+                Temperature
+            )
+
+            # Yield the response
+            yield {"response": internetResponse, "files": [], "ended": False, "errors": []}
         else:
             # Unknown tool. Send to the client
             yield {"response": json.dumps(tool), "files": [], "ended": False, "errors": ["unknown tool"]}
@@ -974,6 +1015,27 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
         # If an error occurs, set to default
         typical_p = None
     
+    try:
+        # Try to get the reasoning
+        reasoning = Prompt["UseReasoning"]
+    except:
+        # If an error occurs, set to default
+        reasoning = True
+    
+    try:
+        # Try to get if the user allows the usage of memories
+        memoriesUsage = Prompt["AllowMemoriesUsage"]
+    except:
+        # If an error occurs, set to default
+        memoriesUsage = True
+    
+    try:
+        # Try to get if the user wants the tools in the system prompt
+        toolsInSP = Prompt["ToolsInSystemPrompt"]
+    except:
+        # If an error occurs, set to default
+        toolsInSP = False
+    
     # Check if the API key is banned
     if (key["key"] in banned["key"]):
         yield {"response": "", "files": [], "ended": True, "errors": ["API key banned"], "pubKey": clientPublicKey}
@@ -1050,7 +1112,10 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 min_p,
                 typical_p,
                 seeTools,
-                dataSave
+                dataSave,
+                reasoning,
+                memoriesUsage,
+                toolsInSP
             )
 
             # For each token
@@ -1305,29 +1370,100 @@ def ExecuteService(Prompt: dict[str, any], IPAddress: str) -> Iterator[dict[str,
                 yield {"response": str(cfg.GetInfoOfTask(prompt, index)["price"]), "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
         except Exception as ex:
             yield {"response": "", "files": [], "ended": True, "errors": [f"COULD NOT GET THE PRICE DUE TO THIS ERROR: {ex}"], "pubKey": clientPublicKey}
+    elif (service == "get_text2audio_type"):
+        # Get the type for a text2audio model
+        try:
+            # Check if the index is valid
+            if (index < 0):
+                # Set index by default
+                index = GetAutoIndex("text2audio", index)
+            
+            if (index >= len(cfg.GetAllInfosOfATask("text2audio"))):
+                # Index is out of range, return error
+                yield {"response": "", "files": [], "ended": True, "errors": ["Invalid index."], "pubKey": clientPublicKey}
+            else:
+                # Get the type of the model
+                info = cfg.GetInfoOfTask("text2audio", index)
+
+                # Get type
+                if (info["type"] == "kokoro"):
+                    modelType = "tts"
+                elif (info["type"] == "hf"):
+                    modelType = "general"
+                else:
+                    modelType = "unknown or invalid"
+                
+                # Yield the model type
+                yield {"response": modelType, "files": [], "ended": True, "errors": [], "pubKey": clientPublicKey}
+        except Exception as ex:
+            yield {"response": "", "files": [], "ended": True, "errors": [f"COULD NOT GET THE TYPE DUE TO THIS ERROR: {ex}"], "pubKey": clientPublicKey}
     else:
         yield {"response": "", "files": [], "ended": True, "errors": ["Invalid command."], "pubKey": clientPublicKey}
 
 async def ExecuteServiceAndSendToClient(
-        Client: ServerConnection,
-        Prompt: dict[str, any],
-        HashAlgorithm: enc.hashes.HashAlgorithm | None,
-        ClientVersion: int,
-    ) -> None:
+    Client: ServerConnection,
+    Prompt: dict[str, any],
+    HashAlgorithm: enc.hashes.HashAlgorithm | None,
+    ClientVersion: int,
+) -> None:
+    # Create variables
     clPubKey = None
+    queue = asyncio.Queue()  # (token or exception, is error, has ended)
+    loop = asyncio.get_running_loop()
+    threadOpen = True
+
+    def __execute_service_thread__() -> None:
+        try:
+            # Get the response
+            response = ExecuteService(Prompt, Client.remote_address[0])
+
+            # For each token in the response
+            for token in response:
+                # Make sure the thread is open
+                if (not threadOpen):
+                    break
+
+                # Add the token to the queue
+                loop.call_soon_threadsafe(asyncio.create_task, queue.put((token, False, False)))
+        except Exception as ex:
+            # Add the error to the queue
+            loop.call_soon_threadsafe(asyncio.create_task, queue.put((ex, True, False)))
+        finally:
+            # End
+            loop.call_soon_threadsafe(asyncio.create_task, queue.put((None, False, True)))
     
     try:
-        # Try to execute the service
-        for response in ExecuteService(Prompt, Client.remote_address[0]):
+        # Create task
+        est = threading.Thread(target = __execute_service_thread__, daemon = False)
+        est.start()
+
+        # Create loop
+        while (True):
+            # Get item from the queue
+            queueItem = await queue.get()
+
+            # Check if the queue ended
+            if (queueItem[2]):
+                # Break the loop
+                break
+
+            # Check if there is an error
+            if (queueItem[1]):
+                # Raise the error
+                raise queueItem[0]
+            
             # Get the public key from the response
-            clPubKey = response["pubKey"]
-            response.pop("pubKey")
+            clPubKey = queueItem[0]["pubKey"]
+            queueItem[0].pop("pubKey")
 
             # Send the response
-            await __send_to_client__(Client, json.dumps(response).encode("utf-8"), clPubKey, HashAlgorithm, ClientVersion)
+            await __send_to_client__(Client, json.dumps(queueItem[0]).encode("utf-8"), clPubKey, HashAlgorithm, ClientVersion)
     except ConnectionClosed as ex:
         # Print error
         print("Connection closed while processing!")
+
+        # Close the thread
+        threadOpen = False
 
         # Check if the processing was done
         if ("Done" not in list(Prompt.keys()) or ("Done" in list(Prompt.keys()) and not Prompt["Done"])):
@@ -1362,6 +1498,9 @@ async def ExecuteServiceAndSendToClient(
 
         # Print error info
         traceback.print_exception(ex)
+
+        # Close the thread
+        threadOpen = False
 
         # Check if the service is valid
         if (len(cfg.GetAllInfosOfATask(Prompt["Service"])) == 0):
@@ -1485,7 +1624,7 @@ async def __receive_loop__(Client: ServerConnection) -> None:
     # Receive every message from the client
     async for msg in Client:
         try:
-            await ProcessMessage(Client, msg)
+            asyncio.create_task(ProcessMessage(Client, msg))
         except ConnectionClosed:
             # Close the client
             break

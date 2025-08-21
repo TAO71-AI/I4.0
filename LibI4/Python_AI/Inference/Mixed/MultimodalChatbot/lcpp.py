@@ -17,7 +17,8 @@ def __inference__(
         TopP: float,
         TopK: int,
         MinP: float,
-        TypicalP: float
+        TypicalP: float,
+        ExtraKWargs: dict[str, any]
     ) -> Iterator[str]:
     # Convert the all the images to a valid format
     for msg in ContentForModel:
@@ -55,8 +56,9 @@ def __inference__(
         typical_p = TypicalP,
         seed = Seed,
         tools = Tools,
-        tool_choice = None,
-        stream = True
+        tool_choice = "auto",
+        stream = True,
+        **ExtraKWargs
     )
 
     # For every token

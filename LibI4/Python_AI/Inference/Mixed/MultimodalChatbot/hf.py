@@ -48,10 +48,11 @@ def __inference__(
         TopP: float,
         TopK: int,
         MinP: float,
-        TypicalP: float
+        TypicalP: float,
+        ExtraKWargs: dict[str, any]
     ) -> Iterator[tuple[str, list[dict[str, any]]]]:
     # Apply the chat template using the processor
-    text = Processor.apply_chat_template(ContentForModel, xml_tools = Tools, tokenize = False, add_generation_prompt = True)
+    text = Processor.apply_chat_template(ContentForModel, xml_tools = Tools, tokenize = False, add_generation_prompt = True, **ExtraKWargs)
 
     # Tokenize the prompt
     audio_inputs, image_inputs, video_inputs = process_mm_info(ContentForModel, use_audio_in_video = True)  # Should work for all models, even if it's not a Qwen model
