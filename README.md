@@ -1,3 +1,8 @@
+> [!IMPORTANT]
+> The source code for I4.0 has been rewritten. The new I4.0 repository is [TAO71-AI/I4.0-NEW](https://github.com/TAO71-AI/I4.0-NEW). This repository is now deprecated.
+> 
+> Future updates will be published in the new repository only.
+
 [![Thumbnail](https://github.com/TAO71-AI/I4.0/blob/main/Assets/Thumbnails/v16.0.0.webp?raw=true)](https://github.com/TAO71-AI/I4.0/releases/tag/v16.0.0)
 
 # What is this?
